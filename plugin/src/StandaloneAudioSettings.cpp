@@ -133,7 +133,6 @@ void StandaloneAudioSettings::changeListenerCallback(juce::ChangeBroadcaster*) {
   // Fires for every device-manager change: our own setters, hot-plugs,
   // devices vanishing mid-session, vendor control panel edits. Re-run the
   // sync policies, then push the UI to re-pull state.
-  logSetup("change");
   ensureInitialPolicies();
   applyMonitoringPolicy();
   if (onDeviceStateChanged)
@@ -264,7 +263,6 @@ juce::var StandaloneAudioSettings::setDeviceType(const juce::String& typeName) {
   if (dm == nullptr)
     return makeResult("Audio settings are unavailable.");
 
-  logSetup("setDeviceType " + typeName);
   // Entirely new device context; any tracked request belongs to the old type.
   explicitInputChannels.clear();
   explicitOutputChannels.clear();
@@ -284,7 +282,6 @@ juce::var StandaloneAudioSettings::setDevice(const juce::String& kind,
   if (dm == nullptr)
     return makeResult("Audio settings are unavailable.");
 
-  logSetup("setDevice " + kind + " \"" + name + "\"");
   auto setup = dm->getAudioDeviceSetup();
 
   // The side(s) whose device is changing get a fresh device context; a mask
@@ -376,7 +373,6 @@ juce::var StandaloneAudioSettings::setInputChannels(
   if (count < 1 || count > kMaxActiveInputChannels)
     return makeResult("Select one (mono) or two (stereo) input channels.");
 
-  logSetup("setInputChannels " + mask.toString(2));
   explicitInputChannels = mask;
   auto setup = dm->getAudioDeviceSetup();
   setup.useDefaultInputChannels = false;
@@ -402,7 +398,6 @@ juce::var StandaloneAudioSettings::setOutputPair(int pairIndex) {
   if (firstBit + 1 < numChannels)
     mask.setBit(firstBit + 1);
 
-  logSetup("setOutputPair " + juce::String(pairIndex));
   explicitOutputChannels = mask;
   auto setup = dm->getAudioDeviceSetup();
   setup.useDefaultOutputChannels = false;
@@ -416,7 +411,6 @@ juce::var StandaloneAudioSettings::setSampleRate(double rate) {
   auto* dm = deviceManager();
   if (dm == nullptr)
     return makeResult("Audio settings are unavailable.");
-  logSetup("setSampleRate " + juce::String(rate));
   auto setup = dm->getAudioDeviceSetup();
   setup.sampleRate = rate;
   pinActiveChannels(setup, dm->getCurrentAudioDevice(), explicitInputChannels, explicitOutputChannels,
@@ -428,7 +422,6 @@ juce::var StandaloneAudioSettings::setBufferSize(int samples) {
   auto* dm = deviceManager();
   if (dm == nullptr)
     return makeResult("Audio settings are unavailable.");
-  logSetup("setBufferSize " + juce::String(samples));
   auto setup = dm->getAudioDeviceSetup();
   setup.bufferSize = samples;
   pinActiveChannels(setup, dm->getCurrentAudioDevice(), explicitInputChannels, explicitOutputChannels,
@@ -486,7 +479,6 @@ juce::var StandaloneAudioSettings::restartDevice() {
   auto* dm = deviceManager();
   if (dm == nullptr)
     return makeResult("Audio settings are unavailable.");
-  logSetup("restartDevice");
   dm->closeAudioDevice();
   dm->restartLastAudioDevice();
   const bool reopened = dm->getCurrentAudioDevice() != nullptr;
@@ -635,16 +627,11 @@ void StandaloneAudioSettings::ensureInitialPolicies() {
   // no-op when nothing differs, so the common path costs nothing. Only when
   // this device pair has never been seen do we record the boot state as its
   // baseline.
-  logSetup("boot");
   const auto saved = getRememberedSetups().getProperty(currentSetupKey(), {});
-  if (saved.isObject()) {
-    juce::Logger::writeToLog("[AudioSettings] boot: re-asserting remembered setup " +
-                             juce::JSON::toString(saved, true));
+  if (saved.isObject())
     applyRememberedSetup(saved);
-  } else {
-    juce::Logger::writeToLog("[AudioSettings] boot: no remembered setup for this device pair");
+  else
     rememberCurrentSetup();
-  }
   applyMonitoringPolicy();
 }
 
@@ -729,10 +716,8 @@ void StandaloneAudioSettings::applyPreferredSetup() {
     changed = true;
   }
 
-  if (changed) {
-    logSetup("applyPreferredSetup");
+  if (changed)
     dm->setAudioDeviceSetup(setup, true);
-  }
 }
 
 bool StandaloneAudioSettings::applyRememberedSetup(const juce::var& saved) {
@@ -772,9 +757,6 @@ bool StandaloneAudioSettings::applyRememberedSetup(const juce::var& saved) {
     explicitOutputChannels = outMask;
   }
 
-  logSetup("applyRememberedSetup rate=" + juce::String(setup.sampleRate) +
-           " buf=" + juce::String(setup.bufferSize) + " in=" + setup.inputChannels.toString(2) +
-           " out=" + setup.outputChannels.toString(2));
   return dm->setAudioDeviceSetup(setup, true).isEmpty();
 }
 
@@ -806,20 +788,16 @@ void StandaloneAudioSettings::rememberCurrentSetup() {
   entry->setProperty("buffer", device->getCurrentBufferSizeSamples());
   entry->setProperty("in", inMask.toString(16));
   entry->setProperty("out", outMask.toString(16));
-  // Own `entry` through a var for the rest of this function. setProperty()
-  // below (NamedValueSet::set) skips storing the value entirely when it
-  // equals what's already there for this key - if that's its only owner,
-  // entry gets deleted right then, and re-wrapping the same raw pointer in
-  // the log line below is a use-after-free (seen live: ASan caught exactly
-  // this, freed inside setProperty, read again two lines later).
+  // Own `entry` through a var immediately and never re-wrap the raw pointer:
+  // NamedValueSet::set() skips storing a value that equals what's already
+  // there for the key, and a skipped store deletes a sole-owner temporary
+  // (was a live use-after-free when a log line re-wrapped `entry` here).
   const juce::var entryVar(entry);
 
   auto remembered = getRememberedSetups();
   if (auto* obj = remembered.getDynamicObject())
     obj->setProperty(currentSetupKey(), entryVar);
   p->setValue(kRememberedSetupsKey, juce::JSON::toString(remembered, true));
-  juce::Logger::writeToLog("[AudioSettings] remember \"" + currentSetupKey() +
-                           "\" = " + juce::JSON::toString(entryVar, true));
 }
 
 void StandaloneAudioSettings::applyMonitoringPolicy() {
@@ -861,46 +839,11 @@ juce::var StandaloneAudioSettings::finishApply(const juce::String& error) {
     rememberCurrentSetup();
     applyMonitoringPolicy();
   } else {
-    logSetup("apply failed: " + error);
+    // Failures are rare and were the hardest thing to diagnose remotely;
+    // one line per failed apply is worth keeping in release logs.
+    juce::Logger::writeToLog("[AudioSettings] apply failed: " + error);
   }
   return makeResult(error);
-}
-
-void StandaloneAudioSettings::logSetup(const juce::String& tag) {
-  auto* dm = deviceManager();
-  if (dm == nullptr)
-    return;
-
-  const auto setup = dm->getAudioDeviceSetup();
-  auto* device = dm->getCurrentAudioDevice();
-
-  // Requested side (what we asked for) and readback side (what the device is
-  // actually running) on one line; a mismatch between the two is exactly the
-  // evidence needed for the Linux mono->stereo reports.
-  juce::String snapshot;
-  snapshot << "type=" << dm->getCurrentAudioDeviceType() << " in=\"" << setup.inputDeviceName
-           << "\" out=\"" << setup.outputDeviceName << "\" req[rate=" << setup.sampleRate
-           << " buf=" << setup.bufferSize << " inMask=" << setup.inputChannels.toString(2)
-           << (setup.useDefaultInputChannels ? "*" : "")
-           << " outMask=" << setup.outputChannels.toString(2)
-           << (setup.useDefaultOutputChannels ? "*" : "") << "]";
-  if (device != nullptr)
-    snapshot << " dev[rate=" << device->getCurrentSampleRate()
-             << " buf=" << device->getCurrentBufferSizeSamples()
-             << " inActive=" << device->getActiveInputChannels().toString(2)
-             << " outActive=" << device->getActiveOutputChannels().toString(2) << "]";
-  else
-    snapshot << " dev[none]";
-
-  // Change callbacks re-log the same state repeatedly; only the transitions
-  // are interesting. Explicit action tags always log so the sequence of user
-  // actions stays visible even when a setter ends up being a no-op.
-  const bool isChangeCallback = tag == "change";
-  if (isChangeCallback && snapshot == lastLoggedSetup)
-    return;
-  lastLoggedSetup = snapshot;
-
-  juce::Logger::writeToLog("[AudioSettings] " + tag + ": " + snapshot);
 }
 
 //==============================================================================
