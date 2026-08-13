@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/react/sortable';
-import { ArrowLeftRight, ClipboardPaste, Copy, PlusCircle, Power, Trash2 } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  ClipboardPaste,
+  Copy,
+  PlusCircle,
+  Power,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { BlockEnergyBorder, BlockLed } from './BlockLed';
 import { ToneImage } from './GearIcon';
 import { LoadingDots } from './LoadingDots';
@@ -14,7 +22,7 @@ import { TileMenu } from './TileMenu';
 import type { TileMenuAnchor } from './TileMenu';
 import { copyBlock } from '../hooks/useBlockClipboard';
 import { useToast } from './Toast';
-import { HIGHLIGHT, ICON_SIZE, SURFACE, SURFACE_RAISED } from './theme';
+import { GRAY, ICON_SIZE, SURFACE, SURFACE_RAISED } from './theme';
 
 /**
  * Gallery view of a chain block: a square tone image with quick actions
@@ -30,6 +38,30 @@ import { HIGHLIGHT, ICON_SIZE, SURFACE, SURFACE_RAISED } from './theme';
 
 /** Opacity of the tile while it travels with the pointer. */
 const DRAG_GHOST_OPACITY = 0.75;
+
+/** File-drag drop-target chrome (tone tiles + add tile). */
+const FILE_DROP_BORDER = '2px dashed rgba(0, 209, 59, 0.50)';
+const ADD_TILE_BORDER = '2px dashed rgba(141, 141, 147, 0.65)';
+const FILE_DROP_ICON_SIZE = 36;
+
+const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
+
+// The global drop swallow (main.tsx) only stops the webview navigating away;
+// accepting a drop also needs every dragover cancelled with the file-copy
+// effect, or the OS shows a rejection cursor.
+const armFileDrag = (e: React.DragEvent, setArmed: (v: boolean) => void) => {
+  if (!isFileDrag(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  setArmed(true);
+};
+
+const disarmFileDrag = (e: React.DragEvent, setArmed: (v: boolean) => void) => {
+  // Crossing into a child still fires dragLeave on the parent; ignore those
+  // or the upload icon / border flicker as the pointer moves across the tile.
+  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+  setArmed(false);
+};
 
 /** Keep tile buttons from taking focus on press: the webview scrolls the
     focused element into view, which nudges the whole lane by a pixel. */
@@ -91,8 +123,10 @@ const TileSurface: React.FC<{
   size: number;
   enabled: boolean;
   dragging: boolean;
+  /** OS file drag is hovering this tile (upload icon + dashed green border). */
+  dropArmed: boolean;
   actions: TileActions;
-}> = ({ block, size, enabled, dragging, actions }) => {
+}> = ({ block, size, enabled, dragging, dropArmed, actions }) => {
   const { blockId, tone } = block;
 
   // A model download/prepare is in flight: `modelLoading` covers switches
@@ -127,34 +161,49 @@ const TileSurface: React.FC<{
           overflow: 'hidden',
           cursor: 'pointer',
           boxSizing: 'border-box',
+          border: dropArmed ? FILE_DROP_BORDER : undefined,
           // Touch drags: without this, touch devices claim the gesture for
           // lane scrolling and pointercancel kills the drag instantly. Drag
           // wins on the tile face; lanes still pan from the gaps around it.
           touchAction: 'none',
         }}
       >
-        {/* Tone image (dimmed while powered off, loading, or failed) */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            opacity: enabled && !busy && !block.loadFailed ? 1 : 0.35,
-            transition: 'opacity 0.2s ease',
-          }}
-        >
-          <ToneImage
-            src={tone.images?.[0]}
-            alt={tone.title}
-            gear={tone.gear}
-            local={tone.local}
-            boxSize={size}
-            draggable={false}
-          />
-        </div>
+        {dropArmed ? (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Upload size={FILE_DROP_ICON_SIZE} color={GRAY} />
+          </div>
+        ) : (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              opacity: enabled && !busy && !block.loadFailed ? 1 : 0.35,
+              transition: 'opacity 0.2s ease',
+            }}
+          >
+            <ToneImage
+              src={tone.images?.[0]}
+              alt={tone.title}
+              gear={tone.gear}
+              local={tone.local}
+              boxSize={size}
+              iconSize={64}
+              draggable={false}
+            />
+          </div>
+        )}
 
         {/* Busy dots while the model downloads natively; if the download
             failed, a retry affordance instead (dots would spin forever). */}
-        {(busy || block.loadFailed) && (
+        {!dropArmed && (busy || block.loadFailed) && (
           <div
             style={{
               position: 'absolute',
@@ -178,70 +227,76 @@ const TileSurface: React.FC<{
 
         {/* Translucent strip under the quick actions so they read on any art.
             Fades in with the header (opacity only, never a layout change). */}
-        <div
-          className="tile-chrome"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '32px',
-            background: 'rgba(0, 0, 0, 0.35)',
-            pointerEvents: 'none',
-          }}
-        />
+        {!dropArmed && (
+          <div
+            className="tile-chrome"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '32px',
+              background: 'rgba(0, 0, 0, 0.35)',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
 
         {/* Top quick-action bar (hover-revealed): power on the left, swap and
             trash clustered on the right. */}
-        <div
-          className="tile-chrome"
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '4px',
-          }}
-        >
-          <ChromeIconButton
-            tone="power"
-            on={enabled}
-            help={HELP.blockPower}
-            onClick={actions.onTogglePower}
-            onMouseDown={preventFocus}
+        {!dropArmed && (
+          <div
+            className="tile-chrome"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '4px',
+            }}
           >
-            <Power size={ICON_SIZE} />
-          </ChromeIconButton>
-          <div style={{ display: 'flex', gap: '16px' }}>
             <ChromeIconButton
-              help={HELP.swapTone}
-              onClick={actions.onSwap}
+              tone="power"
+              on={enabled}
+              help={HELP.blockPower}
+              onClick={actions.onTogglePower}
               onMouseDown={preventFocus}
             >
-              <ArrowLeftRight size={ICON_SIZE} />
+              <Power size={ICON_SIZE} />
             </ChromeIconButton>
-            <ChromeIconButton
-              help={HELP.removeBlock}
-              onClick={actions.onRemove}
-              onMouseDown={preventFocus}
-            >
-              <Trash2 size={ICON_SIZE} />
-            </ChromeIconButton>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <ChromeIconButton
+                help={HELP.swapTone}
+                onClick={actions.onSwap}
+                onMouseDown={preventFocus}
+              >
+                <ArrowLeftRight size={ICON_SIZE} />
+              </ChromeIconButton>
+              <ChromeIconButton
+                help={HELP.removeBlock}
+                onClick={actions.onRemove}
+                onMouseDown={preventFocus}
+              >
+                <Trash2 size={ICON_SIZE} />
+              </ChromeIconButton>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Clip latch lives outside the overflow:hidden face so it stacks
             above the inset glow; red dot only while clipped. */}
       </div>
 
-      <BlockEnergyBorder meterId={outMeterId} borderRadius={12} />
-      <div style={{ position: 'absolute', bottom: '8px', right: '8px', zIndex: 4 }}>
-        <BlockLed meterId={outMeterId} size={10} />
-      </div>
+      {!dropArmed && <BlockEnergyBorder meterId={outMeterId} borderRadius={12} />}
+      {!dropArmed && (
+        <div style={{ position: 'absolute', bottom: '8px', right: '8px', zIndex: 4 }}>
+          <BlockLed meterId={outMeterId} size={10} />
+        </div>
+      )}
     </div>
   );
 };
@@ -266,12 +321,15 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
   ({ block, index, group, size, onOpen }) => {
     const { blockId, params } = block;
     const actions = useChainActions();
+    const toast = useToast();
     const { menuAnchor, openMenu, closeMenu, shouldIgnoreClick } = useTileMenu();
 
     // Optimistic power state; native converges via the chainChanged resync
     // (same pattern as the detail card).
     const [enabled, setEnabled] = useState(params.enabled);
     useEffect(() => setEnabled(params.enabled), [params.enabled]);
+    // True while an OS file drag hovers the tile (upload icon + green dash).
+    const [dropArmed, setDropArmed] = useState(false);
 
     const { ref, isDragging } = useSortable({ id: blockId, index, group });
 
@@ -286,10 +344,22 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
       [actions, blockId]
     );
 
+    const handleDrop = async (e: React.DragEvent) => {
+      e.preventDefault();
+      setDropArmed(false);
+      const item = e.dataTransfer.items[0];
+      if (!item) return;
+      const error = await actions.loadLocalFile(blockId, item);
+      if (error) toast.show(error);
+    };
+
     return (
       <div
         ref={ref}
         onContextMenu={openMenu}
+        onDragOver={(e) => armFileDrag(e, setDropArmed)}
+        onDragLeave={(e) => disarmFileDrag(e, setDropArmed)}
+        onDrop={handleDrop}
         style={{
           // Dim the tile while it travels with the pointer; the hidden
           // placeholder dnd-kit leaves in the lane reveals the plus-circle
@@ -306,6 +376,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
           size={size}
           enabled={enabled}
           dragging={isDragging}
+          dropArmed={dropArmed}
           actions={{
             onOpen: (e) => {
               if (shouldIgnoreClick(e)) return;
@@ -356,8 +427,7 @@ const addTileFaceStyle = (size: number): React.CSSProperties => ({
   height: `${size}px`,
   borderRadius: '12px',
   backgroundColor: SURFACE_RAISED,
-  // https://kovart.github.io/dashed-border-generator/
-  backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%238D8D93FF' stroke-width='2' stroke-dasharray='6%2c 10' stroke-dashoffset='9' stroke-linecap='square'/%3e%3c/svg%3e")`,
+  border: ADD_TILE_BORDER,
   position: 'relative',
   display: 'flex',
   alignItems: 'center',
@@ -402,16 +472,6 @@ export const AddTile: React.FC<AddTileProps> = ({
   const [dropArmed, setDropArmed] = useState(false);
   const { ref, isDragging } = useSortable({ id, index, group });
 
-  // The global drop swallow (main.tsx) only stops the webview navigating
-  // away; accepting the drop here still needs the dragover cancelled with
-  // the file-copy effect, or the OS shows a rejection cursor.
-  const handleDragOver = (e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes('Files')) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setDropArmed(true);
-  };
-
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDropArmed(false);
@@ -443,13 +503,13 @@ export const AddTile: React.FC<AddTileProps> = ({
         onClick();
       }}
       onContextMenu={openMenu}
-      onDragOver={handleDragOver}
-      onDragLeave={() => setDropArmed(false)}
+      onDragOver={(e) => armFileDrag(e, setDropArmed)}
+      onDragLeave={(e) => disarmFileDrag(e, setDropArmed)}
       onDrop={handleDrop}
       {...helpProps(HELP.addTile)}
       style={{
         ...addTileFaceStyle(size),
-        backgroundColor: dropArmed ? HIGHLIGHT : SURFACE_RAISED,
+        ...(dropArmed ? { border: FILE_DROP_BORDER } : {}),
         opacity: isDragging ? DRAG_GHOST_OPACITY : 1,
         cursor: 'pointer',
         // Touch drags need the gesture (see the tone tile face).
@@ -458,9 +518,19 @@ export const AddTile: React.FC<AddTileProps> = ({
         zIndex: menuAnchor ? 5 : undefined,
       }}
     >
-      {!isDragging && (routing === 'left' || routing === 'both') && routingLine('left')}
-      {!isDragging && (routing === 'right' || routing === 'both') && routingLine('right')}
-      <PlusCircle size={40} strokeWidth={1} />
+      {!dropArmed &&
+        !isDragging &&
+        (routing === 'left' || routing === 'both') &&
+        routingLine('left')}
+      {!dropArmed &&
+        !isDragging &&
+        (routing === 'right' || routing === 'both') &&
+        routingLine('right')}
+      {dropArmed ? (
+        <Upload size={FILE_DROP_ICON_SIZE} color={GRAY} />
+      ) : (
+        <PlusCircle size={40} strokeWidth={1} />
+      )}
       {menuAnchor && (
         <TileMenu
           anchor={menuAnchor}

@@ -39,6 +39,11 @@ interface ChromeIconButtonProps {
   on?: boolean;
   /** plain only: HIGHLIGHT fill while true (e.g. non-default input mode). */
   filled?: boolean;
+  /**
+   * Open / panel showing (tone info): WHITE fill + BLACK icon, same as
+   * ChromeTextButton.open. Wins over `tone` / `on` / `filled`.
+   */
+  open?: boolean;
   /** Vertical nudge from a bottom-aligned row (faceplate side buttons). */
   offsetY?: number;
   /** e.g. preventFocus on gallery tiles so the webview doesn't scroll. */
@@ -122,6 +127,7 @@ export const ChromeIconButton: React.FC<ChromeIconButtonProps> = ({
   tone = 'plain',
   on = true,
   filled = false,
+  open = false,
   offsetY,
   onMouseDown,
   disabled = false,
@@ -139,6 +145,13 @@ export const ChromeIconButton: React.FC<ChromeIconButtonProps> = ({
       display: 'grid',
       placeItems: 'center',
       ...toneChrome(tone, on, filled),
+      ...(open
+        ? {
+            color: BLACK,
+            backgroundColor: WHITE,
+            border: `1px solid ${WHITE}`,
+          }
+        : {}),
       opacity: disabled ? 0.3 : 1,
       cursor: disabled ? 'default' : 'pointer',
       transform: offsetY !== undefined ? `translateY(${offsetY}px)` : undefined,

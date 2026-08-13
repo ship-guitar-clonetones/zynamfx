@@ -144,12 +144,13 @@ export function useToneLoadFlow({
     [requireConnection, setShowToneBrowser]
   );
 
-  // Drop a local .nam/.wav (or a folder of them) on an insert slot: no
-  // browser, no auth, the file bytes ride the bridge and native
-  // validates/loads them as one block. Resolves to a user-facing error
-  // message (the tile toasts it), or null on success.
+  // Drop a local .nam/.wav (or a folder of them) on a tile: no browser, no
+  // auth, the file bytes ride the bridge and native validates/loads them.
+  // An insert slot adds a block; an existing tone tile swaps in place.
+  // Resolves to a user-facing error message (the tile toasts it), or null
+  // on success.
   const handleDropFile = useCallback(
-    async (insertBlockId: string, item: DataTransferItem): Promise<string | null> => {
+    async (targetBlockId: string, item: DataTransferItem): Promise<string | null> => {
       // Synchronous reads: the DataTransferItem goes inert once the drop
       // handler yields (the entry/file objects stay usable).
       const entry = item.webkitGetAsEntry();
@@ -175,7 +176,7 @@ export function useToneLoadFlow({
           const payload = await Promise.all(
             files.map(async (f) => ({ name: f.name, data: await readFileBase64(f) }))
           );
-          return await actions.loadLocalTone(entry.name, payload, insertBlockId);
+          return await actions.loadLocalTone(entry.name, payload, targetBlockId);
         }
 
         if (!singleFile) return "Couldn't read the dropped file";
@@ -186,7 +187,7 @@ export function useToneLoadFlow({
         return await actions.loadLocalTone(
           stripExtension(singleFile.name),
           [{ name: singleFile.name, data: await readFileBase64(singleFile) }],
-          insertBlockId
+          targetBlockId
         );
       } catch (error) {
         console.error('Local file drop failed:', error);

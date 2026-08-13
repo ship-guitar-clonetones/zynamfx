@@ -42,6 +42,9 @@ export const Plugin: React.FC = () => {
   // redirect without a picked tone (Browse closed/canceled) so the browser
   // is already mounted under the busy scrim; no flash of the main chain.
   const [showToneBrowser, setShowToneBrowser] = useState(shouldRestoreToneBrowser);
+  // Block info view fills the center column to the header and faceplate so
+  // scroll content isn't stopped by the 24px meter-band pads.
+  const [fillToFaceplate, setFillToFaceplate] = useState(false);
 
   // Chain state: revision-gated polling + mutation actions, owned by one hook.
   const {
@@ -295,22 +298,26 @@ export const Plugin: React.FC = () => {
       switchModel: handleSwitchModel,
       retryLoad: handleRetryLoad,
       listToneModels: session.listToneModels,
+      getTone: session.getTone,
       setBlockParam: actions.setBlockParam,
       setBlockEqBand: actions.setBlockEqBand,
       setBlockEqEnabled: actions.setBlockEqEnabled,
       setBlockEqPre: actions.setBlockEqPre,
       resetBlockEq: actions.resetBlockEq,
       authenticated,
+      login: handleLogin,
     }),
     [
       actions,
       authenticated,
+      handleLogin,
       handleRetryLoad,
       handleShareBlock,
       handleSwitchModel,
       loadFlow.handleAddModel,
       loadFlow.handleDropFile,
       loadFlow.handleSwapBlock,
+      session.getTone,
       session.listToneModels,
     ]
   );
@@ -428,9 +435,11 @@ export const Plugin: React.FC = () => {
                 minWidth: 0,
                 boxSizing: 'border-box',
                 // Shared 24px under the header; 24px above the faceplate only
-                // for chain/BLOCK; Select fills to the faceplate edge.
-                paddingTop: 24,
-                paddingBottom: showToneBrowser ? 0 : 24,
+                // for chain/BLOCK. Select fills to the faceplate; block-info
+                // fills to both header and faceplate, putting those pads
+                // inside the scroll content instead.
+                paddingTop: fillToFaceplate ? 0 : 24,
+                paddingBottom: showToneBrowser || fillToFaceplate ? 0 : 24,
               }}
             >
               {showToneBrowser ? (
@@ -453,6 +462,7 @@ export const Plugin: React.FC = () => {
                     chainRight={stereoEnabled ? (chainRight ?? []) : null}
                     branch={stereoEnabled ? branch : null}
                     sampleRate={sampleRate}
+                    onFillToFaceplate={setFillToFaceplate}
                   />
                 </ChainActionsProvider>
               )}

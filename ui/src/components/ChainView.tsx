@@ -58,6 +58,8 @@ interface ChainViewProps {
   /** Active branch (stereo only), or null when the chains are independent. */
   branch: ChainBranch | null;
   sampleRate: number;
+  /** Block info view: drop the meter-band bottom pad so scroll reaches the faceplate. */
+  onFillToFaceplate?: (fill: boolean) => void;
 }
 
 /** A few px of travel before a drag engages, so tap/click stays a click. */
@@ -87,7 +89,13 @@ type Lanes = Record<ChainSide, ChainItem[]>;
     holds its home slot while the standard drag machinery runs untouched. */
 const DUP_STAND_IN_ID = '__duplicate-stand-in__';
 
-export const ChainView: React.FC<ChainViewProps> = ({ chain, chainRight, branch, sampleRate }) => {
+export const ChainView: React.FC<ChainViewProps> = ({
+  chain,
+  chainRight,
+  branch,
+  sampleRate,
+  onFillToFaceplate,
+}) => {
   const actions = useChainActions();
   // Persisted so the detail takeover survives this component unmounting: a
   // swap from the detail view opens the tone browser (which replaces the whole
@@ -331,7 +339,7 @@ export const ChainView: React.FC<ChainViewProps> = ({ chain, chainRight, branch,
           height: '100%',
           // Top-align under the shared 24px middle-band pad (Plugin); the
           // card bottom then sits 24px above the faceplate when the column
-          // matches the meter height (Figma).
+          // matches the meter height (Figma). Info view scrolls ← BLOCK + card.
           justifyContent: 'flex-start',
           boxSizing: 'border-box',
         }}
@@ -341,6 +349,7 @@ export const ChainView: React.FC<ChainViewProps> = ({ chain, chainRight, branch,
           namDownstream={namDownstream}
           sampleRate={sampleRate}
           onBack={() => setDetailBlockId(null)}
+          onFillToFaceplate={onFillToFaceplate}
         />
       </div>
     );

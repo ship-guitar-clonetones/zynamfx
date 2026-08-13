@@ -88,6 +88,35 @@ TEST(LocalLoadTest, FolderLoadsAsOneTonePerFileModelsSurviveSwitch) {
   EXPECT_EQ(block["tone"]["models"].size(), 2);
 }
 
+TEST(LocalLoadTest, DropOnExistingToneBlockSwapsInPlace) {
+  TONE3000Processor proc;
+  const juce::var first =
+      proc.loadLocalTone("a2-amp-test", filesOf({testFileEntry("a2-amp-test.nam")}));
+  ASSERT_TRUE(first["blockId"].toString().isNotEmpty());
+  ASSERT_TRUE(waitForChainLoaded(proc));
+  const juce::String blockId = first["blockId"].toString();
+
+  const juce::var swapped = proc.loadLocalTone(
+      "cab-ir-test", filesOf({testFileEntry("cab-ir-test.wav")}), blockId.toStdString());
+  EXPECT_TRUE(swapped["error"].isVoid()) << swapped["error"].toString().toStdString();
+  EXPECT_EQ(swapped["blockId"].toString(), blockId);
+  ASSERT_TRUE(waitForChainLoaded(proc));
+
+  const juce::var block = firstToneBlock(proc);
+  EXPECT_EQ(block["blockId"].toString(), blockId);
+  EXPECT_EQ(block["tone"]["title"].toString(), juce::String("cab-ir-test"));
+  EXPECT_EQ(block["tone"]["format"].toString(), juce::String("ir"));
+
+  // Still a single tone block (didn't insert a second).
+  const juce::var state = proc.getChainState(-1);
+  int tones = 0;
+  if (const auto* lane = state["chain"].getArray())
+    for (const auto& item : *lane)
+      if (item["kind"].toString() == "tone")
+        ++tones;
+  EXPECT_EQ(tones, 1);
+}
+
 TEST(LocalLoadTest, IrMixDefaultsFollowKernelLength) {
   // Short (cab) IR: fully wet by default.
   {

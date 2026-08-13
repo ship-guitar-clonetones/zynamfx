@@ -6,6 +6,7 @@ import {
   Equal,
   FolderClosed,
   Gauge,
+  Info,
   Power,
   Share,
   Trash2,
@@ -13,19 +14,27 @@ import {
 import { ToneImage } from './GearIcon';
 import { KnobControl } from './KnobControl';
 import { gainDbScale } from './knobScale';
-import { LoadingDots } from './LoadingDots';
+import { BusyOverlay, LoadingDots } from './LoadingDots';
 import { ModelSelect } from './ModelSelect';
 import { RetryLoadBadge } from './RetryLoadBadge';
 import { BlockMeter } from './BlockMeter';
 import { BlockEqView } from './BlockEqView';
 import type { EqViewMode } from './BlockEqView';
+import { BlockInfoPanel } from './BlockInfoPanel';
 import { meterId } from '../hooks/useMeters';
 import { useChainActions } from '../hooks/useChainActions';
 import { useParameter } from '../hooks/useParameter';
 import type { BlockParamName, ToneBlock } from '../types/chain';
-import type { Model } from '../types/tone';
+import type { Model, Tone } from '../types/tone';
 import { isEqFlat } from '../types/chain';
-import { CARD_WIDTH, CARD_HEIGHT, CARD_RADIUS, HEADER_HEIGHT, BODY_PADDING } from './chainLayout';
+import {
+  CARD_WIDTH,
+  CARD_HEIGHT,
+  CARD_RADIUS,
+  HEADER_HEIGHT,
+  BODY_HEIGHT,
+  BODY_PADDING,
+} from './chainLayout';
 import { formatLabel, gearLabel } from '../t3k/labels';
 import { AvatarImage } from './AvatarFallback';
 import { FormatBadge } from './FormatBadge';
@@ -33,6 +42,7 @@ import { HELP, helpProps } from './helpText';
 import { useBlockNormalizeControlEnabled } from './uiPreferences';
 import { useToast } from './Toast';
 import { ChromeIconButton, ChromeTextButton, chromeIcon } from './ChromeIconButton';
+import { T3K_API } from '../t3k/config';
 import {
   BORDER,
   GRAY,
@@ -48,6 +58,8 @@ import {
 
 /** Tone image; matches the Figma detail mock (fits body with model select). */
 const IMAGE_SIZE = 192;
+/** Info view artwork; Figma detail mock is 160 beside the metadata column. */
+const IMAGE_SIZE_INFO = 160;
 /** Mini meter height in the side rails (meter sits centered above its knob). */
 const RAIL_METER_HEIGHT = 160;
 /** Centers the normalize (=) chrome box on the Out knob. */
@@ -109,6 +121,8 @@ interface ChainBlockProps {
   sampleRate: number;
   /** Return to the chain gallery (← BLOCK sits above the bordered card). */
   onBack: () => void;
+  /** Info view fills the center column to the faceplate (Select Tone pattern). */
+  onFillToFaceplate?: (fill: boolean) => void;
 }
 
 /** The detail card (full block view). All mutations come from the
@@ -119,6 +133,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   namDownstream,
   sampleRate,
   onBack,
+  onFillToFaceplate,
 }) => {
   const { blockId, tone, params } = block;
   const actions = useChainActions();
@@ -135,6 +150,10 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   const [mix, setMix] = useState(params.mix ?? 1.0);
   const [isSwitchingModel, setIsSwitchingModel] = useState(false);
   const [showEq, setShowEq] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [infoTone, setInfoTone] = useState<Tone | null>(null);
+  const [infoLoading, setInfoLoading] = useState(false);
+  const [infoError, setInfoError] = useState<string | null>(null);
   const [eqView, setEqView] = useState<EqViewMode>('sliders');
   // Optimistic EQ power/position state (native converges via polling, like
   // `enabled`).
@@ -205,9 +224,66 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
 
   // A drop-loaded local file (or folder of them): no catalog behind it, so
   // the card keeps the sound controls and drops the catalog chrome (share,
-  // counts). The models are the dropped files themselves; the picker feeds
+  // counts, info). The models are the dropped files themselves; the picker feeds
   // off the tone's own model list.
   const isLocal = tone.local === true;
+
+  // Full catalog metadata for the info panel: fetched on demand from the
+  // TONE3000 API, never written into saved chain/preset state. The seq ref
+  // is a stale guard (the models effect's flag, as a counter since retries
+  // reuse this fetch): only the newest request may touch state, so a swap
+  // mid-flight can't surface the old tone's info.
+  const infoFetchSeq = useRef(0);
+  const fetchInfo = useCallback(
+    async (toneId: number) => {
+      if (!actions.authenticated) return;
+      const seq = ++infoFetchSeq.current;
+      setInfoLoading(true);
+      setInfoError(null);
+      try {
+        const full = await actions.getTone(toneId);
+        if (seq !== infoFetchSeq.current) return;
+        setInfoTone(full);
+      } catch (err) {
+        console.error('Failed to load tone info', err);
+        if (seq !== infoFetchSeq.current) return;
+        setInfoTone(null);
+        setInfoError('Failed to load tone details.');
+      } finally {
+        if (seq === infoFetchSeq.current) setInfoLoading(false);
+      }
+    },
+    [actions]
+  );
+
+  const handleToggleInfo = useCallback(() => {
+    if (showInfo) {
+      setShowInfo(false);
+      return;
+    }
+    setShowEq(false);
+    setShowInfo(true);
+    if (actions.authenticated && infoTone?.id !== tone.id) void fetchInfo(tone.id);
+  }, [actions.authenticated, fetchInfo, infoTone?.id, showInfo, tone.id]);
+
+  // Swap replaces the tone on this block; orphan any in-flight fetch, drop
+  // the stale payload, and refetch if the panel is still open.
+  useEffect(() => {
+    infoFetchSeq.current++;
+    setInfoTone(null);
+    setInfoError(null);
+    setInfoLoading(false);
+    if (showInfo && !isLocal && actions.authenticated) void fetchInfo(tone.id);
+    // Only the tone identity; opening/closing the panel is handleToggleInfo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tone.id]);
+
+  // Select Tone pattern: drop the meter-band bottom pad while info is open
+  // so the card can scroll to the faceplate; restore it on close/unmount.
+  useEffect(() => {
+    onFillToFaceplate?.(showInfo);
+    return () => onFillToFaceplate?.(false);
+  }, [showInfo, onFillToFaceplate]);
 
   // Native persists only the block's *active* model; the full catalog (tones
   // max out at 300 models) is fetched client-side in one call per tone.
@@ -294,542 +370,612 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   // header glow reacts to the toggle immediately.
   const eqActive = eqOn && params.eq ? !isEqFlat(params.eq) : false;
 
+  const tonePageUrl = infoTone?.url || tone.url || `${T3K_API}/tones/${tone.id}`;
+
   return (
     <div
+      className={showInfo ? 'hide-scrollbar' : undefined}
       style={{
         display: 'flex',
         flexDirection: 'column',
         width: `${CARD_WIDTH}px`,
+        height: '100%',
         boxSizing: 'border-box',
+        overflowY: showInfo ? 'auto' : 'hidden',
+        overflowX: 'hidden',
       }}
     >
-      {/* ← BLOCK sits above the bordered card (Figma: 16px mono, gap 16). */}
-      <button
-        type="button"
-        onClick={onBack}
-        {...helpProps(HELP.backToChain)}
-        style={{
-          alignSelf: 'flex-start',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '16px',
-          marginBottom: '16px',
-          background: 'transparent',
-          border: 'none',
-          outline: 'none',
-          padding: 0,
-          cursor: 'pointer',
-          color: WHITE,
-        }}
-      >
-        <ArrowLeft size={16} style={{ display: 'block', flexShrink: 0 }} />
-        <span
-          style={{
-            fontFamily: 'monospace',
-            fontSize: '16px',
-            fontWeight: 400,
-            textTransform: 'uppercase',
-            lineHeight: 1.4,
-          }}
-        >
-          Block
-        </span>
-      </button>
-
+      {/* 24px top/bottom pads live in the scroll content so ← BLOCK + card
+          can reach the plugin header and faceplate. */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          position: 'relative',
-          width: '100%',
-          height: `${CARD_HEIGHT}px`,
-          boxSizing: 'border-box',
-          border: BORDER,
-          borderRadius: `${CARD_RADIUS}px`,
-          overflow: 'hidden',
+          alignItems: 'stretch',
+          padding: showInfo ? '24px 0' : 0,
         }}
       >
-        {/* Header: 16px inset, chrome centered in HEADER_HEIGHT. */}
-        <div
+        {/* ← BLOCK sits above the bordered card (Figma: 16px mono, gap 16). */}
+        <button
+          type="button"
+          onClick={onBack}
+          {...helpProps(HELP.backToChain)}
           style={{
-            height: `${HEADER_HEIGHT}px`,
-            flexShrink: 0,
+            alignSelf: 'flex-start',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: `0 ${BODY_PADDING}px`,
-            boxSizing: 'border-box',
-            borderBottom: BORDER,
+            gap: '16px',
+            marginBottom: '16px',
+            flexShrink: 0,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            color: WHITE,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0 }}>
-            <ChromeIconButton
-              tone="power"
-              on={enabled}
-              help={HELP.blockPower}
-              onClick={handleToggleEnabled}
-            >
-              <Power />
-            </ChromeIconButton>
+          <ArrowLeft size={16} style={{ display: 'block', flexShrink: 0 }} />
+          <span
+            style={{
+              fontFamily: 'monospace',
+              fontSize: '16px',
+              fontWeight: 400,
+              textTransform: 'uppercase',
+              lineHeight: 1.4,
+            }}
+          >
+            Block
+          </span>
+        </button>
 
-            {/* Calibration indicator (not a button): white = the loaded model
-                carries calibration data, gray = it doesn't. Hidden entirely
-                while the calibration setting is off. */}
-            {showCalibration && (
-              <span
-                {...helpProps(calibrationActive ? HELP.blockCalibrated : HELP.blockUncalibrated)}
-                style={{
-                  width: `${ICON_BOX_SIZE}px`,
-                  height: `${ICON_BOX_SIZE}px`,
-                  display: 'grid',
-                  placeItems: 'center',
-                  color: calibrationActive ? WHITE : GRAY,
-                }}
-              >
-                {chromeIcon(<Gauge />, ICON_SIZE)}
-              </span>
-            )}
-          </div>
-
-          {/* Right cluster: EQ submenu (pill when open) then share/swap/trash.
-              EQ stays rightmost in the submenu so opening grows left only.
-              marginRight cancels the pill's right pad so EQ doesn't shift
-              relative to share. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0 }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: showEq ? '16px' : 0,
-                padding: showEq ? '4px 12px' : 0,
-                // Pull back by the pill's right pad so EQ stays put vs share.
-                marginRight: showEq ? -12 : 0,
-                borderRadius: showEq ? 100 : 0,
-                backgroundColor: showEq ? SEGMENTED_TRACK : 'transparent',
-                flexShrink: 0,
-                boxSizing: 'border-box',
-              }}
-            >
-              {showEq && (
-                <>
-                  <ChromeIconButton
-                    tone="power"
-                    on={eqOn}
-                    help={HELP.eqPower}
-                    onClick={handleToggleEqEnabled}
-                  >
-                    <Power />
-                  </ChromeIconButton>
-                  <ChromeTextButton armed={eqPre} help={HELP.eqPre} onClick={handleToggleEqPre}>
-                    PRE
-                  </ChromeTextButton>
-                  <div
-                    style={{
-                      ...segmentedGroupStyle(),
-                      // Nested track, slightly quieter than the outer pill.
-                      backgroundColor: 'rgba(118, 118, 128, 0.24)',
-                    }}
-                  >
-                    <button
-                      onClick={() => setEqView('sliders')}
-                      {...helpProps(HELP.eqSlidersView)}
-                      style={{
-                        ...segmentedCellStyle(true),
-                        color: eqView === 'sliders' ? WHITE : GRAY,
-                      }}
-                    >
-                      <EqSlidersIcon />
-                    </button>
-                    <button
-                      onClick={() => setEqView('graph')}
-                      {...helpProps(HELP.eqCurveView)}
-                      style={{
-                        ...segmentedCellStyle(true),
-                        color: eqView === 'graph' ? WHITE : GRAY,
-                      }}
-                    >
-                      <EqCurveIcon />
-                    </button>
-                  </div>
-                </>
-              )}
-              <ChromeTextButton
-                armed={eqActive}
-                open={showEq}
-                help={HELP.eqToggle}
-                onClick={() => setShowEq((prev) => !prev)}
-              >
-                EQ
-              </ChromeTextButton>
-            </div>
-
-            {!isLocal && (
-              <ChromeIconButton help={HELP.shareTone} onClick={handleShare}>
-                <Share />
-              </ChromeIconButton>
-            )}
-            <ChromeIconButton help={HELP.swapTone} onClick={() => actions.swapBlock(blockId)}>
-              <ArrowLeftRight />
-            </ChromeIconButton>
-            <ChromeIconButton help={HELP.removeBlock} onClick={() => actions.removeBlock(blockId)}>
-              <Trash2 />
-            </ChromeIconButton>
-          </div>
-        </div>
-
-        {/* Body: tone view uses BODY_PADDING; EQ spectrum/grid bleeds
-            edge-to-edge (interactive chrome insets itself). */}
         <div
           style={{
-            flex: 1,
-            minHeight: 0,
             display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'stretch',
-            gap: showEq ? 0 : '24px',
-            padding: showEq ? 0 : `${BODY_PADDING}px`,
+            flexDirection: 'column',
+            position: 'relative',
+            width: '100%',
+            height: showInfo ? undefined : `${CARD_HEIGHT}px`,
+            minHeight: `${CARD_HEIGHT}px`,
             boxSizing: 'border-box',
-            opacity: enabled ? 1 : 0.45,
-            transition: 'opacity 0.2s ease',
-            // Keep the body on its own pixel-snapped compositor layer so the
-            // opacity fade (power toggle) can't promote/demote a temporary layer
-            // that nudges inner content (notably the scaled EQ SVG) by a pixel.
-            transform: 'translateZ(0)',
-            willChange: 'opacity',
+            border: BORDER,
+            borderRadius: `${CARD_RADIUS}px`,
+            overflow: 'hidden',
           }}
         >
-          {showEq ? (
-            <BlockEqView
-              blockId={blockId}
-              bands={params.eq?.bands ?? []}
-              eqEnabled={eqOn}
-              sampleRate={sampleRate}
-              view={eqView}
-              onSetBand={actions.setBlockEqBand}
-            />
-          ) : (
-            <>
-              {/* Input rail: meter above In knob (Figma: gap 12). */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  flexShrink: 0,
-                  gap: '12px',
-                }}
+          {/* Header: 16px inset, chrome centered in HEADER_HEIGHT. */}
+          <div
+            style={{
+              height: `${HEADER_HEIGHT}px`,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `0 ${BODY_PADDING}px`,
+              boxSizing: 'border-box',
+              borderBottom: BORDER,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0 }}>
+              <ChromeIconButton
+                tone="power"
+                on={enabled}
+                help={HELP.blockPower}
+                onClick={handleToggleEnabled}
               >
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', minHeight: 0 }}>
-                  <BlockMeter meterId={meterId.blockIn(blockId)} length={RAIL_METER_HEIGHT} />
-                </div>
-                <KnobControl
-                  label="In"
-                  value={inputGain}
-                  onChange={(val) => {
-                    setInputGain(val);
-                    setParam('inputGain', val);
-                  }}
-                  onDragStateChange={handleKnobDragState}
-                  size={KNOB_SIZE_SECONDARY}
-                  labelBottom={false}
-                  thumb="secondary"
-                  scale={gainDbScale}
-                  defaultValue={0.5}
-                  help={HELP.blockIn}
-                />
-              </div>
+                <Power />
+              </ChromeIconButton>
 
-              {/* Center: image + tone info on top, model picker spanning full width. */}
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  alignSelf: 'stretch',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <div
+              {/* Calibration indicator (not a button): white = the loaded model
+                carries calibration data, gray = it doesn't. Hidden entirely
+                while the calibration setting is off. */}
+              {showCalibration && (
+                <span
+                  {...helpProps(calibrationActive ? HELP.blockCalibrated : HELP.blockUncalibrated)}
                   style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: '24px',
-                    minWidth: 0,
+                    width: `${ICON_BOX_SIZE}px`,
+                    height: `${ICON_BOX_SIZE}px`,
+                    display: 'grid',
+                    placeItems: 'center',
+                    color: calibrationActive ? WHITE : GRAY,
                   }}
                 >
-                  {/* Tone image (gear glyph fallback, like the web's ToneCard) */}
-                  <div
-                    style={{
-                      position: 'relative',
-                      width: IMAGE_SIZE,
-                      height: IMAGE_SIZE,
-                      borderRadius: '8px',
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                    }}
-                  >
+                  {chromeIcon(<Gauge />, ICON_SIZE)}
+                </span>
+              )}
+            </div>
+
+            {/* Right cluster: EQ submenu (pill when open), info, then share/swap/trash.
+              EQ stays rightmost in the submenu so opening grows left only.
+              marginRight cancels the pill's right pad so EQ doesn't shift
+              relative to info. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0 }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: showEq ? '16px' : 0,
+                  padding: showEq ? '4px 12px' : 0,
+                  // Pull back by the pill's right pad so EQ stays put vs share.
+                  marginRight: showEq ? -12 : 0,
+                  borderRadius: showEq ? 100 : 0,
+                  backgroundColor: showEq ? SEGMENTED_TRACK : 'transparent',
+                  flexShrink: 0,
+                  boxSizing: 'border-box',
+                }}
+              >
+                {showEq && (
+                  <>
+                    <ChromeIconButton
+                      tone="power"
+                      on={eqOn}
+                      help={HELP.eqPower}
+                      onClick={handleToggleEqEnabled}
+                    >
+                      <Power />
+                    </ChromeIconButton>
+                    <ChromeTextButton armed={eqPre} help={HELP.eqPre} onClick={handleToggleEqPre}>
+                      PRE
+                    </ChromeTextButton>
                     <div
                       style={{
-                        opacity: modelBusy || block.loadFailed ? 0.35 : 1,
-                        transition: 'opacity 0.2s ease',
-                        width: '100%',
-                        height: '100%',
+                        ...segmentedGroupStyle(),
+                        // Nested track, slightly quieter than the outer pill.
+                        backgroundColor: 'rgba(118, 118, 128, 0.24)',
                       }}
                     >
-                      <ToneImage
-                        src={tone.images?.[0]}
-                        alt={tone.title}
-                        gear={tone.gear}
-                        local={tone.local}
-                        boxSize={IMAGE_SIZE}
-                      />
-                    </div>
-                    {(modelBusy || block.loadFailed) && (
-                      <div
+                      <button
+                        onClick={() => setEqView('sliders')}
+                        {...helpProps(HELP.eqSlidersView)}
                         style={{
-                          position: 'absolute',
-                          inset: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
+                          ...segmentedCellStyle(true),
+                          color: eqView === 'sliders' ? WHITE : GRAY,
                         }}
                       >
-                        {block.loadFailed ? (
-                          <RetryLoadBadge onRetry={() => actions.retryLoad(blockId)} />
-                        ) : (
-                          <LoadingDots />
-                        )}
-                      </div>
-                    )}
-                  </div>
+                        <EqSlidersIcon />
+                      </button>
+                      <button
+                        onClick={() => setEqView('graph')}
+                        {...helpProps(HELP.eqCurveView)}
+                        style={{
+                          ...segmentedCellStyle(true),
+                          color: eqView === 'graph' ? WHITE : GRAY,
+                        }}
+                      >
+                        <EqCurveIcon />
+                      </button>
+                    </div>
+                  </>
+                )}
+                <ChromeTextButton
+                  armed={eqActive}
+                  open={showEq}
+                  help={HELP.eqToggle}
+                  onClick={() => {
+                    setShowEq((prev) => !prev);
+                    setShowInfo(false);
+                  }}
+                >
+                  EQ
+                </ChromeTextButton>
+              </div>
 
-                  {/* Tone info: title / gear+badge / counts / creator (Figma gaps). */}
+              {!isLocal && (
+                <ChromeIconButton open={showInfo} help={HELP.toneInfo} onClick={handleToggleInfo}>
+                  <Info />
+                </ChromeIconButton>
+              )}
+              {!isLocal && (
+                <ChromeIconButton help={HELP.shareTone} onClick={handleShare}>
+                  <Share />
+                </ChromeIconButton>
+              )}
+              <ChromeIconButton help={HELP.swapTone} onClick={() => actions.swapBlock(blockId)}>
+                <ArrowLeftRight />
+              </ChromeIconButton>
+              <ChromeIconButton
+                help={HELP.removeBlock}
+                onClick={() => actions.removeBlock(blockId)}
+              >
+                <Trash2 />
+              </ChromeIconButton>
+            </div>
+          </div>
+
+          {/* Body: tone view uses BODY_PADDING; EQ spectrum/grid bleeds
+            edge-to-edge (interactive chrome insets itself). Info view drops
+            knobs/model select and lets the right column grow. */}
+          <div
+            style={{
+              height: showInfo ? undefined : `${BODY_HEIGHT}px`,
+              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'stretch',
+              gap: showEq || showInfo ? 0 : '24px',
+              padding: showEq
+                ? 0
+                : showInfo
+                  ? `${BODY_PADDING}px ${BODY_PADDING}px 24px`
+                  : `${BODY_PADDING}px`,
+              boxSizing: 'border-box',
+              position: 'relative',
+              opacity: enabled ? 1 : 0.45,
+              transition: 'opacity 0.2s ease',
+              // Keep the body on its own pixel-snapped compositor layer so the
+              // opacity fade (power toggle) can't promote/demote a temporary layer
+              // that nudges inner content (notably the scaled EQ SVG) by a pixel.
+              transform: 'translateZ(0)',
+              willChange: 'opacity',
+            }}
+          >
+            {showEq ? (
+              <BlockEqView
+                blockId={blockId}
+                bands={params.eq?.bands ?? []}
+                eqEnabled={eqOn}
+                sampleRate={sampleRate}
+                view={eqView}
+                onSetBand={actions.setBlockEqBand}
+              />
+            ) : (
+              <>
+                {/* Input rail: meter above In knob (Figma: gap 12). */}
+                {!showInfo && (
                   <div
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '16px',
-                      minWidth: 0,
-                      flex: 1,
+                      alignItems: 'center',
+                      flexShrink: 0,
+                      gap: '12px',
                     }}
                   >
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', minHeight: 0 }}>
+                      <BlockMeter meterId={meterId.blockIn(blockId)} length={RAIL_METER_HEIGHT} />
+                    </div>
+                    <KnobControl
+                      label="In"
+                      value={inputGain}
+                      onChange={(val) => {
+                        setInputGain(val);
+                        setParam('inputGain', val);
+                      }}
+                      onDragStateChange={handleKnobDragState}
+                      size={KNOB_SIZE_SECONDARY}
+                      labelBottom={false}
+                      thumb="secondary"
+                      scale={gainDbScale}
+                      defaultValue={0.5}
+                      help={HELP.blockIn}
+                    />
+                  </div>
+                )}
+
+                {/* Center: image + tone info on top, model picker spanning full width.
+                  Info view keeps image + meta and drops the picker / knobs. */}
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    alignSelf: 'stretch',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: showInfo ? 'flex-start' : 'space-between',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: showInfo ? 'flex-start' : 'center',
+                      gap: '24px',
+                      minWidth: 0,
+                    }}
+                  >
+                    {/* Tone image (gear glyph fallback, like the web's ToneCard) */}
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: showInfo ? IMAGE_SIZE_INFO : IMAGE_SIZE,
+                        height: showInfo ? IMAGE_SIZE_INFO : IMAGE_SIZE,
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          opacity: modelBusy || block.loadFailed ? 0.35 : 1,
+                          transition: 'opacity 0.2s ease',
+                          width: '100%',
+                          height: '100%',
+                        }}
+                      >
+                        <ToneImage
+                          src={tone.images?.[0]}
+                          alt={tone.title}
+                          gear={tone.gear}
+                          local={tone.local}
+                          boxSize={showInfo ? IMAGE_SIZE_INFO : IMAGE_SIZE}
+                        />
+                      </div>
+                      {(modelBusy || block.loadFailed) && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {block.loadFailed ? (
+                            <RetryLoadBadge onRetry={() => actions.retryLoad(blockId)} />
+                          ) : (
+                            <LoadingDots />
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tone info: title / gear+badge / counts / creator (Figma gaps).
+                      Info view appends description / makes / tags under this. */}
                     <div
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '8px',
+                        gap: showInfo ? '24px' : '16px',
                         minWidth: 0,
+                        flex: 1,
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: '18px',
-                          color: WHITE,
-                          fontWeight: 700,
-                          lineHeight: 1.4,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {tone.title}
-                      </span>
-
                       <div
                         style={{
                           display: 'flex',
-                          flexDirection: 'row',
-                          alignItems: 'center',
+                          flexDirection: 'column',
                           gap: '16px',
+                          minWidth: 0,
                         }}
                       >
-                        {tone.gear && (
-                          <span style={{ fontSize: '14px', color: MUTED, fontWeight: 400 }}>
-                            {gearLabel(tone.gear)}
-                          </span>
-                        )}
-                        {formatBadge && <FormatBadge label={formatBadge} a2={isNam} />}
-                      </div>
-                    </div>
-
-                    {!isLocal && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: '24px',
-                        }}
-                      >
-                        <CountStat
-                          icon={<Download size={16} />}
-                          value={tone.downloads_count ?? 0}
-                        />
-                        <CountStat
-                          icon={<FolderClosed size={16} />}
-                          value={tone.models_count ?? 0}
-                        />
-                      </div>
-                    )}
-
-                    {tone.user && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div
                           style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            overflow: 'hidden',
-                            flexShrink: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            minWidth: 0,
                           }}
                         >
-                          <AvatarImage
-                            src={tone.user.avatar_url}
-                            alt={tone.user.username}
-                            size={32}
-                          />
-                        </div>
-                        <span style={{ fontSize: '14px', color: GRAY, fontWeight: 400 }}>
-                          {tone.user.username}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                          <span
+                            style={{
+                              fontSize: '18px',
+                              color: WHITE,
+                              fontWeight: 700,
+                              lineHeight: 1.4,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {tone.title}
+                          </span>
 
-                {/* Switching catalog models re-downloads through native with
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: '16px',
+                            }}
+                          >
+                            {tone.gear && (
+                              <span style={{ fontSize: '14px', color: MUTED, fontWeight: 400 }}>
+                                {gearLabel(tone.gear)}
+                              </span>
+                            )}
+                            {formatBadge && <FormatBadge label={formatBadge} a2={isNam} />}
+                          </div>
+                        </div>
+
+                        {!isLocal && (
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: '24px',
+                            }}
+                          >
+                            <CountStat
+                              icon={<Download size={16} />}
+                              value={tone.downloads_count ?? 0}
+                            />
+                            <CountStat
+                              icon={<FolderClosed size={16} />}
+                              value={tone.models_count ?? 0}
+                            />
+                          </div>
+                        )}
+
+                        {tone.user && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '50%',
+                                overflow: 'hidden',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <AvatarImage
+                                src={tone.user.avatar_url}
+                                alt={tone.user.username}
+                                size={32}
+                              />
+                            </div>
+                            <span style={{ fontSize: '14px', color: GRAY, fontWeight: 400 }}>
+                              {tone.user.username}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {showInfo && (
+                        <BlockInfoPanel
+                          loading={infoLoading}
+                          error={infoError}
+                          onRetry={() => void fetchInfo(tone.id)}
+                          authenticated={actions.authenticated}
+                          onLogin={actions.login}
+                          tone={infoTone}
+                          pageUrl={tonePageUrl}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Switching catalog models re-downloads through native with
                   a Bearer token, so the picker is inert while signed out.
                   The wrapper carries the cursor + hint, as the select itself
                   is pointer-events: none when disabled. Local switches read
                   the stash: no auth, and the picker always shows (the
                   dropped file names are the block's provenance). */}
-                <div
-                  {...(!isLocal && !actions.authenticated
-                    ? helpProps(HELP.modelSelectSignedOut)
-                    : {})}
-                  style={{
-                    cursor: isLocal || actions.authenticated ? 'default' : 'not-allowed',
-                  }}
-                >
-                  <ModelSelect
-                    options={modelOptions.map((m) => ({ id: String(m.id), name: m.name }))}
-                    value={String(block.activeModelId)}
-                    onChange={handleModelSelect}
-                    height={36}
-                    disabled={!isLocal && !actions.authenticated}
-                    loading={modelsLoading}
-                    totalCount={isLocal ? tone.models.length : modelsTotal}
-                  />
+                  {!showInfo && (
+                    <div
+                      {...(!isLocal && !actions.authenticated
+                        ? helpProps(HELP.modelSelectSignedOut)
+                        : {})}
+                      style={{
+                        cursor: isLocal || actions.authenticated ? 'default' : 'not-allowed',
+                      }}
+                    >
+                      <ModelSelect
+                        options={modelOptions.map((m) => ({ id: String(m.id), name: m.name }))}
+                        value={String(block.activeModelId)}
+                        onChange={handleModelSelect}
+                        height={36}
+                        disabled={!isLocal && !actions.authenticated}
+                        loading={modelsLoading}
+                        totalCount={isLocal ? tone.models.length : modelsTotal}
+                      />
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {/* Mix knob: bottom aligned, between the model select and the output rail */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  flexShrink: 0,
-                }}
-              >
-                <KnobControl
-                  label="Mix"
-                  value={mix}
-                  onChange={(val) => {
-                    setMix(val);
-                    setParam('mix', val);
-                  }}
-                  onDragStateChange={handleKnobDragState}
-                  size={KNOB_SIZE_SECONDARY}
-                  labelBottom={false}
-                  thumb="secondary"
-                  defaultValue={defaultMix}
-                  help={HELP.blockMix}
-                />
-              </div>
+                {/* Mix knob: bottom aligned, between the model select and the output rail */}
+                {!showInfo && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <KnobControl
+                      label="Mix"
+                      value={mix}
+                      onChange={(val) => {
+                        setMix(val);
+                        setParam('mix', val);
+                      }}
+                      onDragStateChange={handleKnobDragState}
+                      size={KNOB_SIZE_SECONDARY}
+                      labelBottom={false}
+                      thumb="secondary"
+                      defaultValue={defaultMix}
+                      help={HELP.blockMix}
+                    />
+                  </div>
+                )}
 
-              {/* Output rail: meter above Out (+ optional normalize). The rail
+                {/* Output rail: meter above Out (+ optional normalize). The rail
                 right-aligns and the meter wrapper is knob-wide, so the meter
                 stays centered over the Out knob whether or not the normalize
                 button widens the bottom row to its left. */}
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-end',
-                  flexShrink: 0,
-                  gap: '12px',
-                }}
-              >
-                <div
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: 0,
-                    width: `${KNOB_SIZE_SECONDARY}px`,
-                  }}
-                >
-                  <BlockMeter meterId={meterId.blockOut(blockId)} length={RAIL_METER_HEIGHT} />
-                </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'flex-end',
-                    gap: '10px',
-                  }}
-                >
-                  {isNam && showNormalizeControl && (
-                    /* The wrapper carries the vertical nudge and the overridden
+                {!showInfo && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      flexShrink: 0,
+                      gap: '12px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: 0,
+                        width: `${KNOB_SIZE_SECONDARY}px`,
+                      }}
+                    >
+                      <BlockMeter meterId={meterId.blockOut(blockId)} length={RAIL_METER_HEIGHT} />
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'flex-end',
+                        gap: '10px',
+                      }}
+                    >
+                      {isNam && showNormalizeControl && (
+                        /* The wrapper carries the vertical nudge and the overridden
                      hint: a disabled button swallows hover (no mouseover ever
                      fires), so pointer-events pass through it to this span
                      and the hint delegation resolves here instead. */
-                    <span
-                      {...helpProps(
-                        normalizeOverridden ? HELP.blockNormalizeOverridden : HELP.blockNormalize
+                        <span
+                          {...helpProps(
+                            normalizeOverridden
+                              ? HELP.blockNormalizeOverridden
+                              : HELP.blockNormalize
+                          )}
+                          style={{
+                            display: 'inline-flex',
+                            transform: `translateY(${NORMALIZE_BUTTON_OFFSET}px)`,
+                          }}
+                        >
+                          <ChromeIconButton
+                            tone="outline"
+                            on={normalizeOn}
+                            help={HELP.blockNormalize}
+                            onClick={handleToggleNormalize}
+                            disabled={normalizeOverridden}
+                            style={normalizeOverridden ? { pointerEvents: 'none' } : undefined}
+                          >
+                            <Equal size={ICON_SIZE} />
+                          </ChromeIconButton>
+                        </span>
                       )}
-                      style={{
-                        display: 'inline-flex',
-                        transform: `translateY(${NORMALIZE_BUTTON_OFFSET}px)`,
-                      }}
-                    >
-                      <ChromeIconButton
-                        tone="outline"
-                        on={normalizeOn}
-                        help={HELP.blockNormalize}
-                        onClick={handleToggleNormalize}
-                        disabled={normalizeOverridden}
-                        style={normalizeOverridden ? { pointerEvents: 'none' } : undefined}
-                      >
-                        <Equal size={ICON_SIZE} />
-                      </ChromeIconButton>
-                    </span>
-                  )}
-                  <KnobControl
-                    label="Out"
-                    value={outputGain}
-                    onChange={(val) => {
-                      setOutputGain(val);
-                      setParam('outputGain', val);
-                    }}
-                    onDragStateChange={handleKnobDragState}
-                    size={KNOB_SIZE_SECONDARY}
-                    labelBottom={false}
-                    thumb="secondary"
-                    scale={gainDbScale}
-                    defaultValue={0.5}
-                    help={isNam || block.irLong ? HELP.blockOut : HELP.blockOutIr}
-                  />
-                </div>
-              </div>
-            </>
-          )}
+                      <KnobControl
+                        label="Out"
+                        value={outputGain}
+                        onChange={(val) => {
+                          setOutputGain(val);
+                          setParam('outputGain', val);
+                        }}
+                        onDragStateChange={handleKnobDragState}
+                        size={KNOB_SIZE_SECONDARY}
+                        labelBottom={false}
+                        thumb="secondary"
+                        scale={gainDbScale}
+                        defaultValue={0.5}
+                        help={isNam || block.irLong ? HELP.blockOut : HELP.blockOutIr}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {showInfo && infoLoading && <BusyOverlay align="center" />}
+          </div>
         </div>
       </div>
     </div>

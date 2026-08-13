@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { BlockParamName, ChainSide, EqBand, ToneBlock } from '../types/chain';
-import type { Model } from '../types/tone';
+import type { Model, Tone } from '../types/tone';
 
 /**
  * Everything a chain block (gallery tile or detail card) can do, bundled
@@ -15,10 +15,11 @@ import type { Model } from '../types/tone';
 export interface ChainActions {
   /** Launch the Select flow, adding into the clicked insert slot. */
   addModel: (side: ChainSide, insertBlockId: string) => void;
-  /** Load a drop on an insert slot: a .nam / .wav file (NAM must be A2), or
-      a folder of them (one block, one model per file). Resolves to a
-      user-facing error message, or null when the block was added. */
-  loadLocalFile: (insertBlockId: string, item: DataTransferItem) => Promise<string | null>;
+  /** Load a drop on a tile: a .nam / .wav file (NAM must be A2), or a folder
+      of them (one block, one model per file). An insert slot adds; an
+      existing tone tile swaps in place. Resolves to a user-facing error
+      message, or null on success. */
+  loadLocalFile: (targetBlockId: string, item: DataTransferItem) => Promise<string | null>;
   removeBlock: (blockId: string) => void;
   /** Launch the Select flow to replace this block's tone in place. */
   swapBlock: (blockId: string) => void;
@@ -56,6 +57,11 @@ export interface ChainActions {
    * persisted block only carries the active model.
    */
   listToneModels: (toneId: number, format: string | undefined) => Promise<Model[]>;
+  /**
+   * Fetch a tone's full catalog metadata (description, makes, tags, url).
+   * Backs the detail card's info panel; not written into saved state.
+   */
+  getTone: (toneId: number) => Promise<Tone>;
   /** Fire-and-forget per-block param setter (see useChainState). */
   setBlockParam: (blockId: string, param: BlockParamName, value: number | boolean) => void;
   /** Fire-and-forget whole-band EQ setter (see useChainState). */
@@ -71,6 +77,8 @@ export interface ChainActions {
    * disable themselves when signed out.
    */
   authenticated: boolean;
+  /** Kick off TONE3000 login (connection-gated); used by the info panel CTA. */
+  login: () => void;
 }
 
 const ChainActionsContext = createContext<ChainActions | null>(null);

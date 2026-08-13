@@ -1,5 +1,4 @@
 import React from 'react';
-import { File } from 'lucide-react';
 import { GRAY, SURFACE } from './theme';
 
 /**
@@ -249,6 +248,27 @@ const Experimental = ({ size = 40, color = GRAY }: Props) => (
   </svg>
 );
 
+/** Local-file fallback (drag-and-drop .nam / IR): no catalog artwork or gear
+    id. Stroke is authored on a 64 viewBox so it scales with `size`. */
+const FileIcon = ({ size = 64, color = GRAY }: Props) => (
+  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="File">
+    <path
+      d="M20 52C18.9391 52 17.9217 51.5786 17.1716 50.8284C16.4214 50.0783 16 49.0609 16 48V16C16 14.9391 16.4214 13.9217 17.1716 13.1716C17.9217 12.4214 18.9391 12 20 12H36C36.6331 11.999 37.2602 12.1232 37.8451 12.3655C38.43 12.6079 38.9611 12.9635 39.408 13.412L46.584 20.588C47.0337 21.035 47.3903 21.5667 47.6334 22.1523C47.8764 22.738 48.001 23.3659 48 24V48C48 49.0609 47.5786 50.0783 46.8284 50.8284C46.0783 51.5786 45.0609 52 44 52H20Z"
+      stroke={color}
+      strokeWidth="4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M36 12V22C36 22.5304 36.2107 23.0391 36.5858 23.4142C36.9609 23.7893 37.4696 24 38 24H48"
+      stroke={color}
+      strokeWidth="4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const Ir = ({ size = 40, color = GRAY }: Props) => (
   <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-label="Impulse Response">
     <path
@@ -287,14 +307,15 @@ export const GearIcon: React.FC<{ gear?: string; size?: number; color?: string }
 
 /**
  * Fallback artwork for tones without an image: the gear glyph centered on the
- * web's icon background (#151517 = SURFACE), sized ~40% of the box like the
- * web's ToneCard/ToneImage fallbacks. Fills its parent; pass the box size so
- * the glyph scales with the card/tile.
+ * web's icon background (#151517 = SURFACE). Defaults to ~40% of the box like
+ * the web's ToneCard/ToneImage fallbacks; pass `iconSize` for a fixed glyph
+ * (gallery tiles use 64). Fills its parent.
  */
-export const GearImageFallback: React.FC<{ gear?: string; boxSize: number }> = ({
-  gear,
-  boxSize,
-}) => (
+export const GearImageFallback: React.FC<{
+  gear?: string;
+  boxSize: number;
+  iconSize?: number;
+}> = ({ gear, boxSize, iconSize }) => (
   <div
     style={{
       width: '100%',
@@ -305,7 +326,7 @@ export const GearImageFallback: React.FC<{ gear?: string; boxSize: number }> = (
       backgroundColor: SURFACE,
     }}
   >
-    <GearIcon gear={gear} size={Math.round(boxSize * 0.4)} />
+    <GearIcon gear={gear} size={iconSize ?? Math.round(boxSize * 0.4)} />
   </div>
 );
 
@@ -322,11 +343,14 @@ export const ToneImage: React.FC<{
   gear?: string;
   local?: boolean;
   boxSize: number;
+  /** Override the fallback glyph size (defaults to ~40% of `boxSize`). */
+  iconSize?: number;
   draggable?: boolean;
-}> = ({ src, alt, gear, local, boxSize, draggable }) => {
+}> = ({ src, alt, gear, local, boxSize, iconSize, draggable }) => {
   const [failed, setFailed] = React.useState(false);
   // A new URL (tone swap/model switch) gets a fresh chance to load.
   React.useEffect(() => setFailed(false), [src]);
+  const glyphSize = iconSize ?? Math.round(boxSize * 0.4);
 
   if (local) {
     return (
@@ -340,15 +364,13 @@ export const ToneImage: React.FC<{
           backgroundColor: SURFACE,
         }}
       >
-        {/* Same recipe as the gear glyphs: GRAY at 40% of the box, and the
-            stroke weight scaled to their 6%-of-viewBox line width (1.2 on a
-            20-unit canvas ≈ 1.5 on Lucide's 24). */}
-        <File size={Math.round(boxSize * 0.4)} color={GRAY} strokeWidth={1.5} />
+        <FileIcon size={glyphSize} color={GRAY} />
       </div>
     );
   }
 
-  if (!src || failed) return <GearImageFallback gear={gear} boxSize={boxSize} />;
+  if (!src || failed)
+    return <GearImageFallback gear={gear} boxSize={boxSize} iconSize={iconSize} />;
   return (
     <img
       src={src}

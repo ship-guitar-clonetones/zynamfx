@@ -301,8 +301,21 @@ juce::var TONE3000Processor::loadLocalTone(const juce::String& title, const juce
   tone->setProperty("format", isNam ? "nam" : "ir");
   tone->setProperty("models", models);
 
-  const std::string blockId =
-      loadTone(juce::JSON::toString(juce::var(tone.get())), targetInsertId);
+  const juce::String toneJson = juce::JSON::toString(juce::var(tone.get()));
+
+  // A drop on an existing tone tile replaces in place (same block id +
+  // params). Insert-slot ids (and missing/stale ids) still go through
+  // loadTone and consume/create a slot.
+  if (!targetInsertId.empty() && swapTone(targetInsertId, toneJson)) {
+    juce::Logger::writeToLog("[LocalLoad] Swapped '" + title + "' into block " +
+                             juce::String(targetInsertId) + " (" + juce::String(models.size()) +
+                             " of " + juce::String(fileArray->size()) + " file(s))");
+    juce::DynamicObject::Ptr ok = new juce::DynamicObject();
+    ok->setProperty("blockId", juce::String(targetInsertId));
+    return juce::var(ok.get());
+  }
+
+  const std::string blockId = loadTone(toneJson, targetInsertId);
   if (blockId.empty())
     return fail("Couldn't add the block");
 

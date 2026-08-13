@@ -132,10 +132,11 @@ export function useChainState() {
           to the new blockId ('' on failure). */
       loadTone: (toneJson: string, targetInsertId?: string) =>
         run<string>('loadTone', () => native.loadTone(toneJson, targetInsertId ?? '')),
-      /** Load dropped local file(s) as one block at an insert slot (a single
-          .nam/.wav, or a folder's files; bytes as base64). Native validates
-          each file (NAM must be A2). Resolves to a user-facing error
-          message, or null when the block was added. */
+      /** Load dropped local file(s) as one block (a single .nam/.wav, or a
+          folder's files; bytes as base64). `targetInsertId` is an insert
+          slot (adds) or an existing tone block (swaps in place). Native
+          validates each file (NAM must be A2). Resolves to a user-facing
+          error message, or null on success. */
       loadLocalTone: async (
         title: string,
         files: { name: string; data: string }[],

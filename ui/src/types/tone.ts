@@ -28,11 +28,16 @@ export interface Tag {
   name: string;
 }
 
+export interface Make {
+  id: number;
+  name: string;
+}
+
 export interface Tone {
   id: number;
   user_id: string;
   title: string;
-  description: string;
+  description: string | null;
   created_at: string;
   updated_at: string;
   gear: string;
@@ -51,8 +56,8 @@ export interface Tone {
   sizes: string[];
   user: User;
   models: Model[];
-  /** Gear makes from the API; the plugin never reads them. */
-  makes: unknown[];
+  /** Gear makes/models; the detail card's info panel lists their names. */
+  makes: Make[];
   tags: Tag[];
   /** Canonical public page URL (title slug + id); the share action copies it. */
   url: string;

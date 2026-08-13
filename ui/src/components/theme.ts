@@ -14,7 +14,7 @@ import type { CSSProperties } from 'react';
  * - Interactive icons are white; GRAY only for off/disabled states.
  * - State patterns (see ChromeIconButton / ChromeTextButton):
  *   1. Power (on/off): on = white icon, no fill; off = GRAY icon + HIGHLIGHT.
- *   2. Open / panel showing (EQ editor open): WHITE fill + BLACK label.
+ *   2. Open / panel showing (EQ editor, tone info): WHITE fill + BLACK label/icon.
  *   3. Armed / listening / shaping (auto-balance, active EQ while closed,
  *      PRE, normalize): BRAND_YELLOW fill + BLACK glyph/label.
  *   4. Link (pan link): on = white icon; off = GRAY icon, never a fill.

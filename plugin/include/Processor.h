@@ -81,15 +81,17 @@ public:
   std::string loadTone(const juce::String& toneJsonString,
                        const std::string& targetInsertId = {});
   // Load dropped local files (`files` = [{ name, data }], base64 bytes; one
-  // entry for a single file, many for a folder) as one tone block at an
-  // insert slot, one model per file. Each file is validated (.nam must be
-  // A2, .wav must be real audio) and stashed as a content-addressed copy
-  // whose path becomes the model's model_url; then the tone routes through
-  // loadTone, so downstream behavior (background load, cache, undo,
-  // duplication, persistence) is identical to catalog tones. Unlike catalog
-  // tones the full model list stays in the stored tone JSON (there is no
-  // API catalog to page the others back in from). Returns { blockId } on
-  // success or { error } with a user-facing message.
+  // entry for a single file, many for a folder) as one tone block, one model
+  // per file. `targetInsertId` is either an insert slot (adds, consuming
+  // that tile) or an existing tone block (swaps in place). Each file is
+  // validated (.nam must be A2, .wav must be real audio) and stashed as a
+  // content-addressed copy whose path becomes the model's model_url; then
+  // the tone routes through loadTone / swapTone, so downstream behavior
+  // (background load, cache, undo, duplication, persistence) is identical
+  // to catalog tones. Unlike catalog tones the full model list stays in the
+  // stored tone JSON (there is no API catalog to page the others back in
+  // from). Returns { blockId } on success or { error } with a user-facing
+  // message.
   juce::var loadLocalTone(const juce::String& title, const juce::var& files,
                           const std::string& targetInsertId = {});
   // Age out local-model stash files unused for a week (runs once per

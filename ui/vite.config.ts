@@ -9,6 +9,9 @@ export default defineConfig({
     outDir: '../plugin/webview',
     emptyOutDir: true,
     assetsDir: 'assets',
+    // Served from the plugin binary via JUCE's resource provider, so chunk
+    // size has no network cost; splitting would only add loading states.
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       input: {
         main: './index.html',

@@ -150,6 +150,10 @@ export function useToneSession({ onToneSelected, onAuthenticated }: UseToneSessi
     [client]
   );
 
+  /** Full catalog tone (description / makes / tags / url). Backs the detail
+      card's info panel; not persisted, so saved chain state stays slim. */
+  const getTone = useCallback((toneId: number) => client.getTone(toneId), [client]);
+
   return {
     client,
     user,
@@ -162,6 +166,7 @@ export function useToneSession({ onToneSelected, onAuthenticated }: UseToneSessi
     clearOauthError,
     ensureNativeAuth,
     listToneModels,
+    getTone,
     logout,
   };
 }

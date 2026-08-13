@@ -4,7 +4,8 @@
  * dependency graph acyclic.
  *
  * Sizes follow the Figma detail mock: 16px-radius card, ~45px chrome header,
- * 275px padded body. The ← BLOCK row sits above the card and is not included.
+ * 275px padded body. Info view drops knobs/model select and grows the body
+ * in the right column; the ← BLOCK row sits above the card and is not included.
  */
 
 export const CARD_WIDTH = 800;
