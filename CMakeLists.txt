@@ -561,6 +561,237 @@ if (EXISTS "${_juce_adm_cpp}")
     endif()
 endif()
 
+# T3K_ALSA_CLOSE_STUCK_TIMEOUT: ALSAThread::close() waits a fixed 400ms for
+# the audio thread to exit before deciding it's stuck and force-closing the
+# ALSA handles from the message thread (closeNow(), i.e. snd_pcm_close while
+# the audio thread may still be inside snd_pcm_readi/writei). A single i/o
+# period longer than 400ms - a large buffer at a low sample rate - is then
+# indistinguishable from "stuck", and the forced close frees the pcm (and the
+# input/output buffers backing the callback's channel pointers) out from
+# under a thread that's still using them: reliably a use-after-free on any
+# device reconfiguration. Confirmed live with gdb: closeNow() fires on
+# ordinary channel-selection changes with numCallbacks == callbacksToStop
+# (no callback landed during the wait - the thread was mid-read, not
+# wedged), matching this fix exactly. Matches upstream JUCE PR
+# https://github.com/juce-framework/JUCE/pull/1707 (unmerged as of this
+# writing); drop this patch once it lands. Idempotent configure-time patch,
+# same rationale as the patches above.
+set(_juce_alsa_cpp "${LIB_DIR}/juce/modules/juce_audio_devices/native/juce_ALSA_linux.cpp")
+if (EXISTS "${_juce_alsa_cpp}")
+    file(READ "${_juce_alsa_cpp}" _juce_alsa_src)
+    if (NOT _juce_alsa_src MATCHES "T3K_ALSA_CLOSE_STUCK_TIMEOUT")
+        set(_juce_alsa_old
+[=[            const int callbacksToStop = numCallbacks;
+
+            if ((! waitForThreadToExit (400)) && audioIoInProgress && numCallbacks == callbacksToStop)]=])
+        set(_juce_alsa_new
+[=[            const int callbacksToStop = numCallbacks;
+
+            // T3K_ALSA_CLOSE_STUCK_TIMEOUT: a fixed 400ms wait can't tell a
+            // stuck thread from one that's simply mid-read on a large
+            // buffer/low sample rate combination (a 4096-sample buffer at
+            // 8kHz is a 512ms period), so scale the wait by one i/o period,
+            // capped so a genuinely wedged device still closes promptly.
+            const auto ioPeriodMs = sampleRate > 0.0 ? (int) (1000.0 * bufferSize / sampleRate) : 0;
+            const auto stuckTimeoutMs = 400 + jmin (2000, ioPeriodMs);
+
+            if ((! waitForThreadToExit (stuckTimeoutMs)) && audioIoInProgress && numCallbacks == callbacksToStop)]=])
+        string(REPLACE "${_juce_alsa_old}" "${_juce_alsa_new}" _juce_alsa_src "${_juce_alsa_src}")
+        if (NOT _juce_alsa_src MATCHES "T3K_ALSA_CLOSE_STUCK_TIMEOUT")
+            message(FATAL_ERROR
+                "T3K_ALSA_CLOSE_STUCK_TIMEOUT: failed to patch ${_juce_alsa_cpp}. "
+                "The JUCE source layout likely changed in this version. Update the patch "
+                "anchors in CMakeLists.txt.")
+        endif()
+        file(WRITE "${_juce_alsa_cpp}" "${_juce_alsa_src}")
+        message(STATUS "Patched JUCE ALSAThread: scale the stuck-thread close timeout by the i/o period")
+    endif()
+endif()
+
+# T3K_ALSA_INPUT_CHANS_SYNC: ALSAThread::open() fills currentInputChans and
+# inputChannelDataForCallback together in one loop over the *requested* input
+# mask, then widens currentInputChans alone (ensureMinimumNumBitsSet) up to
+# the hardware's channel-count floor afterward - so on a device whose floor
+# is above the request (e.g. fixed at 2 channels, request is 1), the bitset
+# getActiveInputChannels() reports gains a bit with no matching entry in
+# inputChannelDataForCallback. AudioDeviceManager's CallbackMaxSizeEnforcer
+# sizes its stored channel vectors from that (now too-wide) bitset, fills in
+# only the channels the real callback array actually has, and forwards the
+# rest as null/stale pointers - which is what then reads out of bounds
+# reliably on any device reconfiguration. Confirmed live with gdb: the input
+# open genuinely hands the callback exactly 1 channel pointer while
+# getActiveInputChannels() still reports 2. Fix from upstream JUCE PR
+# https://github.com/juce-framework/JUCE/pull/1706 (unmerged as of this
+# writing) - widen the *request* before the fill loop, so the bitset and the
+# channel array agree by construction; drop this patch once it lands.
+# Idempotent configure-time patch, same rationale as the patches above.
+set(_juce_alsa_cpp2 "${LIB_DIR}/juce/modules/juce_audio_devices/native/juce_ALSA_linux.cpp")
+if (EXISTS "${_juce_alsa_cpp2}")
+    file(READ "${_juce_alsa_cpp2}" _juce_alsa_src2)
+    if (NOT _juce_alsa_src2 MATCHES "T3K_ALSA_INPUT_CHANS_SYNC")
+        set(_juce_alsa_old2
+[=[        error.clear();
+        sampleRate = newSampleRate;
+        bufferSize = newBufferSize;
+
+        int maxInputsRequested = inputChannels.getHighestBit() + 1;]=])
+        set(_juce_alsa_new2
+[=[        error.clear();
+        sampleRate = newSampleRate;
+        bufferSize = newBufferSize;
+
+        // T3K_ALSA_INPUT_CHANS_SYNC: widen the *request* before the fill loop
+        // below builds currentInputChans and inputChannelDataForCallback
+        // together, so the two stay in agreement (matches the output path a
+        // few lines below, which already widens before its own fill loop). A
+        // request for no input channels at all is left alone rather than
+        // being widened to the minimum.
+        if (inputChannels.getHighestBit() >= 0)
+            ensureMinimumNumBitsSet (inputChannels, (int) minChansIn);
+
+        int maxInputsRequested = inputChannels.getHighestBit() + 1;]=])
+        string(REPLACE "${_juce_alsa_old2}" "${_juce_alsa_new2}" _juce_alsa_src2 "${_juce_alsa_src2}")
+
+        # The widening used to happen here, after the fill loop; it's now done
+        # to the request before the loop runs instead, so drop the old call.
+        set(_juce_alsa_old2b
+[=[            ensureMinimumNumBitsSet (currentInputChans, (int) minChansIn);
+
+            if (! inputDevice->setParameters ((unsigned int) sampleRate,]=])
+        set(_juce_alsa_new2b
+[=[            if (! inputDevice->setParameters ((unsigned int) sampleRate,]=])
+        string(REPLACE "${_juce_alsa_old2b}" "${_juce_alsa_new2b}" _juce_alsa_src2 "${_juce_alsa_src2}")
+
+        if (NOT _juce_alsa_src2 MATCHES "T3K_ALSA_INPUT_CHANS_SYNC")
+            message(FATAL_ERROR
+                "T3K_ALSA_INPUT_CHANS_SYNC: failed to patch ${_juce_alsa_cpp2}. "
+                "The JUCE source layout likely changed in this version. Update the patch "
+                "anchors in CMakeLists.txt.")
+        endif()
+        file(WRITE "${_juce_alsa_cpp2}" "${_juce_alsa_src2}")
+        message(STATUS "Patched JUCE ALSAThread: widen the input channel request before the callback-array fill loop")
+    endif()
+endif()
+
+# T3K_CALLBACK_ENFORCER_NULL_SAFE: CallbackMaxSizeEnforcer sizes its stored
+# channel vectors from the device's active-channel bitsets in
+# audioDeviceAboutToStart, but only fills in the number of channels the
+# device actually passes to each callback, then forwards the *vector's full
+# size* to the inner callback (AudioProcessorPlayer) regardless. If a
+# device's bitsets and channel counts ever disagree - which they can even
+# with T3K_ALSA_INPUT_CHANS_SYNC applied, for any other AudioIODevice
+# backend with the same class of mismatch - the tail of those vectors still
+# holds the null pointers std::vector::resize() default-constructed, and
+# gets forwarded as if they were real channels: AudioProcessorPlayer memcpys
+# from them unconditionally, and LevelMeter::updateLevel dereferences them
+# unconditionally too. jassert catches the mismatch in a debug build; a
+# Release build (jassert compiles out) passes the nulls straight through and
+# crashes on the read. AudioIODeviceCallback's own docs say a channel pointer
+# may legitimately be null, so both call sites need to tolerate it as well as
+# forwarding the correct (filled-in) count. Fix from upstream JUCE PR
+# https://github.com/juce-framework/JUCE/pull/1708 (unmerged as of this
+# writing); drop this patch once it lands. Idempotent configure-time patch,
+# same rationale as the patches above. Cross-platform file, so this applies
+# everywhere.
+set(_juce_adm_cpp2 "${LIB_DIR}/juce/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp")
+if (EXISTS "${_juce_adm_cpp2}")
+    file(READ "${_juce_adm_cpp2}" _juce_adm_src2)
+    if (NOT _juce_adm_src2 MATCHES "T3K_CALLBACK_ENFORCER_NULL_SAFE")
+        set(_juce_adm_old2
+[=[    void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
+                                           [[maybe_unused]] int numInputChannels,
+                                           float* const* outputChannelData,
+                                           [[maybe_unused]] int numOutputChannels,
+                                           int numSamples,
+                                           const AudioIODeviceCallbackContext& context) override
+    {
+        jassert ((int) storedInputChannels.size()  == numInputChannels);
+        jassert ((int) storedOutputChannels.size() == numOutputChannels);
+
+        int position = 0;
+
+        while (position < numSamples)
+        {
+            const auto blockLength = jmin (maximumSize, numSamples - position);
+
+            const auto addOffset = [position] (auto ptr) { return ptr + position; };
+            std::transform (inputChannelData,  inputChannelData  + numInputChannels,  storedInputChannels .begin(), addOffset);
+            std::transform (outputChannelData, outputChannelData + numOutputChannels, storedOutputChannels.begin(), addOffset);
+
+            inner.audioDeviceIOCallbackWithContext (storedInputChannels.data(),
+                                                    (int) storedInputChannels.size(),
+                                                    storedOutputChannels.data(),
+                                                    (int) storedOutputChannels.size(),
+                                                    blockLength,
+                                                    context);
+
+            position += blockLength;
+        }
+    }]=])
+        set(_juce_adm_new2
+[=[    void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
+                                           int numInputChannels,
+                                           float* const* outputChannelData,
+                                           int numOutputChannels,
+                                           int numSamples,
+                                           const AudioIODeviceCallbackContext& context) override
+    {
+        jassert ((int) storedInputChannels.size()  == numInputChannels);
+        jassert ((int) storedOutputChannels.size() == numOutputChannels);
+
+        // T3K_CALLBACK_ENFORCER_NULL_SAFE: a device whose active-channel
+        // bitsets disagree with the channel arrays it passes here leaves the
+        // tail of the stored vectors holding the null pointers resize()
+        // default-constructed, so forward the number of channels actually
+        // filled in below, not the vectors' full size.
+        const auto numIns  = jmin ((int) storedInputChannels.size(),  numInputChannels);
+        const auto numOuts = jmin ((int) storedOutputChannels.size(), numOutputChannels);
+
+        int position = 0;
+
+        while (position < numSamples)
+        {
+            const auto blockLength = jmin (maximumSize, numSamples - position);
+
+            const auto addOffset = [position] (auto ptr) { return ptr + position; };
+            std::transform (inputChannelData,  inputChannelData  + numIns,  storedInputChannels .begin(), addOffset);
+            std::transform (outputChannelData, outputChannelData + numOuts, storedOutputChannels.begin(), addOffset);
+
+            inner.audioDeviceIOCallbackWithContext (storedInputChannels.data(),
+                                                    numIns,
+                                                    storedOutputChannels.data(),
+                                                    numOuts,
+                                                    blockLength,
+                                                    context);
+
+            position += blockLength;
+        }
+    }]=])
+        string(REPLACE "${_juce_adm_old2}" "${_juce_adm_new2}" _juce_adm_src2 "${_juce_adm_src2}")
+
+        set(_juce_adm_old2b
+[=[            for (int i = 0; i < numChannels; ++i)
+                s += std::abs (channelData[i][j]);]=])
+        set(_juce_adm_new2b
+[=[            // T3K_CALLBACK_ENFORCER_NULL_SAFE: a channel not specified in
+            // AudioIODevice::open() is passed as a null pointer, as
+            // documented by AudioIODeviceCallback.
+            for (int i = 0; i < numChannels; ++i)
+                if (auto* channel = channelData[i])
+                    s += std::abs (channel[j]);]=])
+        string(REPLACE "${_juce_adm_old2b}" "${_juce_adm_new2b}" _juce_adm_src2 "${_juce_adm_src2}")
+
+        if (NOT _juce_adm_src2 MATCHES "T3K_CALLBACK_ENFORCER_NULL_SAFE")
+            message(FATAL_ERROR
+                "T3K_CALLBACK_ENFORCER_NULL_SAFE: failed to patch ${_juce_adm_cpp2}. "
+                "The JUCE source layout likely changed in this version. Update the patch "
+                "anchors in CMakeLists.txt.")
+        endif()
+        file(WRITE "${_juce_adm_cpp2}" "${_juce_adm_src2}")
+        message(STATUS "Patched JUCE AudioDeviceManager: CallbackMaxSizeEnforcer/LevelMeter tolerate null/short channel arrays")
+    endif()
+endif()
+
 # T3K_ZOOM_TOGGLE: make the standalone window's native zoom button ("+", the
 # green traffic light) a real toggle: first click grows the window to the
 # editor's maximum scale, second click restores the pre-zoom size. Stock JUCE
