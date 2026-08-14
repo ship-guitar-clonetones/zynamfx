@@ -94,6 +94,8 @@ void TONE3000Processor::resolveParamRefs() {
   paramRefs.chainPanRight = get("chainPanRight");
   paramRefs.chainSoloLeft = get("chainSoloLeft");
   paramRefs.chainSoloRight = get("chainSoloRight");
+  paramRefs.chainInvertLeft = get("chainInvertLeft");
+  paramRefs.chainInvertRight = get("chainInvertRight");
   paramRefs.toneBass = get("toneBass");
   paramRefs.toneMid = get("toneMid");
   paramRefs.toneTreble = get("toneTreble");
@@ -189,6 +191,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
       juce::ParameterID{"chainSoloLeft", 23}, "chainSoloLeft", false));
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"chainSoloRight", 24}, "chainSoloRight", false));
+
+  // Per-chain polarity flips (stereo chain mode): captures don't share a
+  // polarity convention, so two chains fed one instrument can land 180° out
+  // (hollow, comb-y, cancels on a mono sum). The flip negates that chain
+  // inside the image matrix (see imageMatrixGains). Tone state, unlike the
+  // solos, so presets capture it.
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"chainInvertLeft", 25}, "chainInvertLeft", false));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"chainInvertRight", 26}, "chainInvertRight", false));
 
   // Oversampling (Advanced settings; see ChainOversampler.h). Deliberately
   // not automatable: a factor change rebuilds every NAM engine and
@@ -462,18 +474,24 @@ static float balanceChainGain(float balance, int chain) {
 // the pan blend has mixed them. When pan is inactive (mono+spread) the pan
 // part is the identity and the matrix reduces to a diagonal L/R tilt.
 // A solo zeroes the other chain's trim (engaging one clears the other in
-// the UI; both on via MIDI leaves both audible). Riding the matrix
-// smoothers makes the mute click-free.
+// the UI; both on via MIDI leaves both audible), and a polarity invert
+// negates its chain's trim. Riding the matrix smoothers makes both
+// click-free: the mute glides, and a sign flip glides through zero.
 struct ImageGains { float lToL, lToR, rToL, rToR; };
 static ImageGains imageMatrixGains(bool panActive, float balance, float panLeft, float panRight,
-                                   bool soloLeft, bool soloRight) {
+                                   bool soloLeft, bool soloRight, bool invertLeft,
+                                   bool invertRight) {
   float pLtoL = 1.0f, pLtoR = 0.0f, pRtoL = 0.0f, pRtoR = 1.0f;
   if (panActive) {
     std::tie(pLtoL, pLtoR) = constantPowerPanGains(panLeft);
     std::tie(pRtoL, pRtoR) = constantPowerPanGains(panRight);
   }
-  const float balL = soloRight && !soloLeft ? 0.0f : balanceChainGain(balance, 0);
-  const float balR = soloLeft && !soloRight ? 0.0f : balanceChainGain(balance, 1);
+  float balL = soloRight && !soloLeft ? 0.0f : balanceChainGain(balance, 0);
+  float balR = soloLeft && !soloRight ? 0.0f : balanceChainGain(balance, 1);
+  if (invertLeft)
+    balL = -balL;
+  if (invertRight)
+    balR = -balR;
   return {balL * pLtoL, balL * pLtoR, balR * pRtoL, balR * pRtoR};
 }
 
@@ -653,7 +671,9 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     const auto g = imageMatrixGains(isStereo, applyBalance ? cacheOutputBalance : 0.5f,
                                     cacheChainPanLeft, cacheChainPanRight,
                                     isStereo && cacheChainSoloLeft,
-                                    isStereo && cacheChainSoloRight);
+                                    isStereo && cacheChainSoloRight,
+                                    isStereo && cacheChainInvertLeft,
+                                    isStereo && cacheChainInvertRight);
     for (auto* smoother : {&imageGainLtoL, &imageGainLtoR, &imageGainRtoL, &imageGainRtoR})
       smoother->reset(sampleRate, 0.02);
     imageGainLtoL.setCurrentAndTargetValue(g.lToL);
@@ -821,6 +841,8 @@ void TONE3000Processor::updateCachedParameters() {
   cacheAlignEnabled = loadBool(paramRefs.alignEnabled);
   cacheChainSoloLeft = loadBool(paramRefs.chainSoloLeft);
   cacheChainSoloRight = loadBool(paramRefs.chainSoloRight);
+  cacheChainInvertLeft = loadBool(paramRefs.chainInvertLeft);
+  cacheChainInvertRight = loadBool(paramRefs.chainInvertRight);
 }
 
 // ##########################
@@ -1360,6 +1382,21 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   }
   gateWasEnabled = cacheGateEnabled;
 
+  // #########################
+  // Auto-align probe injection (see AutoOffset.h): while a measurement is
+  // running, both chains eat the pre-generated sweep instead of the
+  // instrument. Injected downstream of the whole input stage, so the meters
+  // and gate keep tracking the live signal but none of it reaches the
+  // measurement; the output is muted for the duration (the probe mute stage
+  // below). Stereo chain mode only; losing it mid-run cancels (the atomic
+  // flip is audio-thread safe).
+  // #########################
+  if (autoOffset.state() != AutoOffset::State::Idle &&
+      (numChannels < 2 || !stereoEnabled.load()))
+    autoOffset.cancel();
+  if (numChannels >= 2 && autoOffset.renderProbeInput(buffer.getWritePointer(0), numSamples))
+    buffer.copyFrom(1, 0, buffer, 0, 0, numSamples);
+
   // ####################
   // MODULAR CHAIN PROCESSING (chain domain: 48 kHz × OS factor, see ChainDomain.h)
   // ####################
@@ -1461,12 +1498,13 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     if (isStereo) {
       spread.forceIdle();
 
-      // Auto-align listening tap: the raw chain outputs BEFORE the align
-      // delay, so the measurement is the chains' absolute misalignment,
-      // independent of whatever the knob currently says. Zero work unless
-      // armed.
-      if (autoOffset.state() == AutoOffset::State::Listening)
-        autoOffset.capture(buffer, numSamples);
+      // Auto-align probe capture: the raw chain outputs BEFORE the align
+      // delay and the image matrix's polarity flips, so the measurement is
+      // the chains' absolute misalignment and relative polarity, independent
+      // of the current corrections (a second run measures the total, not
+      // the residual). Zero work unless a probe is running.
+      autoOffset.captureChainOutputs(buffer.getReadPointer(0), buffer.getReadPointer(1),
+                                     numSamples);
 
       stereoOffset.setTarget(StereoOffsetParams::fromNormalized(cacheAlignOffset),
                              cacheAlignEnabled);
@@ -1492,16 +1530,19 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     // Balance + pan matrix. Balance is forced center whenever the output
     // image isn't actually stereo (mono mode without spread), so a leftover
     // Bal setting from a prior session can't skew a mono (identical L/R)
-    // bus, matching the UI hiding the knob. Solos are likewise gated to
-    // stereo mode: in mono+spread the two channels are one chain's double,
-    // not chains to audition. All four gains are smoothed so knob moves AND
-    // the balance/solo on/off gating glide instead of stepping (pop).
+    // bus, matching the UI hiding the knob. Solos and polarity flips are
+    // likewise gated to stereo mode: in mono+spread the two channels are one
+    // chain's double, not chains to audition or re-polarize. All four gains
+    // are smoothed so knob moves AND the balance/solo/invert gating glide
+    // instead of stepping (pop).
     if (numChannels >= 2) {
       const bool applyBalance = isStereo || cacheSpreadEnabled;
       const auto g = imageMatrixGains(isStereo, applyBalance ? cacheOutputBalance : 0.5f,
                                       cacheChainPanLeft, cacheChainPanRight,
                                       isStereo && cacheChainSoloLeft,
-                                      isStereo && cacheChainSoloRight);
+                                      isStereo && cacheChainSoloRight,
+                                      isStereo && cacheChainInvertLeft,
+                                      isStereo && cacheChainInvertRight);
       imageGainLtoL.setTargetValue(g.lToL);
       imageGainLtoR.setTargetValue(g.lToR);
       imageGainRtoL.setTargetValue(g.rToL);
@@ -1511,7 +1552,7 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
                              imageGainRtoL.isSmoothing() || imageGainRtoR.isSmoothing();
       const bool identity = std::abs(g.lToL - 1.0f) < 1.0e-4f &&
                             std::abs(g.rToR - 1.0f) < 1.0e-4f &&
-                            g.lToR < 1.0e-4f && g.rToL < 1.0e-4f;
+                            std::abs(g.lToR) < 1.0e-4f && std::abs(g.rToL) < 1.0e-4f;
       if (smoothing || !identity) {
         auto* l = buffer.getWritePointer(0);
         auto* r = buffer.getWritePointer(1);
@@ -1579,6 +1620,14 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   // EQ section (global 3-band tone stack), post-chain.
   // ##########
   processToneStack(buffer);
+
+  // ##########
+  // Auto-align probe mute: fades the output before the probe starts, holds
+  // silence through capture and analysis, ramps back after the result is
+  // applied (see AutoOffset.h). Sits before the output stage so the meters
+  // show the mute honestly. Idle cost: one atomic load.
+  // ##########
+  autoOffset.applyOutputGain(buffer);
 
   // ###########
   // Output gain (level ±24 dB, same on both channels; the balance trim
@@ -1759,47 +1808,68 @@ juce::var TONE3000Processor::pollAutoBalance() {
 }
 
 // #########################
-// AUTO ALIGN (one-shot chain time alignment, stereo chain mode)
+// AUTO ALIGN (probe-based chain time alignment, stereo chain mode)
 // #########################
-// Same "click, play for a couple of seconds, done" flow as auto balance and
-// for the same reasons (see the auto-balance section above); the measurement
-// itself (capture, silence gating, timeout, FFT cross-correlation) lives in
-// AutoOffset (AutoOffset.h). The processor's share is the audio tap in
-// processBlock (pre-align, stereo branch) and applying the result to the
-// host parameters here on the message thread.
+// One [=] press runs a deterministic internal sweep through both chains
+// with the output muted for under half a second; the whole measurement
+// (probe schedule, capture, GCC-PHAT estimation) lives in AutoOffset
+// (AutoOffset.h). The processor's share is the probe injection / capture
+// tap / mute stage in processBlock, and applying the result to the host
+// parameters here on the message thread.
 
 namespace {
-// Below this normalized peak correlation the measurement is noise; e.g. the
-// true misalignment is beyond the ±24 ms the knob can express, or the chains
-// were fed unrelated audio. Reject instead of setting a junk offset. Related
-// chain outputs correlate far above this; unrelated ones peak near 0.
-constexpr float kAutoOffsetMinConfidence = 0.15f;
+// Rejection gate: peak sharpness is the PHAT-native quality metric and sits
+// far above this on every healthy run (5+ measured across real NAM/IR rig
+// pairs; junk in-window peaks land near 1), so a failure means the capture
+// was disturbed (a chain edit spliced mid-probe, a silently broken chain)
+// or the true misalignment is beyond the ±24 ms the knob can express.
+// Reject and log instead of setting a junk offset. The raw-waveform
+// confidence is deliberately NOT gated: two differently voiced rigs
+// legitimately read low there even when perfectly aligned (0.14 measured);
+// it rides along in the log and poll payload as a diagnostic.
+constexpr float kAutoOffsetMinSharpness = 2.0f;
 // Lags under this are already aligned for any practical purpose (well under
 // a sample's worth of imaging); don't power Align on over nothing.
 constexpr float kAutoOffsetSilentMs = 0.05f;
 }  // namespace
 
-void TONE3000Processor::startAutoOffset() { autoOffset.start(); }
+void TONE3000Processor::startAutoOffset() {
+  // Offline renders must never print the probe's silence into the bounce,
+  // and the measurement needs two live chains.
+  if (isNonRealtime() || !stereoEnabled.load())
+    return;
+  autoOffset.arm();
+}
 
 void TONE3000Processor::cancelAutoOffset() { autoOffset.cancel(); }
 
-// Message thread (UI poll). The analysis (a one-shot FFT over the 2 s
-// capture) also runs here, never on the audio thread.
+// Message thread (UI poll). The analysis (a one-shot FFT over the capture)
+// also runs here, never on the audio thread; the output stays muted until
+// resume(), so the parameters below are always in place before the unmute.
 juce::var TONE3000Processor::pollAutoOffset() {
   juce::DynamicObject::Ptr obj = new juce::DynamicObject();
 
   switch (autoOffset.state()) {
-    case AutoOffset::State::Listening:
+    case AutoOffset::State::FadeOut:
+    case AutoOffset::State::Probing:
+    case AutoOffset::State::Tail:
+    case AutoOffset::State::Analyzing:
       obj->setProperty("state", "listening");
       obj->setProperty("progress", static_cast<double>(autoOffset.progress()));
       break;
     case AutoOffset::State::Captured: {
       const auto result = autoOffset.analyze();
-      if (result.confidence < kAutoOffsetMinConfidence) {
+      if (result.peakSharpness < kAutoOffsetMinSharpness) {
+        autoOffset.resume();
         obj->setProperty("state", "timeout");
-        juce::Logger::writeToLog("[AutoOffset] Rejected: peak correlation " +
-                                 juce::String(result.confidence, 3) +
-                                 " (misalignment out of range or unrelated chains)");
+        // The metrics ride along for diagnostics (log scrapes, tests); the
+        // UI only reads the state.
+        obj->setProperty("confidence", result.confidence);
+        obj->setProperty("peakSharpness", result.peakSharpness);
+        juce::Logger::writeToLog("[AutoOffset] Rejected: confidence " +
+                                 juce::String(result.confidence, 3) + ", sharpness " +
+                                 juce::String(result.peakSharpness, 2) +
+                                 " (disturbed capture or misalignment out of range)");
         break;
       }
       // ms → knob position, the StereoOffsetParams::fromNormalized inverse:
@@ -1821,17 +1891,36 @@ juce::var TONE3000Processor::pollAutoOffset() {
           param->endChangeGesture();
         }
       }
+      // Polarity: the tap sits upstream of the image matrix, so
+      // result.inverted is the chains' absolute relative polarity and the
+      // flip parameters must end up XOR-matching it. Toggling only the
+      // Right flip preserves an absolute both-chain flip the user may have
+      // set against the rest of the mix.
+      bool polarityFlipped = false;
+      auto* invLeft = parameters.getParameter("chainInvertLeft");
+      auto* invRight = parameters.getParameter("chainInvertRight");
+      if (invLeft != nullptr && invRight != nullptr) {
+        const bool invertedNow = (invLeft->getValue() > 0.5f) != (invRight->getValue() > 0.5f);
+        polarityFlipped = result.inverted != invertedNow;
+        if (polarityFlipped) {
+          invRight->beginChangeGesture();
+          invRight->setValueNotifyingHost(invRight->getValue() > 0.5f ? 0.0f : 1.0f);
+          invRight->endChangeGesture();
+        }
+      }
+      // Everything is applied; let the output ramp back in.
+      autoOffset.resume();
       obj->setProperty("state", "done");
       obj->setProperty("matchedMs", result.offsetMs);
+      obj->setProperty("polarityFlipped", polarityFlipped);
       juce::Logger::writeToLog("[AutoOffset] Aligned chains (offset " +
-                               juce::String(result.offsetMs, 2) + " ms, confidence " +
-                               juce::String(result.confidence, 3) + ")");
+                               juce::String(result.offsetMs, 3) + " ms, confidence " +
+                               juce::String(result.confidence, 3) + ", sharpness " +
+                               juce::String(result.peakSharpness, 1) +
+                               (polarityFlipped ? ", polarity flipped)" : ")"));
       break;
     }
-    case AutoOffset::State::TimedOut:
-      autoOffset.cancel();
-      obj->setProperty("state", "timeout");
-      break;
+    case AutoOffset::State::RampBack:
     case AutoOffset::State::Idle:
       obj->setProperty("state", "idle");
       break;

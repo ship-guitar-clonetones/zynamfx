@@ -162,7 +162,8 @@ export const HELP = {
   alignOffset: knobHelp('Offset', 'corrective chain alignment, ≤24 ms toward L or R. Center: off.'),
   alignAdvert: 'Align: corrective chain time alignment. Click: enable.',
   alignPower: 'Align Power: align off; collapses its controls.',
-  autoAlign: 'Auto Align: click, play ~2 s to time-align chains. Click again: cancel.',
+  autoAlign:
+    'Auto Align: a ½ s internal sweep time-aligns the chains and fixes inverted polarity. Click again: cancel.',
 
   // Top bar
   tuner: 'Tuner: chromatic tuner. Click again: back.',
@@ -199,6 +200,8 @@ export const HELP = {
   panLink: 'Link Pans: mirror both pan knobs.',
   soloLeft: 'Solo L: hear the Left chain alone.',
   soloRight: 'Solo R: hear the Right chain alone.',
+  invertLeft: 'Invert L: flip the Left chain polarity. Fixes chains that hollow out or cancel.',
+  invertRight: 'Invert R: flip the Right chain polarity. Fixes chains that hollow out or cancel.',
   swapChains: 'Swap Chains: exchange Left/Right chains, pans included.',
   branchGap: 'Branch: feed the other chain from this point in this chain.',
   branchJunction: 'Branch Point: the other chain starts here. Click: make chains independent.',

@@ -56,6 +56,8 @@ export const MAPPABLE_TARGETS: MappableTarget[] = [
   { id: 'chainPanRight', name: 'Pan R', group: 'Stereo', kind: 'continuous' },
   { id: 'chainSoloLeft', name: 'Solo L', group: 'Stereo', kind: 'toggle' },
   { id: 'chainSoloRight', name: 'Solo R', group: 'Stereo', kind: 'toggle' },
+  { id: 'chainInvertLeft', name: 'Invert L', group: 'Stereo', kind: 'toggle' },
+  { id: 'chainInvertRight', name: 'Invert R', group: 'Stereo', kind: 'toggle' },
   ...Array.from({ length: BLOCK_POWER_TARGETS }, (_, i): MappableTarget => ({
     id: `block${i + 1}Power`,
     name: `Block ${i + 1} Power`,

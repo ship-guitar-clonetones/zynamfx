@@ -148,6 +148,8 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
       .withOptionsFrom(editor->chainPanLinkedRelay)
       .withOptionsFrom(editor->chainSoloLeftRelay)
       .withOptionsFrom(editor->chainSoloRightRelay)
+      .withOptionsFrom(editor->chainInvertLeftRelay)
+      .withOptionsFrom(editor->chainInvertRightRelay)
       .withOptionsFrom(editor->bassRelay)
       .withOptionsFrom(editor->midRelay)
       .withOptionsFrom(editor->trebleRelay)
@@ -558,9 +560,9 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             return editor->processor.pollAutoBalance();
           }))
       .withNativeFunction(
-          // Arm a one-shot Align measurement (stereo chain mode); the UI
-          // polls pollAutoOffset for progress/result (see Processor.h /
-          // AutoOffset.h).
+          // Arm a one-shot Align probe (stereo chain mode; output mutes for
+          // ~half a second); the UI polls pollAutoOffset for progress and
+          // the result (see Processor.h / AutoOffset.h).
           "startAutoOffset", guarded(0, false, [editor](const juce::Array<juce::var>&) {
             editor->processor.startAutoOffset();
             return juce::var(true);

@@ -40,9 +40,12 @@ struct StereoOffsetParams {
   float offsetMs = 0.0f;
 
   /** offsetNorm: bipolar 0..1, 0.5 = center = 0 ms. Values within a hair of
-      center decode to exactly zero so the knob detent genuinely means zero. */
+      center decode to exactly zero so the knob detent genuinely means zero.
+      The hair is deliberately tight (~1 sample at 48 kHz): auto-align
+      measures to sub-sample precision, and corrections of a few samples
+      must not vanish into the detent. */
   static StereoOffsetParams fromNormalized(float offsetNorm) {
-    constexpr float kEps = 0.005f;
+    constexpr float kEps = 0.001f;
     StereoOffsetParams p;
     const float bipolar = juce::jlimit(0.0f, 1.0f, offsetNorm) * 2.0f - 1.0f;
     p.targetChannel = bipolar < 0.0f ? 0 : 1;

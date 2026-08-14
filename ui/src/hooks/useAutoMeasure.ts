@@ -3,26 +3,30 @@ import { useNativeFunction } from './useFunction';
 import { useToast } from '../components/Toast';
 
 /** Native poll reply. The measured result rides along when state is 'done':
-    `matchedDb` for auto balance, `matchedMs` for auto offset. */
+    `matchedDb` for auto balance, `matchedMs` (plus `polarityFlipped` when a
+    chain Ø was toggled) for auto offset. */
 export interface AutoMeasureResult {
   state: string;
   matchedDb?: number;
   matchedMs?: number;
+  polarityFlipped?: boolean;
 }
 
 /**
- * Drives a one-shot native "listening" measurement (auto balance, auto
- * offset): toggle() arms or cancels, and while armed we poll until the
- * native state machine leaves 'listening' (done, timeout or cancel). The
- * toast follows the flow: "Listening" pinned while armed, then the
- * formatted result on success; cancel and timeout just take it down.
- * `doneMessage` must be referentially stable (a module-level function).
+ * Drives a one-shot native measurement (auto balance listens to the player,
+ * auto offset runs an internal probe): toggle() arms or cancels, and while
+ * armed we poll until the native state machine leaves 'listening' (done,
+ * timeout or cancel). The toast follows the flow: `pinMessage` pinned while
+ * armed, then the formatted result on success; cancel and timeout just take
+ * it down. `doneMessage` must be referentially stable (a module-level
+ * function).
  */
 export function useAutoMeasure(
   startFn: string,
   cancelFn: string,
   pollFn: string,
-  doneMessage: (result: AutoMeasureResult) => string
+  doneMessage: (result: AutoMeasureResult) => string,
+  pinMessage = 'Listening'
 ) {
   const start = useNativeFunction<boolean>(startFn);
   const cancel = useNativeFunction<boolean>(cancelFn);
@@ -50,9 +54,9 @@ export function useAutoMeasure(
     } else {
       await start();
       setListening(true);
-      toast.pin('Listening');
+      toast.pin(pinMessage);
     }
-  }, [listening, start, cancel, toast]);
+  }, [listening, start, cancel, toast, pinMessage]);
 
   return { listening, toggle };
 }

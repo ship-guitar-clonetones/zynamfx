@@ -295,11 +295,13 @@ export const GalleryLane: React.FC<{
   </div>
 );
 
-/** Per-lane solo chip beside the pan label: grey chip idle, the house armed
-    yellow while soloing. Exclusive: engaging one clears the other. The mute
-    happens in the native image matrix, on the same smoothers as pan moves,
-    so solos never click. */
-const SoloButton: React.FC<{ on: boolean; help: string; onClick: () => void }> = ({
+/** Per-lane chip stacked beside the pan knob: grey idle, the house armed
+    yellow while engaged. Solo ("S") auditions its chain (exclusive:
+    engaging one clears the other); polarity ("Ø") flips its chain's sign,
+    for captures that land 180° out. Both act inside the native image
+    matrix, on the same smoothers as pan moves, so neither clicks. */
+const RailChip: React.FC<{ label: string; on: boolean; help: string; onClick: () => void }> = ({
+  label,
   on,
   help,
   onClick,
@@ -317,16 +319,45 @@ const SoloButton: React.FC<{ on: boolean; help: string; onClick: () => void }> =
       backgroundColor: on ? BRAND_YELLOW : HIGHLIGHT,
     }}
   >
-    S
+    {label}
   </button>
+);
+
+/** Solo above polarity, parked to the right of the knob disc. The pan label
+    stays under the knob (not beside the chips), so the rail doesn't grow a
+    second chip-tall label row. */
+const PanKnobChipStack: React.FC<{
+  solo: boolean;
+  invert: boolean;
+  soloHelp: string;
+  invertHelp: string;
+  onSolo: () => void;
+  onInvert: () => void;
+}> = ({ solo, invert, soloHelp, invertHelp, onSolo, onInvert }) => (
+  <div
+    style={{
+      position: 'absolute',
+      left: KNOB_SIZE_SECONDARY + 6,
+      top: 0,
+      height: KNOB_SIZE_SECONDARY,
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      gap: 4,
+    }}
+  >
+    <RailChip label="S" on={solo} help={soloHelp} onClick={onSolo} />
+    <RailChip label="Ø" on={invert} help={invertHelp} onClick={onInvert} />
+  </div>
 );
 
 /**
  * Left rail for stereo: per-lane pan knobs (each centered on its lane) with
- * solo chips, and the link toggle and whole-chain swap on the seam between
- * them. Constant-power pan positions (0 = hard left, 1 = hard right): Pan L
- * covers hard left..center on a half track, Pan R center..hard right.
- * Linked (default) mirrors the knobs so width changes stay symmetric.
+ * a solo/polarity stack to the right of the disc, and the link toggle and
+ * whole-chain swap on the seam between them. Constant-power pan positions
+ * (0 = hard left, 1 = hard right): Pan L covers hard left..center on a half
+ * track, Pan R center..hard right. Linked (default) mirrors the knobs so
+ * width changes stay symmetric.
  */
 export const StereoPanRail: React.FC = () => {
   const { swapChains } = useChainActions();
@@ -335,6 +366,8 @@ export const StereoPanRail: React.FC = () => {
   const [linked, setLinked] = useParameter('chainPanLinked', 'toggle');
   const [soloLeft, setSoloLeft] = useParameter('chainSoloLeft', 'toggle');
   const [soloRight, setSoloRight] = useParameter('chainSoloRight', 'toggle');
+  const [invertLeft, setInvertLeft] = useParameter('chainInvertLeft', 'toggle');
+  const [invertRight, setInvertRight] = useParameter('chainInvertRight', 'toggle');
 
   const handlePanLeft = (value: number) => {
     setPanLeft(value);
@@ -363,7 +396,8 @@ export const StereoPanRail: React.FC = () => {
 
   // Each knob region: knob centered on its lane, with a hairline connector
   // filling the remaining run between the knob and the link/swap box so the
-  // pan controls read as one wired-together group.
+  // pan controls read as one wired-together group. Width reserves the chip
+  // stack to the right of the disc.
   const knobRegion: React.CSSProperties = {
     flex: 1,
     display: 'flex',
@@ -377,6 +411,11 @@ export const StereoPanRail: React.FC = () => {
     borderLeft: BORDER,
     margin: '6px 0',
   };
+  const panKnobWrap: React.CSSProperties = {
+    position: 'relative',
+    // Knob disc + gap + chip column; label stays knob-wide underneath.
+    paddingRight: ICON_BOX_SIZE + 6,
+  };
 
   return (
     <div
@@ -387,30 +426,37 @@ export const StereoPanRail: React.FC = () => {
         alignSelf: 'center',
         height: `${STEREO_TILE_SIZE * 2 + LANE_GAP}px`,
         flexShrink: 0,
-        // Clearance between the solo chips and the lane tiles.
+        // Clearance between the chip stacks and the lane tiles.
         paddingRight: 16,
         boxSizing: 'content-box',
       }}
     >
       <div style={knobRegion}>
         <div style={spacer} />
-        <KnobControl
-          label="Pan L"
-          value={panLeft}
-          onChange={handlePanLeft}
-          variant="panLeft"
-          min={0}
-          max={0.5}
-          size={KNOB_SIZE_SECONDARY}
-          thumb="secondary"
-          scale={PAN_LEFT_SCALE}
-          defaultValue={0}
-          help={HELP.panLeft}
-          labelBright
-          labelExtra={
-            <SoloButton on={soloLeft} help={HELP.soloLeft} onClick={toggleSoloLeft} />
-          }
-        />
+        <div style={panKnobWrap}>
+          <KnobControl
+            label="Pan L"
+            value={panLeft}
+            onChange={handlePanLeft}
+            variant="panLeft"
+            min={0}
+            max={0.5}
+            size={KNOB_SIZE_SECONDARY}
+            thumb="secondary"
+            scale={PAN_LEFT_SCALE}
+            defaultValue={0}
+            help={HELP.panLeft}
+            labelBright
+          />
+          <PanKnobChipStack
+            solo={soloLeft}
+            invert={invertLeft}
+            soloHelp={HELP.soloLeft}
+            invertHelp={HELP.invertLeft}
+            onSolo={toggleSoloLeft}
+            onInvert={() => setInvertLeft(!invertLeft)}
+          />
+        </div>
         <div style={connector} />
       </div>
       <div
@@ -439,23 +485,30 @@ export const StereoPanRail: React.FC = () => {
       </div>
       <div style={knobRegion}>
         <div style={connector} />
-        <KnobControl
-          label="Pan R"
-          value={panRight}
-          onChange={handlePanRight}
-          variant="panRight"
-          min={0.5}
-          max={1}
-          size={KNOB_SIZE_SECONDARY}
-          thumb="secondary"
-          scale={PAN_RIGHT_SCALE}
-          defaultValue={1}
-          help={HELP.panRight}
-          labelBright
-          labelExtra={
-            <SoloButton on={soloRight} help={HELP.soloRight} onClick={toggleSoloRight} />
-          }
-        />
+        <div style={panKnobWrap}>
+          <KnobControl
+            label="Pan R"
+            value={panRight}
+            onChange={handlePanRight}
+            variant="panRight"
+            min={0.5}
+            max={1}
+            size={KNOB_SIZE_SECONDARY}
+            thumb="secondary"
+            scale={PAN_RIGHT_SCALE}
+            defaultValue={1}
+            help={HELP.panRight}
+            labelBright
+          />
+          <PanKnobChipStack
+            solo={soloRight}
+            invert={invertRight}
+            soloHelp={HELP.soloRight}
+            invertHelp={HELP.invertRight}
+            onSolo={toggleSoloRight}
+            onInvert={() => setInvertRight(!invertRight)}
+          />
+        </div>
         <div style={spacer} />
       </div>
     </div>

@@ -64,7 +64,8 @@ inline juce::ValueTree makeIrBlockTree(const juce::String& blockId, int toneId, 
 
 // A NAM block tree in plugin-state shape, with the amp capture's bytes
 // embedded as its ModelCache (same cache-first loading as makeIrBlockTree).
-inline juce::ValueTree makeNamBlockTree(const juce::String& blockId, int toneId, int modelId) {
+inline juce::ValueTree makeNamBlockTree(const juce::String& blockId, int toneId, int modelId,
+                                        const char* fileName = "a2-amp-test.nam") {
   const juce::String toneJson =
       "{\"id\":" + juce::String(toneId) + ",\"title\":\"Test Amp\",\"format\":\"nam\","
       "\"models\":[{\"id\":" + juce::String(modelId) +
@@ -83,7 +84,7 @@ inline juce::ValueTree makeNamBlockTree(const juce::String& blockId, int toneId,
   block.setProperty("activeModelId", modelId, nullptr);
 
   juce::MemoryBlock bytes;
-  EXPECT_TRUE(testFile("a2-amp-test.nam").loadFileAsData(bytes));
+  EXPECT_TRUE(testFile(fileName).loadFileAsData(bytes));
   juce::ValueTree cached("CachedModel");
   cached.setProperty("modelId", modelId, nullptr);
   cached.setProperty("data", juce::var(bytes), nullptr);

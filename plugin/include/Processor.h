@@ -316,16 +316,15 @@ public:
   void cancelAutoBalance();
   juce::var pollAutoBalance();  // { state: "idle"|"listening"|"done"|"timeout", matchedDb? }
 
-  // Auto align: one-shot chain time alignment (stereo chain mode).
-  // Same listening UX as auto balance, but the measurement is a cross-
-  // correlation of the two raw chain outputs (captured pre-align, so it's
-  // the chains' absolute misalignment) instead of an energy ratio; see
-  // AutoOffset.h for the full rationale and threading model. pollAutoOffset()
-  // applies the measured lag to the alignOffset parameter (and powers
-  // Align on) when the measurement is trustworthy.
+  // Auto align: probe-based chain time alignment (stereo chain mode). One
+  // press drives both chains with an identical internal sweep, output muted
+  // for under half a second, and measures the inter-chain lag and relative
+  // polarity to sub-sample precision; see AutoOffset.h for the rationale
+  // and threading model. pollAutoOffset() runs the analysis and applies the
+  // result (align offset + power, polarity flip) when it's trustworthy.
   void startAutoOffset();
   void cancelAutoOffset();
-  juce::var pollAutoOffset();  // { state: "idle"|"listening"|"done"|"timeout", matchedMs?, progress? }
+  juce::var pollAutoOffset();  // { state: "idle"|"listening"|"done"|"timeout", matchedMs?, polarityFlipped?, progress? }
 
   // Location of the on-disk diagnostic log. Single source of truth shared by the
   // FileLogger setup and the UI's "copy/reveal logs" actions so they never drift.
@@ -784,6 +783,8 @@ private:
     std::atomic<float>* chainPanRight = nullptr;
     std::atomic<float>* chainSoloLeft = nullptr;
     std::atomic<float>* chainSoloRight = nullptr;
+    std::atomic<float>* chainInvertLeft = nullptr;
+    std::atomic<float>* chainInvertRight = nullptr;
     std::atomic<float>* toneBass = nullptr;
     std::atomic<float>* toneMid = nullptr;
     std::atomic<float>* toneTreble = nullptr;
@@ -824,6 +825,8 @@ private:
   float cacheChainPanRight = 1.0f;
   bool cacheChainSoloLeft = false;
   bool cacheChainSoloRight = false;
+  bool cacheChainInvertLeft = false;
+  bool cacheChainInvertRight = false;
   float cacheBassTone = 5.0f;
   float cacheMidTone = 5.0f;
   float cacheTrebleTone = 5.0f;
@@ -921,9 +924,10 @@ private:
   Spread spread;
   StereoOffset stereoOffset;
 
-  // Auto-align measurement engine (state machine + capture + analysis all
-  // live in AutoOffset; the processor just taps the audio and applies the
-  // result; see the public startAutoOffset/pollAutoOffset above).
+  // Auto-align probe engine (sweep schedule + capture + estimation all live
+  // in AutoOffset; the processor injects the probe, taps the chain outputs,
+  // applies the mute stage, and writes the result to the parameters; see
+  // the public startAutoOffset/pollAutoOffset above).
   AutoOffset autoOffset;
 
   // Post-chain image matrix gains (per-chain balance trim × constant-power

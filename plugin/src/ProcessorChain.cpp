@@ -1257,6 +1257,16 @@ bool TONE3000Processor::swapChains() {
       branchSourceSide == ChainSide::Left ? ChainSide::Right : ChainSide::Left;
   refreshBranchTapIndex();
 
+  // Polarity flips describe the captures, so they travel with their lanes
+  // (pans stay put: they're image placement, not chain state).
+  auto* invLeft = parameters.getParameter("chainInvertLeft");
+  auto* invRight = parameters.getParameter("chainInvertRight");
+  if (invLeft != nullptr && invRight != nullptr && invLeft->getValue() != invRight->getValue()) {
+    const float left = invLeft->getValue();
+    invLeft->setValueNotifyingHost(invRight->getValue());
+    invRight->setValueNotifyingHost(left);
+  }
+
   bumpChainRevision();
   DBG("Swapped Left/Right chains");
   return true;
