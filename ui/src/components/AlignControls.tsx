@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Equal, Power } from 'lucide-react';
 import { KnobControl } from './KnobControl';
 import { offsetMsScale } from './knobScale';
 import { useParameter } from '../hooks/useParameter';
+import { useDismissable } from '../hooks/useDismissable';
 import { useAutoMeasure, type AutoMeasureResult } from '../hooks/useAutoMeasure';
 import { HELP, helpProps } from './helpText';
 import { ChromeIconButton } from './ChromeIconButton';
+import { ImageDeckPanel, useImageDeckReset } from './ImageDeckPanel';
 import {
   ICON_SIZE,
   KNOB_SIZE_PRIMARY,
@@ -17,10 +19,9 @@ import {
 import { IMAGE_GROUP_WIDTH } from './SpreadControls';
 
 /**
- * Align (stereo chain mode): a purely corrective alignment delay on one
- * chain (see native StereoOffset.h), e.g. two captures of one performance
- * landing a few ms apart, or NAM models / IRs with different baked-in
- * latency.
+ * Align (stereo chain mode): a corrective alignment delay on one chain (see
+ * native StereoOffset.h), e.g. two captures of one performance landing a
+ * few ms apart, or NAM models / IRs with different baked-in latency.
  *
  * Faceplate face: an "ALIGN" advert pill while off; clicking it powers
  * align on and reveals the bipolar Offset knob, auto-align button, and
@@ -34,6 +35,11 @@ import { IMAGE_GROUP_WIDTH } from './SpreadControls';
  * into the offset (powering align on when there's a real correction). The
  * measurement also catches chains that are polarity-inverted against each
  * other and toggles a chain Ø (the chips on the pan rail) to match.
+ *
+ * Right-click opens the shared deck panel (ImageDeckPanel: Wobble,
+ * Crossover, Diffuse, mono-safety LED), the same sections as Spread's but
+ * all default OFF: align stays purely corrective until the deck is asked
+ * for, at which point the delayed chain reads as an ADT-style second take.
  *
  * Occupies the same fixed slot as the mono-mode Spread group
  * (IMAGE_GROUP_WIDTH).
@@ -136,13 +142,30 @@ const AutoAlignButton: React.FC = () => {
   );
 };
 
-/** Offset knob + auto + power; collapses to the advert when powered off. */
+/** Offset knob + auto + power; right-click opens the advanced deck panel;
+    collapses to the advert when powered off. */
 export const AlignGroup: React.FC = () => {
   const [enabled, setEnabled] = useParameter('alignEnabled', 'toggle');
   const [offset, setOffset] = useParameter('alignOffset', 'slider');
+  const resetDeck = useImageDeckReset('align');
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const close = useCallback(() => setOpen(false), []);
+
+  // Dismissal checks against the panel, not the group wrapper: the Offset
+  // knob, auto, and power live in the same wrapper but a click on them
+  // should close the panel. primaryOnly keeps the contextmenu toggle
+  // working. (Same pattern as SpreadGroup.)
+  useDismissable(open, panelRef, close, { primaryOnly: true });
 
   return (
-    <div style={{ position: 'relative', width: `${IMAGE_GROUP_WIDTH}px`, boxSizing: 'border-box' }}>
+    <div
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setOpen((prev) => !prev);
+      }}
+      style={{ position: 'relative', width: `${IMAGE_GROUP_WIDTH}px`, boxSizing: 'border-box' }}
+    >
       {enabled ? (
         <div
           style={{
@@ -154,16 +177,22 @@ export const AlignGroup: React.FC = () => {
           }}
         >
           <AutoAlignButton />
-          <KnobControl
-            label="Offset"
-            value={offset}
-            onChange={setOffset}
-            variant="bipolar"
-            size={KNOB_SIZE_PRIMARY}
-            scale={offsetMsScale}
-            defaultValue={0.5}
-            help={HELP.alignOffset}
-          />
+          {/* Panel anchors to the Offset knob so its left edge tracks the
+              knob, matching the spread group. */}
+          <div style={{ position: 'relative' }}>
+            <KnobControl
+              label="Offset"
+              value={offset}
+              onChange={setOffset}
+              variant="bipolar"
+              size={KNOB_SIZE_PRIMARY}
+              scale={offsetMsScale}
+              defaultValue={0.5}
+              onReset={resetDeck}
+              help={HELP.alignOffset}
+            />
+            {open && <ImageDeckPanel feature="align" ref={panelRef} fromKnob />}
+          </div>
           <ChromeIconButton
             tone="power"
             on
@@ -177,6 +206,7 @@ export const AlignGroup: React.FC = () => {
       ) : (
         <AdvertButton onClick={() => setEnabled(true)} />
       )}
+      {open && !enabled && <ImageDeckPanel feature="align" ref={panelRef} />}
     </div>
   );
 };

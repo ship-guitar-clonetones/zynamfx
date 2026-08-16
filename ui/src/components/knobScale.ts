@@ -80,6 +80,15 @@ const sidedMsScale = (maxMs: number): KnobScale => {
     Align delay: center = 0 ms, ends reach 24 ms toward L or R. */
 export const offsetMsScale = sidedMsScale(24);
 
+/** Deck crossover cutoff (spread + align advanced panels): log map over
+    32.5-520 Hz, center = 130 Hz (mirrors the native deckCrossoverHz). */
+export const crossoverHzScale: KnobScale = {
+  toDisplay: (n) => 32.5 * Math.pow(16, n),
+  fromDisplay: (d) => Math.log(d / 32.5) / Math.log(16),
+  format: (n) => `${Math.round(32.5 * Math.pow(16, n))} Hz`,
+  editText: (n) => Math.round(32.5 * Math.pow(16, n)).toString(),
+};
+
 /**
  * Chain pan halves. The left knob covers normalized 0..0.5 (hard left ..
  * center), the right 0.5..1 (center .. hard right). Display is the pan

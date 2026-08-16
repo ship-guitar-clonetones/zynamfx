@@ -10,41 +10,24 @@ void Spread::prepare(double newSampleRate, int maxBlockSize) {
                                     static_cast<juce::uint32>(juce::jmax(1, maxBlockSize)), 1};
 
   crossover.setType(juce::dsp::LinkwitzRileyFilterType::lowpass);
-  crossover.setCutoffFrequency(static_cast<float>(kCrossoverHz));
+  crossover.setCutoffFrequency(appliedCrossoverHz);
   crossover.prepare(spec);
 
   const int maxDelaySamples = static_cast<int>(std::ceil(
-      (SpreadParams::kMaxOffsetMs + kWobbleMaxMs) * 0.001 * sampleRate)) + 8;
+      (SpreadParams::kMaxOffsetMs + kDeckWobbleMaxMs) * 0.001 * sampleRate)) + 8;
   delayLine.setMaximumDelayInSamples(maxDelaySamples);
   delayLine.prepare(spec);
 
-  for (int i = 0; i < kNumAllpasses; ++i) {
-    const double fc = kAllpassLowHz * std::pow(kAllpassHighHz / kAllpassLowHz,
-                                               static_cast<double>(i) / (kNumAllpasses - 1));
-    const double t = std::tan(juce::MathConstants<double>::pi * fc / sampleRate);
-    allpasses[static_cast<size_t>(i)].a = static_cast<float>((t - 1.0) / (t + 1.0));
-  }
+  diffuser.prepare(sampleRate);
+  wobble.prepare(sampleRate);
+  corrMeter.prepare(sampleRate);
 
   offsetCoeff = 1.0f - std::exp(static_cast<float>(-1.0 / (kOffsetSmoothSeconds * sampleRate)));
-  wobbleCoeff = 1.0f - std::exp(static_cast<float>(
-      -juce::MathConstants<double>::twoPi * kWobbleRateHz / sampleRate));
 
-  // Wobble normalization, analytic. The noise shaper is two cascaded
-  // one-poles with coefficient k (see Spread.h for why two); its impulse
-  // response is h[n] = k²(n+1)aⁿ with a = 1-k, so the steady-state output
-  // variance for unit-variance input is Σh² = k⁴(1+a²)/(1-a²)³. Uniform
-  // [-1,1] noise has σ² = 1/3; scale so 3σ reaches the ±1 clamp. Only then
-  // does the depth knob actually span the full ±kWobbleMaxMs at any sample
-  // rate. (The spec pseudocode's fixed wobNorm = 3.0 "tune once" placeholder
-  // was ~100× too small, which made the wobble inaudible.)
-  const double k = wobbleCoeff, a = 1.0 - k;
-  const double gainSq = k * k * k * k * (1.0 + a * a) /
-                        ((1.0 - a * a) * (1.0 - a * a) * (1.0 - a * a));
-  const double wobbleSigma = std::sqrt(gainSq / 3.0);
-  wobbleNorm = static_cast<float>(1.0 / (3.0 * wobbleSigma));
-
-  wobbleDepth.reset(sampleRate, kFadeSeconds);
-  wetGain.reset(sampleRate, kFadeSeconds);
+  wobbleDepth.reset(sampleRate, kDeckFadeSeconds);
+  wetGain.reset(sampleRate, kDeckFadeSeconds);
+  crossoverMix.reset(sampleRate, kDeckFadeSeconds);
+  diffuseMix.reset(sampleRate, kDeckFadeSeconds);
 
   running = false;
   engaged = false;
@@ -54,10 +37,9 @@ void Spread::prepare(double newSampleRate, int maxBlockSize) {
 void Spread::resetDeck() {
   crossover.reset();
   delayLine.reset();
-  for (auto& ap : allpasses) ap.z = 0.0f;
-  wobbleState1 = wobbleState2 = 0.0f;
-  corrLR = corrLL = corrRR = 0.0f;
-  correlationOut.store(1.0f, std::memory_order_relaxed);
+  diffuser.reset();
+  wobble.reset();
+  corrMeter.reset();
 }
 
 void Spread::setTarget(const SpreadParams& params, bool nowEngaged) {
@@ -69,6 +51,8 @@ void Spread::setTarget(const SpreadParams& params, bool nowEngaged) {
     resetDeck();
     offsetStateMs = params.offsetMs;
     wobbleDepth.setCurrentAndTargetValue(params.wobbleDepth);
+    crossoverMix.setCurrentAndTargetValue(params.crossoverOn ? 1.0f : 0.0f);
+    diffuseMix.setCurrentAndTargetValue(params.diffuseOn ? 1.0f : 0.0f);
     wetGain.setCurrentAndTargetValue(0.0f);
     running = true;
   }
@@ -76,13 +60,19 @@ void Spread::setTarget(const SpreadParams& params, bool nowEngaged) {
   engaged = nowEngaged;
   targetOffsetMs = params.offsetMs;
   wobbleDepth.setTargetValue(params.wobbleDepth);
+  crossoverMix.setTargetValue(params.crossoverOn ? 1.0f : 0.0f);
+  diffuseMix.setTargetValue(params.diffuseOn ? 1.0f : 0.0f);
+  if (params.crossoverHz != appliedCrossoverHz) {
+    appliedCrossoverHz = params.crossoverHz;
+    crossover.setCutoffFrequency(appliedCrossoverHz);
+  }
   wetGain.setTargetValue(engaged ? 1.0f : 0.0f);
 }
 
 void Spread::forceIdle() {
   running = false;
   engaged = false;
-  correlationOut.store(1.0f, std::memory_order_relaxed);
+  corrMeter.reset();
 }
 
 void Spread::process(juce::AudioBuffer<float>& buffer) {
@@ -93,7 +83,7 @@ void Spread::process(juce::AudioBuffer<float>& buffer) {
   auto* l = buffer.getWritePointer(0);
   auto* r = buffer.getWritePointer(1);
 
-  // Correlation block sums (means folded into the followers after the loop).
+  // Correlation block sums (means folded into the meter after the loop).
   float sumLR = 0.0f, sumLL = 0.0f, sumRR = 0.0f;
 
   for (int i = 0; i < numSamples; ++i) {
@@ -104,17 +94,18 @@ void Spread::process(juce::AudioBuffer<float>& buffer) {
     const float xl = l[i];
     const float xr = r[i];
 
+    // Crossover, blended toward its bypass (low = 0, high = the full band;
+    // the filter keeps running so re-engaging blends into warm state).
     float low = 0.0f, high = 0.0f;
     crossover.processSample(0, xl, low, high);
+    const float xoMix = crossoverMix.getNextValue();
+    low *= xoMix;
+    high = xl + (high - xl) * xoMix;
 
     delayLine.pushSample(0, high);
 
-    // Wobble: white noise through two cascaded 0.3 Hz one-poles, a random
-    // walk with no audio-rate residue (see Spread.h).
-    wobbleState1 += wobbleCoeff * (random.nextFloat() * 2.0f - 1.0f - wobbleState1);
-    wobbleState2 += wobbleCoeff * (wobbleState1 - wobbleState2);
-    const float wobbleMs = kWobbleMaxMs * wobbleDepth.getNextValue() *
-                           juce::jlimit(-1.0f, 1.0f, wobbleState2 * wobbleNorm);
+    // Wobble: random walk with no audio-rate residue (see DeckWobble).
+    const float wobbleMs = kDeckWobbleMaxMs * wobbleDepth.getNextValue() * wobble.next();
 
     // Smooth the SIGNED offset; side and magnitude derive from the result so
     // zero-crossings pass through identity (spec routing note).
@@ -122,12 +113,12 @@ void Spread::process(juce::AudioBuffer<float>& buffer) {
     const float tMs = std::abs(offsetStateMs);
     const bool lagOnR = offsetStateMs >= 0.0f;
 
-    const float delayMs = juce::jlimit(0.0f, SpreadParams::kMaxOffsetMs + kWobbleMaxMs,
+    const float delayMs = juce::jlimit(0.0f, SpreadParams::kMaxOffsetMs + kDeckWobbleMaxMs,
                                        tMs + wobbleMs);
     float lag = delayLine.popSample(0, delayMs * msToSamples);
 
-    for (auto& ap : allpasses)
-      lag = ap.process(lag);
+    // Diffusion cascade, blended toward its bypass (the pure delay).
+    lag += (diffuser.process(lag) - lag) * diffuseMix.getNextValue();
     lag *= lagGain;
 
     // Center-identity blend: below kCenterBlendMs the lag path converges to
@@ -149,17 +140,7 @@ void Spread::process(juce::AudioBuffer<float>& buffer) {
     sumRR += outR * outR;
   }
 
-  // ~300 ms one-pole over block means, then publish the normalized value.
-  const float norm = 1.0f / static_cast<float>(numSamples);
-  const float corrCoeff = 1.0f - std::exp(static_cast<float>(-numSamples / (kCorrSeconds * sampleRate)));
-  corrLR += corrCoeff * (sumLR * norm - corrLR);
-  corrLL += corrCoeff * (sumLL * norm - corrLL);
-  corrRR += corrCoeff * (sumRR * norm - corrRR);
-  const float energy = corrLL * corrRR;
-  correlationOut.store(energy > kCorrFloor * kCorrFloor
-                           ? juce::jlimit(-1.0f, 1.0f, corrLR / std::sqrt(energy))
-                           : 1.0f,
-                       std::memory_order_relaxed);
+  corrMeter.update(sumLR, sumLL, sumRR, numSamples);
 
   // Disengage completes once the fade-out lands: output equals input again.
   if (!engaged && !wetGain.isSmoothing() && wetGain.getCurrentValue() <= 0.0f)
