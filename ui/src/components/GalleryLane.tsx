@@ -13,13 +13,13 @@ import {
   BLACK,
   BORDER,
   BRAND_YELLOW,
-  HIGHLIGHT,
   ICON_BOX_SIZE,
   ICON_SIZE,
-  iconButtonStyle,
   KNOB_SIZE_SECONDARY,
   MUTED,
   WHITE,
+  segmentedCellStyle,
+  segmentedGroupStyle,
 } from './theme';
 import { useParameter } from '../hooks/useParameter';
 import { useChainActions } from '../hooks/useChainActions';
@@ -295,65 +295,41 @@ export const GalleryLane: React.FC<{
   </div>
 );
 
-/** Per-lane chip stacked beside the pan knob: grey idle, the house armed
-    yellow while engaged. Solo ("S") auditions its chain (exclusive:
-    engaging one clears the other); polarity ("Ø") flips its chain's sign,
-    for captures that land 180° out. Both act inside the native image
-    matrix, on the same smoothers as pan moves, so neither clicks. */
-const RailChip: React.FC<{ label: string; on: boolean; help: string; onClick: () => void }> = ({
-  label,
-  on,
-  help,
-  onClick,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    {...helpProps(help)}
-    style={{
-      ...iconButtonStyle(),
-      fontSize: '12px',
-      fontFamily: 'monospace',
-      lineHeight: 1,
-      color: on ? BLACK : MUTED,
-      backgroundColor: on ? BRAND_YELLOW : HIGHLIGHT,
-    }}
-  >
-    {label}
-  </button>
-);
-
-/** Solo above polarity, parked to the right of the knob disc. The pan label
-    stays under the knob (not beside the chips), so the rail doesn't grow a
-    second chip-tall label row. */
-const PanKnobChipStack: React.FC<{
+/** Per-lane solo + polarity as one segmented [S|Ø] under the pan label.
+    Grey idle, house-armed yellow while engaged. Solo ("S") auditions its
+    chain (exclusive: engaging one clears the other); polarity ("Ø") flips
+    its chain's sign, for captures that land 180° out. Both act inside the
+    native image matrix, on the same smoothers as pan moves, so neither
+    clicks. */
+const PanRailChips: React.FC<{
   solo: boolean;
   invert: boolean;
   soloHelp: string;
   invertHelp: string;
   onSolo: () => void;
   onInvert: () => void;
-}> = ({ solo, invert, soloHelp, invertHelp, onSolo, onInvert }) => (
-  <div
-    style={{
-      position: 'absolute',
-      left: KNOB_SIZE_SECONDARY + 6,
-      top: 0,
-      height: KNOB_SIZE_SECONDARY,
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      gap: 4,
-    }}
-  >
-    <RailChip label="S" on={solo} help={soloHelp} onClick={onSolo} />
-    <RailChip label="Ø" on={invert} help={invertHelp} onClick={onInvert} />
-  </div>
-);
+}> = ({ solo, invert, soloHelp, invertHelp, onSolo, onInvert }) => {
+  const cell = (on: boolean): React.CSSProperties => ({
+    ...segmentedCellStyle(false),
+    minWidth: `${ICON_BOX_SIZE}px`,
+    color: on ? BLACK : MUTED,
+    backgroundColor: on ? BRAND_YELLOW : 'transparent',
+  });
+  return (
+    <div style={segmentedGroupStyle()}>
+      <button type="button" onClick={onSolo} {...helpProps(soloHelp)} style={cell(solo)}>
+        S
+      </button>
+      <button type="button" onClick={onInvert} {...helpProps(invertHelp)} style={cell(invert)}>
+        Ø
+      </button>
+    </div>
+  );
+};
 
 /**
  * Left rail for stereo: per-lane pan knobs (each centered on its lane) with
- * a solo/polarity stack to the right of the disc, and the link toggle and
+ * a solo/polarity [S|Ø] group under the label, and the link toggle and
  * whole-chain swap on the seam between them. Constant-power pan positions
  * (0 = hard left, 1 = hard right): Pan L covers hard left..center on a half
  * track, Pan R center..hard right. Linked (default) mirrors the knobs so
@@ -394,10 +370,9 @@ export const StereoPanRail: React.FC = () => {
     if (next) setSoloLeft(false);
   };
 
-  // Each knob region: knob centered on its lane, with a hairline connector
-  // filling the remaining run between the knob and the link/swap box so the
-  // pan controls read as one wired-together group. Width reserves the chip
-  // stack to the right of the disc.
+  // Each knob region: knob + [S|Ø] centered on its lane, with a hairline
+  // connector filling the remaining run between the knob and the link/swap
+  // box so the pan controls read as one wired-together group.
   const knobRegion: React.CSSProperties = {
     flex: 1,
     display: 'flex',
@@ -412,9 +387,10 @@ export const StereoPanRail: React.FC = () => {
     margin: '6px 0',
   };
   const panKnobWrap: React.CSSProperties = {
-    position: 'relative',
-    // Knob disc + gap + chip column; label stays knob-wide underneath.
-    paddingRight: ICON_BOX_SIZE + 6,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 6,
   };
 
   return (
@@ -426,9 +402,6 @@ export const StereoPanRail: React.FC = () => {
         alignSelf: 'center',
         height: `${STEREO_TILE_SIZE * 2 + LANE_GAP}px`,
         flexShrink: 0,
-        // Clearance between the chip stacks and the lane tiles.
-        paddingRight: 16,
-        boxSizing: 'content-box',
       }}
     >
       <div style={knobRegion}>
@@ -448,7 +421,7 @@ export const StereoPanRail: React.FC = () => {
             help={HELP.panLeft}
             labelBright
           />
-          <PanKnobChipStack
+          <PanRailChips
             solo={soloLeft}
             invert={invertLeft}
             soloHelp={HELP.soloLeft}
@@ -500,7 +473,7 @@ export const StereoPanRail: React.FC = () => {
             help={HELP.panRight}
             labelBright
           />
-          <PanKnobChipStack
+          <PanRailChips
             solo={soloRight}
             invert={invertRight}
             soloHelp={HELP.soloRight}

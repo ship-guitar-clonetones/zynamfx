@@ -202,7 +202,7 @@ export const HELP = {
   soloRight: 'Solo R: hear the Right chain alone.',
   invertLeft: 'Invert L: flip the Left chain polarity. Fixes chains that hollow out or cancel.',
   invertRight: 'Invert R: flip the Right chain polarity. Fixes chains that hollow out or cancel.',
-  swapChains: 'Swap Chains: exchange Left/Right chains, pans included.',
+  swapChains: 'Swap Chains: exchange Left/Right chains.',
   branchGap: 'Branch: feed the other chain from this point in this chain.',
   branchJunction: 'Branch Point: the other chain starts here. Click: make chains independent.',
 
