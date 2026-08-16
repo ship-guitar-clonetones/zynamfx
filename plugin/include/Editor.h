@@ -113,6 +113,8 @@ private:
   juce::WebToggleButtonRelay chainPanLinkedRelay{"chainPanLinked"};
   juce::WebToggleButtonRelay chainSoloLeftRelay{"chainSoloLeft"};
   juce::WebToggleButtonRelay chainSoloRightRelay{"chainSoloRight"};
+  juce::WebToggleButtonRelay chainInvertLeftRelay{"chainInvertLeft"};
+  juce::WebToggleButtonRelay chainInvertRightRelay{"chainInvertRight"};
   juce::WebSliderRelay bassRelay{"toneBass"};
   juce::WebSliderRelay midRelay{"toneMid"};
   juce::WebSliderRelay trebleRelay{"toneTreble"};
@@ -151,6 +153,10 @@ private:
       *processor.parameters.getParameter("chainSoloLeft"), chainSoloLeftRelay, nullptr};
   juce::WebToggleButtonParameterAttachment chainSoloRightWebAttachment{
       *processor.parameters.getParameter("chainSoloRight"), chainSoloRightRelay, nullptr};
+  juce::WebToggleButtonParameterAttachment chainInvertLeftWebAttachment{
+      *processor.parameters.getParameter("chainInvertLeft"), chainInvertLeftRelay, nullptr};
+  juce::WebToggleButtonParameterAttachment chainInvertRightWebAttachment{
+      *processor.parameters.getParameter("chainInvertRight"), chainInvertRightRelay, nullptr};
   juce::WebToggleButtonParameterAttachment gateEnabledWebAttachment{
       *processor.parameters.getParameter("gateEnabled"), gateEnabledRelay, nullptr};
   juce::WebToggleButtonParameterAttachment toneEqEnabledWebAttachment{

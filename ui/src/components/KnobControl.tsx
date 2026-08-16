@@ -5,7 +5,7 @@ import type { KnobThumb, KnobVariant } from './KnobInner';
 import type { KnobScale } from './knobScale';
 import { percentScale } from './knobScale';
 import { helpProps, pinHelp, unpinHelp } from './helpText';
-import { GRAY, ICON_BOX_SIZE, KNOB_LABEL_GAP, SURFACE_RAISED, WHITE } from './theme';
+import { GRAY, KNOB_LABEL_GAP, SURFACE_RAISED, WHITE } from './theme';
 
 /**
  * Knob interaction conventions (matching typical plugin UX):
@@ -44,11 +44,8 @@ interface KnobControlProps {
   /** One-line hint for the faceplate help readout, shown while hovered or
       dragging (see helpText.ts). */
   help?: string;
-  /** Optional chrome beside the label (e.g. a pan-rail solo chip). Renders
-      in a flex row with the label; the row grows past the knob width. */
-  labelExtra?: React.ReactNode;
   /** Idle label in white instead of muted gray (pan rail: labels read as
-      section titles next to the solo chips). Readout/edit stay white either
+      section titles above the [S|Ø] chips). Readout/edit stay white either
       way. */
   labelBright?: boolean;
   /** Fires true on grab / false on release, so owners of optimistic values
@@ -95,7 +92,6 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   scale = percentScale,
   defaultValue,
   help,
-  labelExtra,
   labelBright = false,
   onDragStateChange,
 }) => {
@@ -257,9 +253,6 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   }, [dragging]);
 
   const showReadout = !editing && readoutVisible;
-  // Fixed-footprint label slot: with labelExtra, lock to the idle label
-  // width (hidden sizer) so the chip keeps its gap and stays put through
-  // readout/edit. Without labelExtra, lock to the knob `size`.
   const slotHeight = Math.round(LABEL_SIZE * 1.2);
 
   const labelText = (
@@ -308,44 +301,6 @@ export const KnobControl: React.FC<KnobControlProps> = ({
     />
   );
 
-  // Idle-label sizer: width matches normal "Pan L" / etc.; visible content
-  // overlays it so readout/edit never move the solo chip or eat the gap.
-  const labelExtraSlot = (
-    <span
-      style={{
-        position: 'relative',
-        display: 'inline-block',
-        flexShrink: 0,
-        height: editing ? slotHeight + 4 : slotHeight,
-      }}
-    >
-      <span
-        aria-hidden
-        style={{
-          visibility: 'hidden',
-          display: 'block',
-          fontSize: LABEL_SIZE,
-          fontWeight: 400,
-          letterSpacing: '1px',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {editing ? editInput : labelText}
-      </span>
-    </span>
-  );
-
   return (
     <div
       {...(help ? helpProps(help) : {})}
@@ -385,23 +340,19 @@ export const KnobControl: React.FC<KnobControlProps> = ({
 
       <div
         style={{
-          width: labelExtra ? undefined : size,
-          height: Math.max(slotHeight, labelExtra ? ICON_BOX_SIZE : 0),
+          width: size,
+          height: slotHeight,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: labelExtra ? '6px' : undefined,
           overflow: 'visible',
         }}
       >
-        {labelExtra ? (
-          labelExtraSlot
-        ) : editing ? (
+        {editing ? (
           <span style={{ width: size, flexShrink: 0, display: 'inline-block' }}>{editInput}</span>
         ) : (
           labelText
         )}
-        {labelExtra}
       </div>
     </div>
   );

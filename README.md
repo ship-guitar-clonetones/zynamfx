@@ -200,11 +200,14 @@ flowchart LR
   dialed in to match the chains stays correct at any pan position; each pan
   knob carries a solo that auditions its chain alone (exclusive: engaging
   one clears the other; the mute rides the same smoothed matrix, so it
-  never clicks, and stays out of presets). Align
-  applies a corrective alignment delay (up to 24 ms) to one chain, useful
-  when NAM models or IRs carry different baked-in latency; the auto-align
-  button measures it from a couple seconds of playing
-  (`plugin/include/AutoOffset.h`).
+  never clicks, and stays out of presets) and a polarity flip (Ø) for
+  captures that land 180° out (the sign rides the same matrix smoothers, so
+  flips glide through zero instead of clicking). Align applies a corrective
+  alignment delay (up to 24 ms, sub-sample precise) to one chain, useful when
+  NAM models or IRs carry different baked-in latency; the auto-align button
+  mutes the output for under half a second, drives both chains with an
+  identical internal sweep, and measures the lag and relative polarity from
+  the cross-correlation (`plugin/include/AutoOffset.h`).
 - **Tone stack**: one global Bass/Middle/Treble EQ after the DC blocker.
 - **Oversampling**: a Plugin Settings option runs the whole chain at 2x/4x/8x the
   48 kHz base rate: minimum-phase half-band filters (zero added latency),
@@ -311,6 +314,11 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   the CLAP wrapper.
 - O. Das, ["An Open-Source Stereo Widening Plugin"](https://www.dafx.de/paper-archive/2024/papers/DAFx24_paper_92.pdf)
   (DAFx24): the allpass decorrelation approach used by the spread doubler.
+- A. Farina, ["Simultaneous Measurement of Impulse Response and Distortion
+  with a Swept-Sine Technique"](https://www.melaudia.net/zdoc/sweepSine.PDF)
+  (108th AES Convention, 2000) and C. Knapp & G. Carter, "The Generalized
+  Correlation Method for Estimation of Time Delay" (IEEE TASSP, 1976): the
+  sweep probe and GCC-PHAT estimator behind auto-align.
 - [dnd-kit](https://dndkit.com), [lucide](https://lucide.dev), and
   [react-knob-headless](https://github.com/satelllte/react-knob-headless) in
   the UI.

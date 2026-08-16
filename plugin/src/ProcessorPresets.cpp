@@ -21,6 +21,7 @@ const std::vector<juce::String>& TONE3000Processor::presetParameterIds() {
       "spreadEnabled",  "spreadOffset",        "spreadWobble",
       "alignEnabled",   "alignOffset",
       "chainPanLeft",   "chainPanRight",       "chainPanLinked",
+      "chainInvertLeft", "chainInvertRight",
   };
   return ids;
 }

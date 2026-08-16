@@ -28,10 +28,12 @@ import { IMAGE_GROUP_WIDTH } from './SpreadControls';
  * footprint so the toggle never shifts the plate. Offset center = 0 ms =
  * identity; the sign picks which chain is delayed.
  *
- * The auto (=) button measures the alignment for you: same one-shot
- * listening flow as auto-balance (see native AutoOffset.h): click, play
- * ~2 s, and the measured inter-chain lag is written into the offset
- * (powering align on when there's a real correction).
+ * The auto (=) button measures the alignment for you: one click mutes the
+ * output for under half a second while an internal sweep drives both chains
+ * (see native AutoOffset.h), and the measured inter-chain lag is written
+ * into the offset (powering align on when there's a real correction). The
+ * measurement also catches chains that are polarity-inverted against each
+ * other and toggles a chain Ø (the chips on the pan rail) to match.
  *
  * Occupies the same fixed slot as the mono-mode Spread group
  * (IMAGE_GROUP_WIDTH).
@@ -92,18 +94,25 @@ const AdvertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 );
 
 /**
- * Auto align: one-shot chain time alignment. Click arms a listening
- * measurement on the native side: play for ~2 s and the measured lag is
- * written into alignOffset (the Offset knob visibly moves). Yellow
- * (listening) while armed; click again to cancel; times out after 15 s of
- * silence or an untrustworthy measurement.
+ * Auto align: one-shot chain time alignment. Click runs an internal probe
+ * on the native side (output muted for ~½ s) and the measured lag is
+ * written into alignOffset (the Offset knob visibly moves). Yellow while
+ * measuring; click again to cancel. An untrustworthy measurement (e.g. a
+ * chain edit landing mid-probe) is discarded silently.
  */
 /** matchedMs is the measured inter-chain lag (positive = the right chain
-    gets delayed), mirroring the Offset knob move. Below the native
-    "already aligned" floor no correction was applied. */
-const alignDoneMessage = ({ matchedMs = 0 }: AutoMeasureResult): string => {
-  if (Math.abs(matchedMs) < 0.05) return 'Aligned';
-  return `Aligned · ${matchedMs > 0 ? 'R' : 'L'} +${Math.abs(matchedMs).toFixed(1)} ms`;
+    gets delayed), mirroring the Offset knob move; below the native
+    "already aligned" floor no delay correction was applied. polarityFlipped
+    reports a chain Ø toggled alongside. Two decimals: the probe measures to
+    sub-sample precision. */
+const alignDoneMessage = ({ matchedMs = 0, polarityFlipped = false }: AutoMeasureResult): string => {
+  const delay =
+    Math.abs(matchedMs) < 0.05
+      ? null
+      : `${matchedMs > 0 ? 'R' : 'L'} +${Math.abs(matchedMs).toFixed(2)} ms`;
+  return ['Aligned', delay, polarityFlipped ? 'Ø flipped' : null]
+    .filter((part) => part != null)
+    .join(' · ');
 };
 
 const AutoAlignButton: React.FC = () => {
@@ -111,7 +120,8 @@ const AutoAlignButton: React.FC = () => {
     'startAutoOffset',
     'cancelAutoOffset',
     'pollAutoOffset',
-    alignDoneMessage
+    alignDoneMessage,
+    'Measuring'
   );
   return (
     <ChromeIconButton
