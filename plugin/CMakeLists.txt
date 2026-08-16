@@ -148,6 +148,7 @@ target_sources(${PROJECT_NAME}
         src/BlockSpectrum.cpp
         include/ChainBlock.h
         include/ChainHistory.h
+        include/ImageDeck.h
         include/Spread.h
         src/Spread.cpp
         include/StereoOffset.h

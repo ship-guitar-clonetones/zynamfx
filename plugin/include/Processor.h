@@ -182,9 +182,9 @@ public:
   void setMultiCoreEnabled(bool enabled, bool persist = true);
 
   // All meter levels in one call: { input, output, blocks: { id: { in, out } },
-  // cpu (0..1 audio-callback load), correlation (-1..1 spread output
-  // correlation) }. Levels in dB with a -60 floor. Designed to be polled once
-  // per UI frame.
+  // cpu (0..1 audio-callback load), correlation (-1..1 stereo-image output
+  // correlation, from whichever engine the mode runs) }. Levels in dB with a
+  // -60 floor. Designed to be polled once per UI frame.
   juce::var getMeterLevels() const;
 
   // Per-block EQ (post-block by default, pre-model when its pre flag is on).
@@ -777,8 +777,17 @@ private:
     std::atomic<float>* spreadEnabled = nullptr;
     std::atomic<float>* spreadOffset = nullptr;
     std::atomic<float>* spreadWobble = nullptr;
+    std::atomic<float>* spreadWobbleEnabled = nullptr;
+    std::atomic<float>* spreadCrossover = nullptr;
+    std::atomic<float>* spreadCrossoverEnabled = nullptr;
+    std::atomic<float>* spreadDiffuseEnabled = nullptr;
     std::atomic<float>* alignEnabled = nullptr;
     std::atomic<float>* alignOffset = nullptr;
+    std::atomic<float>* alignWobble = nullptr;
+    std::atomic<float>* alignWobbleEnabled = nullptr;
+    std::atomic<float>* alignCrossover = nullptr;
+    std::atomic<float>* alignCrossoverEnabled = nullptr;
+    std::atomic<float>* alignDiffuseEnabled = nullptr;
     std::atomic<float>* chainPanLeft = nullptr;
     std::atomic<float>* chainPanRight = nullptr;
     std::atomic<float>* chainSoloLeft = nullptr;
@@ -818,9 +827,18 @@ private:
   float cacheOutputBalance = 0.5f;
   bool cacheSpreadEnabled = false;
   float cacheSpreadOffset = 0.8125f;  // bipolar, 0.5 = center = 0 ms; default +15 ms R
-  float cacheSpreadWobble = 0.25f;   // 0..1 of the ±1.2 ms wobble range
+  float cacheSpreadWobble = 0.25f;    // 0..1 of the ±1.2 ms wobble range
+  bool cacheSpreadWobbleEnabled = true;
+  float cacheSpreadCrossover = 0.5f;  // log map 32.5..520 Hz; 0.5 = 130 Hz
+  bool cacheSpreadCrossoverEnabled = true;
+  bool cacheSpreadDiffuseEnabled = true;
   bool cacheAlignEnabled = false;
-  float cacheAlignOffset = 0.5f;  // bipolar, 0.5 = center = 0 ms
+  float cacheAlignOffset = 0.5f;   // bipolar, 0.5 = center = 0 ms
+  float cacheAlignWobble = 0.25f;  // same span as spread's wobble
+  bool cacheAlignWobbleEnabled = false;
+  float cacheAlignCrossover = 0.5f;  // log map 32.5..520 Hz; 0.5 = 130 Hz
+  bool cacheAlignCrossoverEnabled = false;
+  bool cacheAlignDiffuseEnabled = false;
   float cacheChainPanLeft = 0.0f;
   float cacheChainPanRight = 1.0f;
   bool cacheChainSoloLeft = false;

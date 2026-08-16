@@ -41,6 +41,9 @@ interface KnobControlProps {
   scale?: KnobScale;
   /** Normalized default; enables Alt/Option-click reset. */
   defaultValue?: number;
+  /** Extra work on Alt/Option-click reset (after writing defaultValue). Used
+      by Spread/Align Offset to also restore the advanced deck defaults. */
+  onReset?: () => void;
   /** One-line hint for the faceplate help readout, shown while hovered or
       dragging (see helpText.ts). */
   help?: string;
@@ -93,6 +96,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   defaultValue,
   help,
   labelBright = false,
+  onReset,
   onDragStateChange,
 }) => {
   const knobRef = useRef<HTMLDivElement>(null);
@@ -113,6 +117,8 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   onChangeRef.current = onChange;
   const defaultValueRef = useRef(defaultValue);
   defaultValueRef.current = defaultValue;
+  const onResetRef = useRef(onReset);
+  onResetRef.current = onReset;
 
   useEffect(() => {
     const knobElement = knobRef.current;
@@ -138,8 +144,11 @@ export const KnobControl: React.FC<KnobControlProps> = ({
     const handlePointerDown = (e: PointerEvent) => {
       // Alt/Option-click: reset to default. The drag still engages beneath,
       // which is harmless: releasing without moving stays at the default.
+      // onReset runs after so owners can restore sibling defaults (e.g. the
+      // Spread/Align advanced deck) in the same gesture.
       if (e.altKey && defaultValueRef.current !== undefined) {
         onChangeRef.current(defaultValueRef.current);
+        onResetRef.current?.();
       }
 
       draggingRef.current = true;

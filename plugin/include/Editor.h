@@ -106,8 +106,17 @@ private:
   juce::WebToggleButtonRelay spreadEnabledRelay{"spreadEnabled"};
   juce::WebSliderRelay spreadOffsetRelay{"spreadOffset"};
   juce::WebSliderRelay spreadWobbleRelay{"spreadWobble"};
+  juce::WebToggleButtonRelay spreadWobbleEnabledRelay{"spreadWobbleEnabled"};
+  juce::WebSliderRelay spreadCrossoverRelay{"spreadCrossover"};
+  juce::WebToggleButtonRelay spreadCrossoverEnabledRelay{"spreadCrossoverEnabled"};
+  juce::WebToggleButtonRelay spreadDiffuseEnabledRelay{"spreadDiffuseEnabled"};
   juce::WebToggleButtonRelay alignEnabledRelay{"alignEnabled"};
   juce::WebSliderRelay alignOffsetRelay{"alignOffset"};
+  juce::WebSliderRelay alignWobbleRelay{"alignWobble"};
+  juce::WebToggleButtonRelay alignWobbleEnabledRelay{"alignWobbleEnabled"};
+  juce::WebSliderRelay alignCrossoverRelay{"alignCrossover"};
+  juce::WebToggleButtonRelay alignCrossoverEnabledRelay{"alignCrossoverEnabled"};
+  juce::WebToggleButtonRelay alignDiffuseEnabledRelay{"alignDiffuseEnabled"};
   juce::WebSliderRelay chainPanLeftRelay{"chainPanLeft"};
   juce::WebSliderRelay chainPanRightRelay{"chainPanRight"};
   juce::WebToggleButtonRelay chainPanLinkedRelay{"chainPanLinked"};
@@ -139,10 +148,34 @@ private:
       *processor.parameters.getParameter("spreadOffset"), spreadOffsetRelay, nullptr};
   juce::WebSliderParameterAttachment spreadWobbleWebAttachment{
       *processor.parameters.getParameter("spreadWobble"), spreadWobbleRelay, nullptr};
+  juce::WebToggleButtonParameterAttachment spreadWobbleEnabledWebAttachment{
+      *processor.parameters.getParameter("spreadWobbleEnabled"), spreadWobbleEnabledRelay,
+      nullptr};
+  juce::WebSliderParameterAttachment spreadCrossoverWebAttachment{
+      *processor.parameters.getParameter("spreadCrossover"), spreadCrossoverRelay, nullptr};
+  juce::WebToggleButtonParameterAttachment spreadCrossoverEnabledWebAttachment{
+      *processor.parameters.getParameter("spreadCrossoverEnabled"), spreadCrossoverEnabledRelay,
+      nullptr};
+  juce::WebToggleButtonParameterAttachment spreadDiffuseEnabledWebAttachment{
+      *processor.parameters.getParameter("spreadDiffuseEnabled"), spreadDiffuseEnabledRelay,
+      nullptr};
   juce::WebToggleButtonParameterAttachment alignEnabledWebAttachment{
       *processor.parameters.getParameter("alignEnabled"), alignEnabledRelay, nullptr};
   juce::WebSliderParameterAttachment alignOffsetWebAttachment{
       *processor.parameters.getParameter("alignOffset"), alignOffsetRelay, nullptr};
+  juce::WebSliderParameterAttachment alignWobbleWebAttachment{
+      *processor.parameters.getParameter("alignWobble"), alignWobbleRelay, nullptr};
+  juce::WebToggleButtonParameterAttachment alignWobbleEnabledWebAttachment{
+      *processor.parameters.getParameter("alignWobbleEnabled"), alignWobbleEnabledRelay,
+      nullptr};
+  juce::WebSliderParameterAttachment alignCrossoverWebAttachment{
+      *processor.parameters.getParameter("alignCrossover"), alignCrossoverRelay, nullptr};
+  juce::WebToggleButtonParameterAttachment alignCrossoverEnabledWebAttachment{
+      *processor.parameters.getParameter("alignCrossoverEnabled"), alignCrossoverEnabledRelay,
+      nullptr};
+  juce::WebToggleButtonParameterAttachment alignDiffuseEnabledWebAttachment{
+      *processor.parameters.getParameter("alignDiffuseEnabled"), alignDiffuseEnabledRelay,
+      nullptr};
   juce::WebSliderParameterAttachment chainPanLeftWebAttachment{
       *processor.parameters.getParameter("chainPanLeft"), chainPanLeftRelay, nullptr};
   juce::WebSliderParameterAttachment chainPanRightWebAttachment{

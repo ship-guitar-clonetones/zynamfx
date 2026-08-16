@@ -15,12 +15,16 @@ const std::vector<juce::String>& TONE3000Processor::presetParameterIds() {
   // chainSolo* stays out on purpose: solo is monitoring state, not tone,
   // and a preset saved mid-audition must not load with a chain muted.
   static const std::vector<juce::String> ids = {
-      "inputLevel",     "outputLevel",         "outputBalance",
-      "toneBass",       "toneMid",             "toneTreble",
-      "gateThreshold",  "gateEnabled",         "toneEqEnabled",
-      "spreadEnabled",  "spreadOffset",        "spreadWobble",
-      "alignEnabled",   "alignOffset",
-      "chainPanLeft",   "chainPanRight",       "chainPanLinked",
+      "inputLevel",     "outputLevel",      "outputBalance",
+      "toneBass",       "toneMid",          "toneTreble",
+      "gateThreshold",  "gateEnabled",      "toneEqEnabled",
+      "spreadEnabled",  "spreadOffset",     "spreadWobble",
+      "spreadWobbleEnabled", "spreadCrossover", "spreadCrossoverEnabled",
+      "spreadDiffuseEnabled",
+      "alignEnabled",   "alignOffset",      "alignWobble",
+      "alignWobbleEnabled", "alignCrossover", "alignCrossoverEnabled",
+      "alignDiffuseEnabled",
+      "chainPanLeft",   "chainPanRight",    "chainPanLinked",
       "chainInvertLeft", "chainInvertRight",
   };
   return ids;
@@ -142,18 +146,25 @@ bool TONE3000Processor::loadPreset(const juce::String& presetId) {
   }
   retired.clear();
 
-  // Faceplate parameters. Gestured so hosts treat this like a user edit
-  // (automation write modes record it instead of fighting it).
+  // Faceplate parameters: every preset-managed id is set, entries missing
+  // from the file (saved before a parameter existed) land on the parameter
+  // default, so a preset always restores the same rig. Gestured so hosts
+  // treat this like a user edit (automation write modes record it instead
+  // of fighting it).
   const juce::ValueTree params = preset.getChildWithName("Params");
-  for (int i = 0; i < params.getNumChildren(); ++i) {
-    const juce::ValueTree paramTree = params.getChild(i);
-    if (auto* p = parameters.getParameter(paramTree.getProperty("id").toString())) {
-      const auto denormalized =
-          static_cast<float>(static_cast<double>(paramTree.getProperty("value")));
-      p->beginChangeGesture();
-      p->setValueNotifyingHost(p->convertTo0to1(denormalized));
-      p->endChangeGesture();
-    }
+  for (const auto& paramId : presetParameterIds()) {
+    auto* p = parameters.getParameter(paramId);
+    if (p == nullptr)
+      continue;
+    const juce::ValueTree paramTree = params.getChildWithProperty("id", paramId);
+    const float norm =
+        paramTree.isValid()
+            ? p->convertTo0to1(
+                  static_cast<float>(static_cast<double>(paramTree.getProperty("value"))))
+            : p->getDefaultValue();
+    p->beginChangeGesture();
+    p->setValueNotifyingHost(norm);
+    p->endChangeGesture();
   }
 
   juce::Logger::writeToLog("[Presets] Loaded preset: " + activePresetName);

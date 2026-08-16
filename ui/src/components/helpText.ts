@@ -156,12 +156,24 @@ export const HELP = {
     'double-track lag, ≤24 ms toward L or R. Center: off. Right-click: advanced.'
   ),
   spreadWobble: knobHelp('Wobble', 'humanizing delay drift, up to ±1.2 ms.'),
+  spreadWobblePower: 'Wobble Power: delay drift on/off. Off: a static, more comb-like double.',
+  spreadCrossover: knobHelp('Crossover', 'lows below the cutoff stay dual-mono, 33-520 Hz.'),
+  spreadCrossoverPower: 'Crossover Power: off doubles the full band (lows lose mono safety).',
+  spreadDiffuse: 'Diffuse Power: phase-decorrelates the lagged side. Off: a pure delay.',
   spreadAdvert: 'Spread: mono-to-stereo double via a wobbling short lag. Click: enable.',
   spreadPower: 'Spread Power: spread off; collapses its controls. Right-click: advanced.',
-  spreadCorrelation: 'Mono safety: dim: safe · yellow: caution · red: cancellation on mono sum.',
-  alignOffset: knobHelp('Offset', 'corrective chain alignment, ≤24 ms toward L or R. Center: off.'),
+  imageCorrelation: 'Mono safety: dim: safe · yellow: caution · red: cancellation on mono sum.',
+  alignOffset: knobHelp(
+    'Offset',
+    'corrective chain alignment, ≤24 ms toward L or R. Center: off. Right-click: advanced.'
+  ),
+  alignWobble: knobHelp('Wobble', 'humanizing drift of the align delay, up to ±1.2 ms.'),
+  alignWobblePower: 'Wobble Power: drifts the delayed chain like an ADT double-track.',
+  alignCrossover: knobHelp('Crossover', 'lows below the cutoff skip the deck, 33-520 Hz.'),
+  alignCrossoverPower: 'Crossover Power: on keeps lows out of the delay and diffusion.',
+  alignDiffuse: 'Diffuse Power: phase-decorrelates the delayed chain for width.',
   alignAdvert: 'Align: corrective chain time alignment. Click: enable.',
-  alignPower: 'Align Power: align off; collapses its controls.',
+  alignPower: 'Align Power: align off; collapses its controls. Right-click: advanced.',
   autoAlign:
     'Auto Align: a ½ s internal sweep time-aligns the chains and fixes inverted polarity. Click again: cancel.',
 

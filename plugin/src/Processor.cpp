@@ -88,8 +88,17 @@ void TONE3000Processor::resolveParamRefs() {
   paramRefs.spreadEnabled = get("spreadEnabled");
   paramRefs.spreadOffset = get("spreadOffset");
   paramRefs.spreadWobble = get("spreadWobble");
+  paramRefs.spreadWobbleEnabled = get("spreadWobbleEnabled");
+  paramRefs.spreadCrossover = get("spreadCrossover");
+  paramRefs.spreadCrossoverEnabled = get("spreadCrossoverEnabled");
+  paramRefs.spreadDiffuseEnabled = get("spreadDiffuseEnabled");
   paramRefs.alignEnabled = get("alignEnabled");
   paramRefs.alignOffset = get("alignOffset");
+  paramRefs.alignWobble = get("alignWobble");
+  paramRefs.alignWobbleEnabled = get("alignWobbleEnabled");
+  paramRefs.alignCrossover = get("alignCrossover");
+  paramRefs.alignCrossoverEnabled = get("alignCrossoverEnabled");
+  paramRefs.alignDiffuseEnabled = get("alignDiffuseEnabled");
   paramRefs.chainPanLeft = get("chainPanLeft");
   paramRefs.chainPanRight = get("chainPanRight");
   paramRefs.chainSoloLeft = get("chainSoloLeft");
@@ -149,27 +158,52 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"outputBalance", 12}, "outputBalance", 0.0f, 1.0f, 0.5f));
 
-  // Spread (mono chain mode; see Spread.h and plugin/docs/spread.md). Offset
-  // is bipolar: 0.5 = center = 0 ms; below center lags the left channel,
-  // above center the right (0..24 ms). Wobble is the random-walk delay
-  // modulation depth (0..±1.2 ms absolute). Stored normalized; SpreadParams
-  // decodes. Defaults land a tight classic ADT (+15 ms R, 25% wobble) so
-  // powering spread on is audible immediately.
+  // Spread (mono chain mode; see Spread.h and plugin/docs/stereo-image.md).
+  // Offset is bipolar: 0.5 = center = 0 ms; below center lags the left
+  // channel, above center the right (0..24 ms). Wobble is the random-walk
+  // delay modulation depth (0..±1.2 ms absolute). Stored normalized;
+  // SpreadParams decodes. Defaults land a tight classic ADT (+15 ms R, 25%
+  // wobble) so powering spread on is audible immediately.
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"spreadEnabled", 13}, "spreadEnabled", false));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"spreadOffset", 14}, "spreadOffset", 0.0f, 1.0f, 0.8125f));
+  // Spread advanced-panel deck. All switches default on: the deck is
+  // spread's core sound, the panel just exposes its sections. The crossover
+  // cutoff rides the shared log map (deckCrossoverHz: 32.5..520 Hz,
+  // 0.5 = 130 Hz).
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"spreadWobble", 15}, "spreadWobble", 0.0f, 1.0f, 0.25f));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"spreadWobbleEnabled", 16}, "spreadWobbleEnabled", true));
+  layout.add(std::make_unique<juce::AudioParameterFloat>(
+      juce::ParameterID{"spreadCrossover", 17}, "spreadCrossover", 0.0f, 1.0f, 0.5f));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"spreadCrossoverEnabled", 18}, "spreadCrossoverEnabled", true));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"spreadDiffuseEnabled", 19}, "spreadDiffuseEnabled", true));
 
   // Align (stereo chain mode; see StereoOffset.h): corrective alignment
   // delay between the two chains, same bipolar encoding as the spread
   // offset. Defaults to center; a corrective tool has no useful nonzero
   // default. Off by default; the UI shows an advert pill until powered on.
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"alignEnabled", 16}, "alignEnabled", false));
+      juce::ParameterID{"alignEnabled", 20}, "alignEnabled", false));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"alignOffset", 17}, "alignOffset", 0.0f, 1.0f, 0.5f));
+      juce::ParameterID{"alignOffset", 21}, "alignOffset", 0.0f, 1.0f, 0.5f));
+  // Align advanced-panel deck: the same sections and knob spans as the
+  // spread deck, but every switch defaults OFF, so align stays purely
+  // corrective until the deck is asked for.
+  layout.add(std::make_unique<juce::AudioParameterFloat>(
+      juce::ParameterID{"alignWobble", 22}, "alignWobble", 0.0f, 1.0f, 0.25f));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"alignWobbleEnabled", 23}, "alignWobbleEnabled", false));
+  layout.add(std::make_unique<juce::AudioParameterFloat>(
+      juce::ParameterID{"alignCrossover", 24}, "alignCrossover", 0.0f, 1.0f, 0.5f));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"alignCrossoverEnabled", 25}, "alignCrossoverEnabled", false));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"alignDiffuseEnabled", 26}, "alignDiffuseEnabled", false));
 
   // Stereo-mode chain pans: constant-power positions for the Left/Right
   // chain outputs (0 = hard left, 1 = hard right). The UI constrains the
@@ -178,19 +212,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // default. chainPanLinked is a UI behavior flag (mirrored knob moves),
   // persisted as a parameter so sessions and presets restore it.
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"chainPanLeft", 18}, "chainPanLeft", 0.0f, 1.0f, 0.0f));
+      juce::ParameterID{"chainPanLeft", 27}, "chainPanLeft", 0.0f, 1.0f, 0.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"chainPanRight", 19}, "chainPanRight", 0.0f, 1.0f, 1.0f));
+      juce::ParameterID{"chainPanRight", 28}, "chainPanRight", 0.0f, 1.0f, 1.0f));
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"chainPanLinked", 20}, "chainPanLinked", true));
+      juce::ParameterID{"chainPanLinked", 29}, "chainPanLinked", true));
 
   // Per-chain solos (stereo chain mode): audition one chain by muting the
   // other inside the image matrix (see imageMatrixGains). Monitoring state,
   // not tone, so presets don't capture them.
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"chainSoloLeft", 23}, "chainSoloLeft", false));
+      juce::ParameterID{"chainSoloLeft", 30}, "chainSoloLeft", false));
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"chainSoloRight", 24}, "chainSoloRight", false));
+      juce::ParameterID{"chainSoloRight", 31}, "chainSoloRight", false));
 
   // Per-chain polarity flips (stereo chain mode): captures don't share a
   // polarity convention, so two chains fed one instrument can land 180° out
@@ -198,18 +232,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // inside the image matrix (see imageMatrixGains). Tone state, unlike the
   // solos, so presets capture it.
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"chainInvertLeft", 25}, "chainInvertLeft", false));
+      juce::ParameterID{"chainInvertLeft", 32}, "chainInvertLeft", false));
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"chainInvertRight", 26}, "chainInvertRight", false));
+      juce::ParameterID{"chainInvertRight", 33}, "chainInvertRight", false));
 
   // Oversampling (Advanced settings; see ChainOversampler.h). Deliberately
   // not automatable: a factor change rebuilds every NAM engine and
   // re-prepares the whole chain. Choice index i maps to factor 2^(i+1).
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"osEnabled", 21}, "osEnabled", false,
+      juce::ParameterID{"osEnabled", 34}, "osEnabled", false,
       juce::AudioParameterBoolAttributes().withAutomatable(false)));
   layout.add(std::make_unique<juce::AudioParameterChoice>(
-      juce::ParameterID{"osFactor", 22}, "osFactor", juce::StringArray{"2x", "4x", "8x"}, 0,
+      juce::ParameterID{"osFactor", 35}, "osFactor", juce::StringArray{"2x", "4x", "8x"}, 0,
       juce::AudioParameterChoiceAttributes().withAutomatable(false)));
 
   return layout;
@@ -823,7 +857,10 @@ void TONE3000Processor::updateCachedParameters() {
   updateFloat(cacheOutputBalance, paramRefs.outputBalance);
   updateFloat(cacheSpreadOffset, paramRefs.spreadOffset);
   updateFloat(cacheSpreadWobble, paramRefs.spreadWobble);
+  updateFloat(cacheSpreadCrossover, paramRefs.spreadCrossover);
   updateFloat(cacheAlignOffset, paramRefs.alignOffset);
+  updateFloat(cacheAlignWobble, paramRefs.alignWobble);
+  updateFloat(cacheAlignCrossover, paramRefs.alignCrossover);
   updateFloat(cacheChainPanLeft, paramRefs.chainPanLeft);
   updateFloat(cacheChainPanRight, paramRefs.chainPanRight);
   updateFloat(cacheBassTone, paramRefs.toneBass, true);
@@ -838,7 +875,13 @@ void TONE3000Processor::updateCachedParameters() {
   cacheGateEnabled = loadBool(paramRefs.gateEnabled);
   cacheToneEqEnabled = loadBool(paramRefs.toneEqEnabled);
   cacheSpreadEnabled = loadBool(paramRefs.spreadEnabled);
+  cacheSpreadWobbleEnabled = loadBool(paramRefs.spreadWobbleEnabled);
+  cacheSpreadCrossoverEnabled = loadBool(paramRefs.spreadCrossoverEnabled);
+  cacheSpreadDiffuseEnabled = loadBool(paramRefs.spreadDiffuseEnabled);
   cacheAlignEnabled = loadBool(paramRefs.alignEnabled);
+  cacheAlignWobbleEnabled = loadBool(paramRefs.alignWobbleEnabled);
+  cacheAlignCrossoverEnabled = loadBool(paramRefs.alignCrossoverEnabled);
+  cacheAlignDiffuseEnabled = loadBool(paramRefs.alignDiffuseEnabled);
   cacheChainSoloLeft = loadBool(paramRefs.chainSoloLeft);
   cacheChainSoloRight = loadBool(paramRefs.chainSoloRight);
   cacheChainInvertLeft = loadBool(paramRefs.chainInvertLeft);
@@ -1482,8 +1525,10 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   //    its internal ~25 ms crossfade against the untouched buffer; fully
   //    skipped once idle.
   //  - Stereo mode: Align delays one chain in place via StereoOffset,
-  //    purely corrective (see StereoOffset.h): 0 ms = identity, all
-  //    transitions glide through zero; fully skipped once idle.
+  //    corrective by default (see StereoOffset.h): 0 ms = identity, all
+  //    transitions glide through identity; fully skipped once idle. Its
+  //    advanced deck (wobble / crossover / diffuse, all default off) layers
+  //    the spread-style treatments onto the delayed chain.
   //  - The opposite mode's engine is force-idled (no fade needed): mode
   //    switches always ride the chain-edit fade above, so the hard stop
   //    lands on silence.
@@ -1506,14 +1551,21 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
       autoOffset.captureChainOutputs(buffer.getReadPointer(0), buffer.getReadPointer(1),
                                      numSamples);
 
-      stereoOffset.setTarget(StereoOffsetParams::fromNormalized(cacheAlignOffset),
-                             cacheAlignEnabled);
+      stereoOffset.setTarget(
+          StereoOffsetParams::fromNormalized(cacheAlignOffset, cacheAlignWobble,
+                                             cacheAlignCrossover, cacheAlignWobbleEnabled,
+                                             cacheAlignCrossoverEnabled,
+                                             cacheAlignDiffuseEnabled),
+          cacheAlignEnabled);
       if (stereoOffset.isRunning())
         stereoOffset.process(buffer);
     } else {
       stereoOffset.forceIdle();
-      spread.setTarget(SpreadParams::fromNormalized(cacheSpreadOffset, cacheSpreadWobble),
-                       cacheSpreadEnabled && numChannels >= 2);
+      spread.setTarget(
+          SpreadParams::fromNormalized(cacheSpreadOffset, cacheSpreadWobble,
+                                       cacheSpreadCrossover, cacheSpreadWobbleEnabled,
+                                       cacheSpreadCrossoverEnabled, cacheSpreadDiffuseEnabled),
+          cacheSpreadEnabled && numChannels >= 2);
       if (spread.isRunning())
         spread.process(buffer);
     }

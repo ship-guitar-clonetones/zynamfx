@@ -1,29 +1,25 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Power } from 'lucide-react';
 import { KnobControl } from './KnobControl';
-import { offsetMsScale, percentScale } from './knobScale';
+import { offsetMsScale } from './knobScale';
 import { useParameter } from '../hooks/useParameter';
 import { useDismissable } from '../hooks/useDismissable';
-import { useCorrelation } from '../hooks/useMeters';
 import { HELP, helpProps } from './helpText';
 import { ChromeIconButton } from './ChromeIconButton';
+import { ImageDeckPanel, useImageDeckReset } from './ImageDeckPanel';
 import {
-  BORDER,
-  BRAND_RED,
-  BRAND_YELLOW,
   ICON_BOX_SIZE,
   ICON_SIZE,
   KNOB_SIZE_PRIMARY,
   KNOB_SIZE_SECONDARY,
   KNOB_LABEL_GAP,
-  SUBTLE,
   faceplateChromeLift,
   pillButtonStyle,
 } from './theme';
 
 /**
  * Spread (mono chain mode): an ADT-style mono-to-stereo double where one channel
- * gets a wobbling short lag (see native Spread.h and plugin/docs/spread.md).
+ * gets a wobbling short lag (see native Spread.h, plugin/docs/stereo-image.md).
  *
  * Faceplate face: a "SPREAD" advert pill while off; clicking it powers
  * spread on and reveals the bipolar Offset knob + power button (which
@@ -34,17 +30,13 @@ import {
  *
  * Advanced controls are deliberately invisible: right-click anywhere on the
  * group (the standard plugin gesture for a control's extended options,
- * taught by the hover hint) opens a small floating panel with the Wobble
- * knob (humanizing delay drift, absolute: up to ±1.2 ms around the offset,
- * not a fraction of it) and the mono-safety LED (live L/R output
- * correlation: dim = safe, yellow = caution, red = cancellation on a mono
- * sum). The crossover frequency and allpass cascade stay fixed by design;
- * they're what keep the low end mono-safe and the double decorrelated.
+ * taught by the hover hint) opens the shared deck panel (ImageDeckPanel:
+ * Wobble, Crossover, Diffuse, mono-safety LED). Spread's sections all
+ * default on: the deck is its core sound.
  */
 
 /** Default +15 ms R on the bipolar ±24 ms offset (matches the APVTS default). */
 const SPREAD_OFFSET_DEFAULT = 0.8125;
-const SPREAD_WOBBLE_DEFAULT = 0.25;
 
 const CHROME_LIFT = faceplateChromeLift(KNOB_SIZE_SECONDARY);
 
@@ -109,71 +101,11 @@ const AdvertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
   </button>
 );
 
-/** Mono-safety LED. Below 0.5 correlation a mono fold-down audibly thins;
-    below 0 it actively cancels. */
-const CorrelationLed: React.FC = () => {
-  const correlation = useCorrelation();
-  const color = correlation < 0 ? BRAND_RED : correlation < 0.5 ? BRAND_YELLOW : SUBTLE;
-  return (
-    <div
-      {...helpProps(HELP.spreadCorrelation)}
-      style={{
-        position: 'absolute',
-        top: '8px',
-        right: '8px',
-        width: '6px',
-        height: '6px',
-        borderRadius: '50%',
-        background: color,
-      }}
-    />
-  );
-};
-
-/** The advanced panel: the Wobble knob + mono-safety LED, floating above
-    the plate. When anchored to the Offset knob, its left edge starts at the
-    knob's left side; otherwise (advert state) it flush-rights to the group. */
-const AdvancedPanel = React.forwardRef<
-  HTMLDivElement,
-  { fromKnob?: boolean }
->(function AdvancedPanel({ fromKnob = false }, ref) {
-  const [wobble, setWobble] = useParameter('spreadWobble', 'slider');
-  return (
-    <div
-      ref={ref}
-      style={{
-        position: 'absolute',
-        // Splits the difference down toward the knob's top edge instead of
-        // floating a full gap above the group.
-        bottom: 'calc(100% + 6px)',
-        ...(fromKnob ? { left: 0 } : { right: 0 }),
-        backgroundColor: '#141416',
-        border: BORDER,
-        borderRadius: '14px',
-        padding: '14px 22px 8px',
-        zIndex: 200,
-        boxSizing: 'border-box',
-      }}
-    >
-      <KnobControl
-        label="Wobble"
-        value={wobble}
-        onChange={setWobble}
-        size={KNOB_SIZE_SECONDARY}
-        thumb="secondary"
-        scale={percentScale}
-        defaultValue={SPREAD_WOBBLE_DEFAULT}
-        help={HELP.spreadWobble}
-      />
-      <CorrelationLed />
-    </div>
-  );
-});
-
-/** Offset knob + power; right-click opens the advanced panel. */
+/** Offset knob + power; right-click opens the advanced deck panel. */
 export const SpreadGroup: React.FC = () => {
   const [enabled, setEnabled] = useParameter('spreadEnabled', 'toggle');
   const [offset, setOffset] = useParameter('spreadOffset', 'slider');
+  const resetDeck = useImageDeckReset('spread');
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const close = useCallback(() => setOpen(false), []);
@@ -216,9 +148,10 @@ export const SpreadGroup: React.FC = () => {
               size={KNOB_SIZE_PRIMARY}
               scale={offsetMsScale}
               defaultValue={SPREAD_OFFSET_DEFAULT}
+              onReset={resetDeck}
               help={HELP.spreadOffset}
             />
-            {open && <AdvancedPanel ref={panelRef} fromKnob />}
+            {open && <ImageDeckPanel feature="spread" ref={panelRef} fromKnob />}
           </div>
           <ChromeIconButton
             tone="power"
@@ -233,7 +166,7 @@ export const SpreadGroup: React.FC = () => {
       ) : (
         <AdvertButton onClick={() => setEnabled(true)} />
       )}
-      {open && !enabled && <AdvancedPanel ref={panelRef} />}
+      {open && !enabled && <ImageDeckPanel feature="spread" ref={panelRef} />}
     </div>
   );
 };
