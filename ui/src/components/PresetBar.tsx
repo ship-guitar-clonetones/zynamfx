@@ -1,16 +1,19 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUp,
   ArrowUpDown,
   Check,
   ChevronLeft,
   ChevronRight,
+  GripVertical,
   Pencil,
   Save,
   Search,
   Trash2,
 } from 'lucide-react';
+import { DragDropProvider } from '@dnd-kit/react';
+import { isSortable, useSortable } from '@dnd-kit/react/sortable';
+import { arrayMove } from '@dnd-kit/helpers';
+import type { DragEndEvent } from '@dnd-kit/react';
 import type { ActivePreset, PresetInfo } from '../types/chain';
 import { useDismissable } from '../hooks/useDismissable';
 import { useToast } from './Toast';
@@ -20,8 +23,8 @@ import { BORDER, GRAY } from './theme';
 /**
  * Top-bar preset controls: ‹ name › pill + save button, with two anchored
  * panels: the save popover (name + save) and the preset browser (search,
- * TONE3000 factory section, user section with inline rename/delete, and a
- * reorder mode that swaps the row actions for up/down arrows).
+ * user section with inline rename/delete, TONE3000 factory section, and a
+ * reorder mode that swaps the row actions for a grip and drag-and-drop).
  *
  * Pure view: the list and all mutations come from usePresets, the active
  * preset rides the chain state poll. Prev/next walk the list in its shown
@@ -77,6 +80,136 @@ const iconButtonStyle: React.CSSProperties = {
   padding: '5px',
 };
 
+type PresetGroup = 'factory' | 'user';
+
+interface PresetRowProps {
+  preset: PresetInfo;
+  index: number;
+  group: PresetGroup;
+  sortable: boolean;
+  isActive: boolean;
+  isRenaming: boolean;
+  renameValue: string;
+  onRenameChange: (value: string) => void;
+  onCommitRename: () => void;
+  onCancelRename: () => void;
+  onLoad: () => void;
+  onStartRename: () => void;
+  onDelete: () => void;
+}
+
+const PresetRow: React.FC<PresetRowProps> = ({
+  preset,
+  index,
+  group,
+  sortable,
+  isActive,
+  isRenaming,
+  renameValue,
+  onRenameChange,
+  onCommitRename,
+  onCancelRename,
+  onLoad,
+  onStartRename,
+  onDelete,
+}) => {
+  const { ref, handleRef, isDragging } = useSortable({
+    id: preset.id,
+    index,
+    group,
+    disabled: !sortable,
+  });
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        height: '32px',
+        padding: '0 4px',
+        opacity: isDragging ? 0.75 : 1,
+      }}
+    >
+      <span style={{ width: '16px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        {isActive && <Check size={14} color="#ffffff" />}
+      </span>
+      {isRenaming ? (
+        <input
+          autoFocus
+          value={renameValue}
+          onChange={(e) => onRenameChange(e.target.value)}
+          onBlur={onCommitRename}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onCommitRename();
+            if (e.key === 'Escape') onCancelRename();
+          }}
+          style={{ ...inputStyle, padding: '4px 8px', borderRadius: '6px', flex: 1 }}
+        />
+      ) : (
+        <button
+          onClick={onLoad}
+          style={{
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            textAlign: 'left',
+            color: isActive ? '#ffffff' : MUTED,
+            fontSize: '14px',
+            fontWeight: 400,
+            cursor: 'pointer',
+            padding: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {preset.name}
+        </button>
+      )}
+      {sortable ? (
+        <button
+          ref={handleRef}
+          type="button"
+          aria-label="Reorder"
+          {...helpProps(HELP.presetDrag)}
+          style={{
+            ...iconButtonStyle,
+            padding: '3px',
+            flexShrink: 0,
+            cursor: isDragging ? 'grabbing' : 'grab',
+            // Keep the list from claiming the gesture on touch.
+            touchAction: 'none',
+          }}
+        >
+          <GripVertical size={14} />
+        </button>
+      ) : (
+        !preset.factory &&
+        !isRenaming && (
+          <>
+            <button
+              onClick={onStartRename}
+              {...helpProps(HELP.presetRename)}
+              style={{ ...iconButtonStyle, padding: '3px' }}
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={onDelete}
+              {...helpProps(HELP.presetDelete)}
+              style={{ ...iconButtonStyle, padding: '3px' }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </>
+        )
+      )}
+    </div>
+  );
+};
+
 interface PresetBarProps {
   active: ActivePreset | null;
   presets: PresetInfo[];
@@ -84,8 +217,8 @@ interface PresetBarProps {
   onLoad: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
-  /** One step up (-1) / down (+1) within the preset's section. */
-  onMove: (id: string, delta: -1 | 1) => void;
+  /** N steps within the preset's section (negative = earlier). */
+  onMove: (id: string, delta: number) => void;
 }
 
 type OpenPanel = 'none' | 'save' | 'browse';
@@ -104,13 +237,20 @@ export const PresetBar: React.FC<PresetBarProps> = ({
   const [search, setSearch] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  // Reorder mode: rows swap rename/delete for up/down arrows. Arrows only
-  // make sense on the full list, so they hide while a search filter is on.
+  // Reorder mode: rows swap rename/delete for a grip handle. Drag only
+  // makes sense on the full list, so grips hide while a search filter is on.
   const [reordering, setReordering] = useState(false);
   const toast = useToast();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const closePanels = useCallback(() => setOpen('none'), []);
   useDismissable(open !== 'none', containerRef, closePanels);
+
+  // Optimistic order while a drag is in flight / until native list refresh.
+  const [ordered, setOrdered] = useState<PresetInfo[] | null>(null);
+  const draggingRef = useRef(false);
+  useEffect(() => {
+    if (!draggingRef.current) setOrdered(null);
+  }, [presets]);
 
   const openSave = useCallback(() => {
     // Prefill with the active user preset's name: saving it again is the
@@ -124,6 +264,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
     setSearch('');
     setRenamingId(null);
     setReordering(false);
+    setOrdered(null);
     setOpen((prev) => (prev === 'browse' ? 'none' : 'browse'));
   }, []);
 
@@ -158,9 +299,10 @@ export const PresetBar: React.FC<PresetBarProps> = ({
   }, [renamingId, renameValue, onRename]);
 
   const filtered = useMemo(() => {
+    const list = ordered ?? presets;
     const q = search.trim().toLowerCase();
-    return q ? presets.filter((p) => p.name.toLowerCase().includes(q)) : presets;
-  }, [presets, search]);
+    return q ? list.filter((p) => p.name.toLowerCase().includes(q)) : list;
+  }, [ordered, presets, search]);
   const factoryPresets = filtered.filter((p) => p.factory);
   const userPresets = filtered.filter((p) => !p.factory);
 
@@ -172,117 +314,65 @@ export const PresetBar: React.FC<PresetBarProps> = ({
     alignItems: 'center',
     justifyContent: 'center',
     cursor: presets.length > 0 ? 'pointer' : 'default',
-    padding: '4px',
+    padding: '0 4px',
+    alignSelf: 'stretch',
   };
 
-  // Arrow rendering needs the row's place in its *section* (moves never
-  // cross the factory/user boundary, so edges disable per section).
-  const showArrows = reordering && search.trim() === '';
+  // Grips only on the full list: a search filter's indices don't match the
+  // persisted order, and moves never cross the factory/user boundary.
+  const canDrag = reordering && search.trim() === '';
 
-  const renderRow = (preset: PresetInfo, sectionIndex: number, sectionLength: number) => {
-    const isActive = active?.id === preset.id;
+  const handleDragStart = useCallback(() => {
+    draggingRef.current = true;
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      draggingRef.current = false;
+      const { source } = event.operation;
+      if (event.canceled || !isSortable(source)) return;
+      if (source.group !== source.initialGroup) return;
+      const from = source.initialIndex;
+      const to = source.index;
+      if (from === to) return;
+      const id = String(source.id);
+      setOrdered((prev) => {
+        const list = prev ?? presets;
+        const item = list.find((p) => p.id === id);
+        if (!item) return prev;
+        const section = list.filter((p) => p.factory === item.factory);
+        const others = list.filter((p) => p.factory !== item.factory);
+        const moved = arrayMove(section, from, to);
+        // Browser order is user section first, then factory.
+        return item.factory ? [...others, ...moved] : [...moved, ...others];
+      });
+      onMove(id, to - from);
+    },
+    [presets, onMove]
+  );
+
+  const renderRow = (preset: PresetInfo, sectionIndex: number, group: PresetGroup) => {
     const isRenaming = renamingId === preset.id;
     return (
-      <div
+      <PresetRow
         key={preset.id}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          height: '32px',
-          padding: '0 4px',
+        preset={preset}
+        index={sectionIndex}
+        group={group}
+        sortable={canDrag}
+        isActive={active?.id === preset.id}
+        isRenaming={isRenaming}
+        renameValue={renameValue}
+        onRenameChange={setRenameValue}
+        onCommitRename={commitRename}
+        onCancelRename={() => setRenamingId(null)}
+        onLoad={() => onLoad(preset.id)}
+        onStartRename={() => {
+          setRenamingId(preset.id);
+          setRenameValue(preset.name);
         }}
-      >
-        <span style={{ width: '16px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-          {isActive && <Check size={14} color="#ffffff" />}
-        </span>
-        {isRenaming ? (
-          <input
-            autoFocus
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commitRename();
-              if (e.key === 'Escape') setRenamingId(null);
-            }}
-            style={{ ...inputStyle, padding: '4px 8px', borderRadius: '6px', flex: 1 }}
-          />
-        ) : (
-          <button
-            onClick={() => onLoad(preset.id)}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              textAlign: 'left',
-              color: isActive ? '#ffffff' : MUTED,
-              fontSize: '14px',
-              fontWeight: 400,
-              cursor: 'pointer',
-              padding: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {preset.name}
-          </button>
-        )}
-        {showArrows ? (
-          <>
-            <button
-              onClick={() => onMove(preset.id, -1)}
-              disabled={sectionIndex === 0}
-              {...helpProps(HELP.presetMoveUp)}
-              style={{
-                ...iconButtonStyle,
-                padding: '3px',
-                color: sectionIndex === 0 ? MUTED : '#ffffff',
-                cursor: sectionIndex === 0 ? 'default' : 'pointer',
-              }}
-            >
-              <ArrowUp size={13} />
-            </button>
-            <button
-              onClick={() => onMove(preset.id, 1)}
-              disabled={sectionIndex === sectionLength - 1}
-              {...helpProps(HELP.presetMoveDown)}
-              style={{
-                ...iconButtonStyle,
-                padding: '3px',
-                color: sectionIndex === sectionLength - 1 ? MUTED : '#ffffff',
-                cursor: sectionIndex === sectionLength - 1 ? 'default' : 'pointer',
-              }}
-            >
-              <ArrowDown size={13} />
-            </button>
-          </>
-        ) : (
-          !preset.factory &&
-          !isRenaming && (
-            <>
-              <button
-                onClick={() => {
-                  setRenamingId(preset.id);
-                  setRenameValue(preset.name);
-                }}
-                {...helpProps(HELP.presetRename)}
-                style={{ ...iconButtonStyle, padding: '3px' }}
-              >
-                <Pencil size={13} />
-              </button>
-              <button
-                onClick={() => onDelete(preset.id)}
-                {...helpProps(HELP.presetDelete)}
-                style={{ ...iconButtonStyle, padding: '3px' }}
-              >
-                <Trash2 size={13} />
-              </button>
-            </>
-          )
-        )}
-      </div>
+        onDelete={() => onDelete(preset.id)}
+      />
     );
   };
 
@@ -295,7 +385,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'stretch',
           height: '36px',
           borderRadius: '8px',
           backgroundColor: '#1C1C1E',
@@ -317,8 +407,10 @@ export const PresetBar: React.FC<PresetBarProps> = ({
             fontWeight: 400,
             cursor: 'pointer',
             // Constant width so the pill never resizes with the name; long
-            // names ellipsize.
+            // names ellipsize. Full pill height is the click target.
             width: '150px',
+            height: '100%',
+            lineHeight: '36px',
             textAlign: 'center',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -376,10 +468,18 @@ export const PresetBar: React.FC<PresetBarProps> = ({
         </div>
       )}
 
-      {/* Preset browser */}
+      {/* Preset browser. Top/bottom spacing lives in the scroll content so
+          the list clips at the search row and the panel border. */}
       {open === 'browse' && (
-        <div style={{ ...panelStyle, width: '300px', padding: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+        <div
+          style={{
+            ...panelStyle,
+            width: '360px',
+            padding: '12px 12px 0',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
               <Search
                 size={14}
@@ -417,25 +517,33 @@ export const PresetBar: React.FC<PresetBarProps> = ({
             )}
           </div>
 
-          <div className="hide-scrollbar" style={{ maxHeight: '340px', overflowY: 'auto' }}>
-            {factoryPresets.length > 0 && (
-              <>
-                <div style={sectionHeaderStyle}>TONE3000</div>
-                {factoryPresets.map((preset, i) => renderRow(preset, i, factoryPresets.length))}
-              </>
-            )}
-            {userPresets.length > 0 && (
-              <>
-                <div style={sectionHeaderStyle}>Your Presets</div>
-                {userPresets.map((preset, i) => renderRow(preset, i, userPresets.length))}
-              </>
-            )}
-            {filtered.length === 0 && (
-              <div style={{ color: MUTED, fontSize: '13px', fontWeight: 400, padding: '12px 4px' }}>
-                {presets.length === 0 ? 'No presets yet. Save one to get started.' : 'No matches.'}
+          <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="hide-scrollbar" style={{ maxHeight: '362px', overflowY: 'auto' }}>
+              <div style={{ padding: '10px 0 12px' }}>
+                {userPresets.length > 0 && (
+                  <>
+                    <div style={sectionHeaderStyle}>Your Presets</div>
+                    {userPresets.map((preset, i) => renderRow(preset, i, 'user'))}
+                  </>
+                )}
+                {factoryPresets.length > 0 && (
+                  <>
+                    <div style={sectionHeaderStyle}>TONE3000</div>
+                    {factoryPresets.map((preset, i) => renderRow(preset, i, 'factory'))}
+                  </>
+                )}
+                {filtered.length === 0 && (
+                  <div
+                    style={{ color: MUTED, fontSize: '13px', fontWeight: 400, padding: '12px 4px' }}
+                  >
+                    {presets.length === 0
+                      ? 'No presets yet. Save one to get started.'
+                      : 'No matches.'}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          </DragDropProvider>
         </div>
       )}
     </div>

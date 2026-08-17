@@ -301,9 +301,9 @@ public:
   bool loadPreset(const juce::String& presetId);   // undoable (chain part)
   bool renamePreset(const juce::String& presetId, const juce::String& newName);
   bool deletePreset(const juce::String& presetId);
-  // Move a preset one step up/down within its browser section. The custom
-  // order is user-facing truth: prev/next stepping and MIDI program-change
-  // numbers follow it (see loadPresetAtIndex).
+  // Move a preset by `delta` steps within its browser section (negative =
+  // earlier). The custom order is user-facing truth: prev/next stepping and
+  // MIDI program-change numbers follow it (see loadPresetAtIndex).
   bool movePreset(const juce::String& presetId, int delta);
 
   // Tuner: enabled by the UI while the tuner screen is visible. Reads the raw

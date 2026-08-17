@@ -393,8 +393,8 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             return juce::var(editor->processor.deletePreset(args[0].toString()));
           }))
       .withNativeFunction(
-          // (id, delta): one step up (-1) / down (+1) within the preset's
-          // browser section. Prev/next and MIDI program changes follow it.
+          // (id, delta): N steps within the preset's browser section
+          // (negative = earlier). Prev/next and MIDI follow it.
           "movePreset", guarded(2, false, [editor](const juce::Array<juce::var>& args) {
             return juce::var(editor->processor.movePreset(
                 args[0].toString(), static_cast<int>(coerceDouble(args[1]))));

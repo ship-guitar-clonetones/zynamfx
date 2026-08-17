@@ -167,15 +167,27 @@ bool PresetManager::move(const juce::String& id, int delta) const {
   if (it == presets.end())
     return false;
 
-  const auto index = static_cast<size_t>(std::distance(presets.begin(), it));
-  const auto target = delta < 0 ? index - 1 : index + 1;  // one step per call
-  if (target >= presets.size() || presets[target].factory != it->factory)
-    return false;  // already at its section's edge
+  const int index = static_cast<int>(std::distance(presets.begin(), it));
+  const bool factory = it->factory;
+
+  int sectionStart = index;
+  while (sectionStart > 0 && presets[static_cast<size_t>(sectionStart - 1)].factory == factory)
+    --sectionStart;
+  int sectionEnd = index + 1;
+  while (sectionEnd < static_cast<int>(presets.size()) &&
+         presets[static_cast<size_t>(sectionEnd)].factory == factory)
+    ++sectionEnd;
+
+  const int target = std::clamp(index + delta, sectionStart, sectionEnd - 1);
+  if (target == index)
+    return false;  // already at its section's edge (or a no-op clamp)
 
   juce::StringArray ids;
   for (const Info& info : presets)
     ids.add(info.id);
-  ids.getReference(static_cast<int>(index)).swapWith(ids.getReference(static_cast<int>(target)));
+  const juce::String moving = ids[index];
+  ids.remove(index);
+  ids.insert(target, moving);
   return writeOrder(ids);
 }
 

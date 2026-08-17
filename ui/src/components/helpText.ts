@@ -193,9 +193,8 @@ export const HELP = {
   presetSave: 'Save Preset: store the current chain. Same name: overwrite.',
   presetRename: 'Rename: edit name. Enter: commit · Esc: cancel.',
   presetDelete: 'Delete: remove this preset.',
-  presetReorder: 'Reorder: custom preset order. Prev/Next and MIDI follow it.',
-  presetMoveUp: 'Move Up: one spot earlier.',
-  presetMoveDown: 'Move Down: one spot later.',
+  presetReorder: 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',
+  presetDrag: 'Drag: move this preset within its section.',
 
   // Chain gallery
   addTile:

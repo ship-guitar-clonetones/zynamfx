@@ -70,8 +70,8 @@ public:
   /** Delete a user preset. Factory presets are refused. */
   bool remove(const juce::String& id) const;
 
-  /** Move a preset one step up (delta < 0) or down (delta > 0) within its
-      section; factory stays before user, so the browser's sections and the
+  /** Move a preset by `delta` steps within its section (negative = earlier).
+      Clamped to the factory/user boundary so the browser's sections and the
       global order can't disagree. Persists the whole current order. */
   bool move(const juce::String& id, int delta) const;
 

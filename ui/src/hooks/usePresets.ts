@@ -74,9 +74,9 @@ export function usePresets(onChanged?: () => void) {
       rename: (id: string, name: string) =>
         run<boolean>('renamePreset', () => native.renamePreset(id, name)),
       remove: (id: string) => run<boolean>('deletePreset', () => native.deletePreset(id)),
-      /** One step up (-1) / down (+1) within the preset's section. The order
+      /** N steps within the preset's section (negative = earlier). The order
           persists and drives prev/next and MIDI program-change numbers. */
-      move: (id: string, delta: -1 | 1) =>
+      move: (id: string, delta: number) =>
         run<boolean>('movePreset', () => native.movePreset(id, delta)),
     }),
     [native, run]
