@@ -154,4 +154,25 @@ TEST(PresetManagerTest, MovePersistsOrderWithinTheUserSection) {
   EXPECT_FALSE(fresh.move(a.id, -1));
 }
 
+TEST(PresetManagerTest, MoveShiftsByDeltaWithinTheSection) {
+  TempPresetDir tmp;
+  PresetManager mgr(tmp.dir);
+  const auto a = mgr.save("Alpha", makePreset("a"));
+  const auto b = mgr.save("Beta", makePreset("b"));
+  const auto c = mgr.save("Gamma", makePreset("c"));
+  const auto d = mgr.save("Delta", makePreset("d"));
+
+  // Name order Alpha, Beta, Delta, Gamma. Sliding Delta back two puts it first.
+  ASSERT_TRUE(mgr.move(d.id, -2));
+  auto presets = mgr.list();
+  ASSERT_EQ(presets.size(), 4u);
+  EXPECT_EQ(presets[0].id, d.id);
+  EXPECT_EQ(presets[1].id, a.id);
+  EXPECT_EQ(presets[2].id, b.id);
+  EXPECT_EQ(presets[3].id, c.id);
+
+  // A delta that would leave the section is a no-op at the edge.
+  EXPECT_FALSE(mgr.move(d.id, -4));
+}
+
 }  // namespace
