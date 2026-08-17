@@ -27,7 +27,9 @@ target_sources(DspTests PRIVATE
     src/processor_tests.cpp
     src/spread_tests.cpp
     src/swap_fade_tests.cpp
+    src/tone_refresh_tests.cpp
     src/tuner_tests.cpp
+    src/wav_repair_tests.cpp
     # Compiled straight from the plugin tree so the tests exercise the real
     # processor, not a copy. GUI sources are excluded; HEADLESS=1 below
     # compiles the processor exactly like the headless plugin build.
