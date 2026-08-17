@@ -228,29 +228,45 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   // off the tone's own model list.
   const isLocal = tone.local === true;
 
-  // Full catalog metadata for the info panel: fetched on demand from the
-  // TONE3000 API, never written into saved chain/preset state. The seq ref
-  // is a stale guard (the models effect's flag, as a counter since retries
-  // reuse this fetch): only the newest request may touch state, so a swap
-  // mid-flight can't surface the old tone's info.
+  // Full catalog metadata: fetched from the TONE3000 API, never written into
+  // saved chain/preset state by the UI. One fetch serves two purposes: it
+  // pre-warms the info panel (infoTone) and re-hydrates native's stored tone
+  // metadata (refreshToneMetadata merges it in and the chainChanged resync
+  // updates every view). `background` (the on-expand sync) never touches the
+  // loading/error UI, so offline or signed-out use is undisturbed; the
+  // foreground path (info panel open) keeps its spinner and retry UI. The
+  // seq ref is a stale guard (the models effect's flag, as a counter since
+  // retries reuse this fetch): only the newest request may touch state, so a
+  // swap mid-flight can't surface the old tone's info.
   const infoFetchSeq = useRef(0);
   const fetchInfo = useCallback(
-    async (toneId: number) => {
+    async (toneId: number, background = false) => {
       if (!actions.authenticated) return;
       const seq = ++infoFetchSeq.current;
-      setInfoLoading(true);
-      setInfoError(null);
+      if (!background) {
+        setInfoLoading(true);
+        setInfoError(null);
+      }
       try {
         const full = await actions.getTone(toneId);
         if (seq !== infoFetchSeq.current) return;
         setInfoTone(full);
+        // Best-effort: native no-ops when nothing changed server-side.
+        actions.refreshToneMetadata(JSON.stringify(full));
       } catch (err) {
+        if (background) {
+          // Silent by design (offline, API down, tone deleted): the cached
+          // tone keeps working, and opening the info panel refetches with
+          // its own visible error/retry UI.
+          console.debug('Tone metadata sync skipped', err);
+          return;
+        }
         console.error('Failed to load tone info', err);
         if (seq !== infoFetchSeq.current) return;
         setInfoTone(null);
         setInfoError('Failed to load tone details.');
       } finally {
-        if (seq === infoFetchSeq.current) setInfoLoading(false);
+        if (!background && seq === infoFetchSeq.current) setInfoLoading(false);
       }
     },
     [actions]
@@ -266,14 +282,18 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
     if (actions.authenticated && infoTone?.id !== tone.id) void fetchInfo(tone.id);
   }, [actions.authenticated, fetchInfo, infoTone?.id, showInfo, tone.id]);
 
-  // Swap replaces the tone on this block; orphan any in-flight fetch, drop
-  // the stale payload, and refetch if the panel is still open.
+  // Expand and swap both land here (mount / tone identity change): orphan
+  // any in-flight fetch, drop the stale payload, then fetch the latest tone
+  // in the background (metadata re-sync + info pre-warm). With the info
+  // panel already open (swap from the detail view) the fetch runs foreground
+  // so its loading/error UI behaves as before. Local tones have no catalog
+  // to sync from.
   useEffect(() => {
     infoFetchSeq.current++;
     setInfoTone(null);
     setInfoError(null);
     setInfoLoading(false);
-    if (showInfo && !isLocal && actions.authenticated) void fetchInfo(tone.id);
+    if (!isLocal && actions.authenticated) void fetchInfo(tone.id, !showInfo);
     // Only the tone identity; opening/closing the panel is handleToggleInfo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tone.id]);

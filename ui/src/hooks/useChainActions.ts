@@ -62,6 +62,10 @@ export interface ChainActions {
    * Backs the detail card's info panel; not written into saved state.
    */
   getTone: (toneId: number) => Promise<Tone>;
+  /** Push a fresh /tones/{id} payload into native, which merges it into
+      every block holding that tone (stored models preserved). Best-effort
+      background sync: metadata only, not undoable, no-op when unchanged. */
+  refreshToneMetadata: (toneJson: string) => void;
   /** Fire-and-forget per-block param setter (see useChainState). */
   setBlockParam: (blockId: string, param: BlockParamName, value: number | boolean) => void;
   /** Fire-and-forget whole-band EQ setter (see useChainState). */

@@ -124,6 +124,25 @@ juce::uint64 fnv1a64(const void* data, size_t size) {
   return hash;
 }
 
+// Some catalog WAVs end in an odd-sized chunk but omit the RIFF pad byte
+// that odd chunks require (their header's RIFF size counts it, the file
+// doesn't ship it). JUCE 9's WAV reader rejects such a chunk outright (its
+// rounded-up length overruns the stream, tripping the malformed-chunk
+// guard), so the file reads as zero samples: the convolver got an empty
+// kernel and short cab IRs silently degraded to a dry passthrough. Every
+// audio byte is present, though; detecting exactly this shape (declared
+// RIFF size == real size + 1) lets one appended zero byte make the file
+// spec-compliant without touching a sample.
+bool wavMissingRiffPadByte(const void* data, size_t size) {
+  if (size < 44)
+    return false;
+  const auto* bytes = static_cast<const uint8_t*>(data);
+  if (std::memcmp(bytes, "RIFF", 4) != 0 || std::memcmp(bytes + 8, "WAVE", 4) != 0)
+    return false;
+  const auto declared = static_cast<juce::uint64>(juce::ByteOrder::littleEndianInt(bytes + 4));
+  return declared + 8 == static_cast<juce::uint64>(size) + 1;
+}
+
 // One dropped file: validate the bytes and stash a content-addressed copy.
 // Validation happens here, at drop time, instead of letting a bad file
 // reach the background loader: its failure surfaces as a retry badge, which
@@ -157,6 +176,13 @@ juce::var stashLocalFile(const juce::String& filename, const juce::String& base6
       return fail("Not a valid NAM file");
     }
   } else {
+    // Repair before validating: a WAV missing its final RIFF pad byte would
+    // otherwise be rejected here as unreadable. The repaired bytes are what
+    // get stashed (and content-hashed), so downstream loads read a
+    // spec-compliant file.
+    if (wavMissingRiffPadByte(decoded.getData(), decoded.getDataSize()))
+      decoded.writeByte(0);
+
     juce::AudioFormatManager formatManager;
     formatManager.registerBasicFormats();
     std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(
@@ -568,6 +594,15 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
         juce::Logger::writeToLog("[ModelLoader] Failed to create temporary IR file: " +
                                  tempFile.getFullPathName());
         return out;
+      }
+
+      // The bytes can come from any source (fresh download, model cache,
+      // embedded DAW/preset state), so the pad-byte repair lives here, at
+      // the last common point before JUCE reads the file.
+      if (wavMissingRiffPadByte(modelData.data(), modelData.size())) {
+        const char pad = 0;
+        tempFile.appendData(&pad, 1);
+        juce::Logger::writeToLog("[ModelLoader] Repaired missing RIFF pad byte: " + filename);
       }
 
       juce::AudioFormatManager formatManager;

@@ -101,6 +101,16 @@ public:
   // position and user params (enabled/gains/mix); the new tone's first model
   // is queued for background loading.
   bool swapTone(const std::string& blockId, const juce::String& toneJsonString);
+  // Best-effort tone metadata re-sync: merge a fresh /tones/{id} API payload
+  // into every non-local block holding that tone (both lanes). The stored
+  // models array is preserved per block (native persists only the active
+  // model, and its model_url backs retries/reloads); everything else (title,
+  // artwork, counts, url, ...) is taken from the fresh payload. Purely
+  // metadata: params, activeModelId and engines are untouched, and no undo
+  // step is recorded. The revision only bumps when something actually
+  // changed, so an identical payload is a true no-op. Returns whether any
+  // block changed.
+  bool refreshToneMetadata(const juce::String& toneJsonString);
   // Switch the block's active model. Native only stores the active model, so
   // `modelData` (JSON object with id/name/model_url, paged in from the API by
   // the UI) is required and becomes the tone's new sole stored model.

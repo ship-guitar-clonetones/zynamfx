@@ -54,6 +54,7 @@ export function useChainState() {
       loadTone: backend.getPluginFunction('loadTone'),
       loadLocalTone: backend.getPluginFunction('loadLocalTone'),
       swapTone: backend.getPluginFunction('swapTone'),
+      refreshToneMetadata: backend.getPluginFunction('refreshToneMetadata'),
       switchModel: backend.getPluginFunction('switchModel'),
       retryModelLoad: backend.getPluginFunction('retryModelLoad'),
       removeChainBlock: backend.getPluginFunction('removeChainBlock'),
@@ -151,6 +152,11 @@ export function useChainState() {
       /** Replace an existing block's tone in place (keeps position + params). */
       swapTone: (blockId: string, toneJson: string) =>
         run<boolean>('swapTone', () => native.swapTone(blockId, toneJson)),
+      /** Best-effort metadata re-sync from a fresh /tones/{id} payload:
+          native merges it into every block holding that tone (stored models
+          preserved). Metadata only, not undoable; no-op when unchanged. */
+      refreshToneMetadata: (toneJson: string) =>
+        run<boolean>('refreshToneMetadata', () => native.refreshToneMetadata(toneJson)),
       /** `modelJson` is the full model object (id/name/model_url); native
           only stores the active model and resolves the switch from this. */
       switchModel: (blockId: string, modelId: number, modelJson: string) =>

@@ -199,6 +199,14 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
                                                         args[1].toString()));
           }))
       .withNativeFunction(
+          // (toneJson): best-effort metadata re-sync from a fresh /tones/{id}
+          // payload. Merges into every block holding that tone (stored models
+          // array preserved); metadata only, not undoable, revision bumps
+          // only on real change.
+          "refreshToneMetadata", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
+            return juce::var(editor->processor.refreshToneMetadata(args[0].toString()));
+          }))
+      .withNativeFunction(
           // (blockId, modelId, modelJson): native only stores the active
           // model, so the full model object always rides along.
           "switchModel", guarded(3, false, [editor](const juce::Array<juce::var>& args) {

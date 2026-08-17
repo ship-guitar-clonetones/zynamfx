@@ -299,6 +299,7 @@ export const Plugin: React.FC = () => {
       retryLoad: handleRetryLoad,
       listToneModels: session.listToneModels,
       getTone: session.getTone,
+      refreshToneMetadata: actions.refreshToneMetadata,
       setBlockParam: actions.setBlockParam,
       setBlockEqBand: actions.setBlockEqBand,
       setBlockEqEnabled: actions.setBlockEqEnabled,
