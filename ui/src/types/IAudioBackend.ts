@@ -35,6 +35,9 @@ export interface SliderParameter {
   valueChangedEvent?: ValueChangeEvent<number>;
   /** Ask the backend to re-send the current value/properties (safe to call any time). */
   requestInitialUpdate?(): void;
+  /** Host automation gesture. Call on pointer-down / pointer-up of a drag. */
+  sliderDragStarted?(): void;
+  sliderDragEnded?(): void;
 }
 
 export interface ToggleParameter {

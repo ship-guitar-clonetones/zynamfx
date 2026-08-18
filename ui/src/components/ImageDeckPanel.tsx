@@ -126,7 +126,8 @@ const SectionKnob: React.FC<{
   on: boolean;
   powerHelp: string;
   onPower: () => void;
-}> = ({ label, value, onChange, scale, defaultValue, help, on, powerHelp, onPower }) => (
+  onDragStateChange?: (dragging: boolean) => void;
+}> = ({ label, value, onChange, scale, defaultValue, help, on, powerHelp, onPower, onDragStateChange }) => (
   <div
     style={{
       width: SECTION_WIDTH,
@@ -144,6 +145,7 @@ const SectionKnob: React.FC<{
       scale={scale}
       defaultValue={defaultValue}
       help={help}
+      onDragStateChange={onDragStateChange}
     />
     <ChromeIconButton
       tone="power"
@@ -169,9 +171,9 @@ export const ImageDeckPanel = React.forwardRef<
   { feature: 'spread' | 'align'; fromKnob?: boolean }
 >(function ImageDeckPanel({ feature, fromKnob = false }, ref) {
   const help = DECK_HELP[feature];
-  const [wobble, setWobble] = useParameter(`${feature}Wobble`, 'slider');
+  const [wobble, setWobble, onWobbleDrag] = useParameter(`${feature}Wobble`, 'slider');
   const [wobbleOn, setWobbleOn] = useParameter(`${feature}WobbleEnabled`, 'toggle');
-  const [crossover, setCrossover] = useParameter(`${feature}Crossover`, 'slider');
+  const [crossover, setCrossover, onCrossoverDrag] = useParameter(`${feature}Crossover`, 'slider');
   const [crossoverOn, setCrossoverOn] = useParameter(`${feature}CrossoverEnabled`, 'toggle');
   const [diffuseOn, setDiffuseOn] = useParameter(`${feature}DiffuseEnabled`, 'toggle');
   return (
@@ -186,7 +188,7 @@ export const ImageDeckPanel = React.forwardRef<
         backgroundColor: '#141416',
         border: BORDER,
         borderRadius: '14px',
-        padding: '14px 22px 8px',
+        padding: '14px 16px 8px',
         zIndex: 200,
         boxSizing: 'border-box',
         display: 'flex',
@@ -204,6 +206,7 @@ export const ImageDeckPanel = React.forwardRef<
         on={wobbleOn}
         powerHelp={help.wobblePower}
         onPower={() => setWobbleOn(!wobbleOn)}
+        onDragStateChange={onWobbleDrag}
       />
       <SectionKnob
         label="Crossover"
@@ -215,6 +218,7 @@ export const ImageDeckPanel = React.forwardRef<
         on={crossoverOn}
         powerHelp={help.crossoverPower}
         onPower={() => setCrossoverOn(!crossoverOn)}
+        onDragStateChange={onCrossoverDrag}
       />
       {/* Diffuse has no continuous control, just its power; same column width
           and knob-box/label geometry as the knob sections so the flex gaps

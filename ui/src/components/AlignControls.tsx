@@ -146,7 +146,7 @@ const AutoAlignButton: React.FC = () => {
     collapses to the advert when powered off. */
 export const AlignGroup: React.FC = () => {
   const [enabled, setEnabled] = useParameter('alignEnabled', 'toggle');
-  const [offset, setOffset] = useParameter('alignOffset', 'slider');
+  const [offset, setOffset, onOffsetDrag] = useParameter('alignOffset', 'slider');
   const resetDeck = useImageDeckReset('align');
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -190,6 +190,7 @@ export const AlignGroup: React.FC = () => {
               defaultValue={0.5}
               onReset={resetDeck}
               help={HELP.alignOffset}
+              onDragStateChange={onOffsetDrag}
             />
             {open && <ImageDeckPanel feature="align" ref={panelRef} fromKnob />}
           </div>

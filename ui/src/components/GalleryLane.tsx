@@ -337,8 +337,8 @@ const PanRailChips: React.FC<{
  */
 export const StereoPanRail: React.FC = () => {
   const { swapChains } = useChainActions();
-  const [panLeft, setPanLeft] = useParameter('chainPanLeft', 'slider');
-  const [panRight, setPanRight] = useParameter('chainPanRight', 'slider');
+  const [panLeft, setPanLeft, onPanLeftDrag] = useParameter('chainPanLeft', 'slider');
+  const [panRight, setPanRight, onPanRightDrag] = useParameter('chainPanRight', 'slider');
   const [linked, setLinked] = useParameter('chainPanLinked', 'toggle');
   const [soloLeft, setSoloLeft] = useParameter('chainSoloLeft', 'toggle');
   const [soloRight, setSoloRight] = useParameter('chainSoloRight', 'toggle');
@@ -420,6 +420,7 @@ export const StereoPanRail: React.FC = () => {
             defaultValue={0}
             help={HELP.panLeft}
             labelBright
+            onDragStateChange={onPanLeftDrag}
           />
           <PanRailChips
             solo={soloLeft}
@@ -472,6 +473,7 @@ export const StereoPanRail: React.FC = () => {
             defaultValue={1}
             help={HELP.panRight}
             labelBright
+            onDragStateChange={onPanRightDrag}
           />
           <PanRailChips
             solo={soloRight}

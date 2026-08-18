@@ -107,6 +107,8 @@ function adaptSlider(slider: SliderState): SliderParameter {
       removeListener: (id: number) => removeControlListener(slider, id),
     },
     requestInitialUpdate: () => requestInitialUpdate(slider),
+    sliderDragStarted: () => slider.sliderDragStarted(),
+    sliderDragEnded: () => slider.sliderDragEnded(),
   };
 }
 

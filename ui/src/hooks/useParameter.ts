@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAudioBackend } from './useAudioBackend';
 import type { ParameterType, ParameterMap, ParameterValueType } from '../types/IAudioBackend';
 
@@ -10,23 +10,48 @@ function readCurrent<T extends ParameterType>(param: Parameter<T>): ParameterVal
   return param.getValue() as ParameterValueType[T];
 }
 
+/**
+ * Binding to a native (JUCE relay) parameter.
+ *
+ * The third return is a drag-state callback for continuous sliders: it
+ * begins/ends the host automation gesture and ignores inbound valueChanged
+ * echoes while the pointer is down. Without that, react-knob-headless's
+ * "current value + this event's delta" math fights the native round-trip
+ * and the knob sticks, then jumps. KnobControl already keeps a local value
+ * during drag; this stops the parent state from snapping back under it.
+ */
 export function useParameter<T extends ParameterType>(
   identifier: string,
   type: T
-): [ParameterValueType[T], (value: ParameterValueType[T]) => void] {
+): [
+  ParameterValueType[T],
+  (value: ParameterValueType[T]) => void,
+  (dragging: boolean) => void,
+] {
   const backend = useAudioBackend();
   const param = backend.getParameterState(identifier, type) as Parameter<T>;
   const [value, setValue] = useState<ParameterValueType[T]>(() => readCurrent(param));
+  const draggingRef = useRef(false);
+  const lastSentRef = useRef<ParameterValueType[T]>(value);
 
   const updateValue = useCallback(
     (newValue: ParameterValueType[T]) => {
-      // Only update if the value actually changed
-      if (newValue === value) return;
-
+      if (newValue === lastSentRef.current) return;
+      lastSentRef.current = newValue;
       setValue(newValue);
       (param.setValue as (v: ParameterValueType[T]) => void)(newValue);
     },
-    [param, value]
+    [param]
+  );
+
+  const onDragStateChange = useCallback(
+    (dragging: boolean) => {
+      draggingRef.current = dragging;
+      const slider = param as ParameterMap['slider'];
+      if (dragging) slider.sliderDragStarted?.();
+      else slider.sliderDragEnded?.();
+    },
+    [param]
   );
 
   useEffect(() => {
@@ -34,7 +59,10 @@ export function useParameter<T extends ParameterType>(
 
     if (param.valueChangedEvent) {
       listenerId = param.valueChangedEvent.addListener((newValue) => {
-        setValue(newValue as ParameterValueType[T]);
+        if (draggingRef.current) return;
+        const next = newValue as ParameterValueType[T];
+        lastSentRef.current = next;
+        setValue(next);
       });
     }
 
@@ -44,7 +72,9 @@ export function useParameter<T extends ParameterType>(
     // on Windows WebView2), leaving the knob at its default. Re-read whatever
     // state already arrived, then ask the backend to send it again now that
     // we're subscribed.
-    setValue(readCurrent(param));
+    const current = readCurrent(param);
+    lastSentRef.current = current;
+    setValue(current);
     param.requestInitialUpdate?.();
 
     return () => {
@@ -54,5 +84,5 @@ export function useParameter<T extends ParameterType>(
     };
   }, [param, type]);
 
-  return [value, updateValue];
+  return [value, updateValue, onDragStateChange];
 }

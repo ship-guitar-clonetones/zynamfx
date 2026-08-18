@@ -104,7 +104,7 @@ const AdvertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 /** Offset knob + power; right-click opens the advanced deck panel. */
 export const SpreadGroup: React.FC = () => {
   const [enabled, setEnabled] = useParameter('spreadEnabled', 'toggle');
-  const [offset, setOffset] = useParameter('spreadOffset', 'slider');
+  const [offset, setOffset, onOffsetDrag] = useParameter('spreadOffset', 'slider');
   const resetDeck = useImageDeckReset('spread');
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -150,6 +150,7 @@ export const SpreadGroup: React.FC = () => {
               defaultValue={SPREAD_OFFSET_DEFAULT}
               onReset={resetDeck}
               help={HELP.spreadOffset}
+              onDragStateChange={onOffsetDrag}
             />
             {open && <ImageDeckPanel feature="spread" ref={panelRef} fromKnob />}
           </div>

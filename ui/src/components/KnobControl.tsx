@@ -72,15 +72,17 @@ const READOUT_SHOW_MS = 150;
     faders) instead of snapping back to the label. */
 const READOUT_HOLD_MS = 250;
 
-/** Bipolar center detent: values within the snap window collapse to exactly
-    0.5 so the DSP's "center = skip processing" branch is actually reachable
-    by drag (not just by precise pixel luck). Fine mode narrows the window
-    and quantum so Shift genuinely adds precision. */
+/** Bipolar center detent (coarse drag only): values within the snap window
+    collapse to exactly 0.5 so the DSP's "center = skip processing" branch
+    is reachable by drag. Shift/fine skips the magnet — a 40-step dead zone
+    at 0.1 ms resolution is what made Offset feel sticky. */
 const roundKnobValue = (x: number, snapCenter: boolean, fine: boolean) => {
-  if (snapCenter && Math.abs(x - 0.5) < (fine ? 0.004 : 0.02)) return 0.5;
+  if (snapCenter && !fine && Math.abs(x - 0.5) < 0.02) return 0.5;
   const quantum = fine ? 10000 : 100;
   return Math.round(x * quantum) / quantum;
 };
+
+const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
 export const KnobControl: React.FC<KnobControlProps> = ({
   label,
@@ -104,11 +106,20 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   // The pointerup listener lives on `document` (releases can land anywhere),
   // so it must ignore releases that don't belong to this knob's drag.
   const draggingRef = useRef(false);
+  // Accumulated drag value. react-knob-headless applies each event as
+  // `props.value + thisDelta`, so any native echo (or a second move before
+  // React re-renders) drops prior deltas: the knob sticks, then jumps.
+  // We own the math with this ref so every pixel counts.
+  const liveRef = useRef(value);
+  const lastYRef = useRef(0);
+  const fineRef = useRef(false);
 
   const [dragging, setDragging] = useState(false);
   const [fine, setFine] = useState(false);
+  const [liveValue, setLiveValue] = useState(value);
   const [editText, setEditText] = useState<string | null>(null); // null = not editing
   const editing = editText !== null;
+  const shownValue = dragging ? liveValue : value;
 
   // Latest callbacks/props for the mount-once listener effect.
   const dragStateRef = useRef(onDragStateChange);
@@ -119,6 +130,21 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   defaultValueRef.current = defaultValue;
   const onResetRef = useRef(onReset);
   onResetRef.current = onReset;
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const minRef = useRef(min);
+  minRef.current = min;
+  const maxRef = useRef(max);
+  maxRef.current = max;
+  const variantRef = useRef(variant);
+  variantRef.current = variant;
+
+  useEffect(() => {
+    if (!draggingRef.current) {
+      liveRef.current = value;
+      setLiveValue(value);
+    }
+  }, [value]);
 
   useEffect(() => {
     const knobElement = knobRef.current;
@@ -129,6 +155,30 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       return false;
     };
 
+    const applyLive = (next: number) => {
+      let v = clamp(next, minRef.current, maxRef.current);
+      // Coarse bipolar detent only; Shift skips it so Offset can land on
+      // sub-millisecond values next to zero. No 0.01 quantum here: that
+      // was aria rounding, and applying it live is the "stuck then jump"
+      // the faceplate knobs had.
+      if (
+        variantRef.current === 'bipolar' &&
+        !fineRef.current &&
+        Math.abs(v - 0.5) < 0.02
+      ) {
+        v = 0.5;
+      }
+      if (v === liveRef.current) return;
+      liveRef.current = v;
+      setLiveValue(v);
+      onChangeRef.current(v);
+    };
+
+    const setFineMode = (on: boolean) => {
+      fineRef.current = on;
+      setFine(on);
+    };
+
     // Shift toggles fine mode live, including mid-drag. Keydown/keyup alone
     // can't be trusted here: the plugin webview doesn't reliably deliver
     // bare-modifier key events (the native wrapper consumes them), which
@@ -137,11 +187,28 @@ export const KnobControl: React.FC<KnobControlProps> = ({
     // EQ editors); the key listeners stay as a bonus so fine mode can engage
     // while the pointer is stationary.
     const handleShift = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') setFine(e.type === 'keydown');
+      if (e.key === 'Shift') setFineMode(e.type === 'keydown');
     };
-    const handleDragPointerMove = (e: PointerEvent) => setFine(e.shiftKey);
+    const handleDragPointerMove = (e: PointerEvent) => {
+      if (!draggingRef.current) return;
+      const shift = e.shiftKey || e.getModifierState?.('Shift');
+      if (shift !== fineRef.current) setFineMode(shift);
+      // clientY (not movementY): the WKWebView zoom pointer fix patches
+      // client coordinates so layout px and pointer px stay aligned.
+      applyLive(
+        liveRef.current +
+          (lastYRef.current - e.clientY) *
+            (fineRef.current ? BASE_SENSITIVITY / FINE_FACTOR : BASE_SENSITIVITY)
+      );
+      lastYRef.current = e.clientY;
+    };
 
     const handlePointerDown = (e: PointerEvent) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      // Own the gesture so react-knob-headless's useDrag (value + thisDelta)
+      // never starts; that path is what fought the native echo.
+      e.stopPropagation();
+      knobElement.focus();
       // Alt/Option-click: reset to default. The drag still engages beneath,
       // which is harmless: releasing without moving stays at the default.
       // onReset runs after so owners can restore sibling defaults (e.g. the
@@ -149,11 +216,22 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       if (e.altKey && defaultValueRef.current !== undefined) {
         onChangeRef.current(defaultValueRef.current);
         onResetRef.current?.();
+        liveRef.current = defaultValueRef.current;
+        setLiveValue(defaultValueRef.current);
+      } else {
+        liveRef.current = valueRef.current;
+        setLiveValue(valueRef.current);
       }
 
       draggingRef.current = true;
-      setFine(e.shiftKey);
+      lastYRef.current = e.clientY;
+      setFineMode(e.shiftKey || e.getModifierState?.('Shift'));
       setDragging(true);
+      try {
+        knobElement.setPointerCapture(e.pointerId);
+      } catch {
+        /* capture is best-effort; document listeners still cover the drag */
+      }
       window.addEventListener('keydown', handleShift);
       window.addEventListener('keyup', handleShift);
       window.addEventListener('pointermove', handleDragPointerMove);
@@ -172,7 +250,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       if (!draggingRef.current) return;
       draggingRef.current = false;
       setDragging(false);
-      setFine(false);
+      setFineMode(false);
       window.removeEventListener('keydown', handleShift);
       window.removeEventListener('keyup', handleShift);
       window.removeEventListener('pointermove', handleDragPointerMove);
@@ -227,8 +305,8 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   }, [dragging]);
 
   const openEditor = useCallback(() => {
-    setEditText(scale.editText(value));
-  }, [scale, value]);
+    setEditText(scale.editText(shownValue));
+  }, [scale, shownValue]);
 
   useEffect(() => {
     if (editing) {
@@ -278,7 +356,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         fontVariantNumeric: 'tabular-nums',
       }}
     >
-      {showReadout ? scale.format(value) : label}
+      {showReadout ? scale.format(shownValue) : label}
     </span>
   );
 
@@ -324,13 +402,16 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       <KnobHeadless
         ref={knobRef}
         aria-label={label}
-        valueRaw={value}
+        valueRaw={shownValue}
         valueMin={min}
         valueMax={max}
-        dragSensitivity={fine ? BASE_SENSITIVITY / FINE_FACTOR : BASE_SENSITIVITY}
+        // Drag math lives in the pointer listeners above. The library applies
+        // each event as `valueRaw + thisDelta`, which fights native echoes
+        // and drops moves that land before the next render.
+        dragSensitivity={0}
         valueRawRoundFn={(x) => roundKnobValue(x, variant === 'bipolar', fine)}
         valueRawDisplayFn={(x) => scale.format(x)}
-        onValueRawChange={onChange}
+        onValueRawChange={() => {}}
         onDoubleClick={openEditor}
         className="knob"
         style={{
@@ -344,7 +425,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
           cursor: 'pointer',
         }}
       >
-        <KnobInner value={value} size={size} variant={variant} thumb={thumb} />
+        <KnobInner value={shownValue} size={size} variant={variant} thumb={thumb} />
       </KnobHeadless>
 
       <div

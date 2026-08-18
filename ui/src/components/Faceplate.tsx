@@ -267,8 +267,8 @@ const OutputGainKnob: React.FC<{
   /** Show the auto-balance (=) button next to the balance knob. */
   autoBalance: boolean;
 }> = ({ stereo, autoBalance }) => {
-  const [level, setLevel] = useParameter('outputLevel', 'slider');
-  const [balance, setBalance] = useParameter('outputBalance', 'slider');
+  const [level, setLevel, onLevelDrag] = useParameter('outputLevel', 'slider');
+  const [balance, setBalance, onBalanceDrag] = useParameter('outputBalance', 'slider');
 
   // The (=) button sits on the outer edge, keeping Bal next to the main
   // knob: [=][Bal][knob]. Inactive companions stay mounted but invisible so
@@ -290,6 +290,7 @@ const OutputGainKnob: React.FC<{
           scale={balanceDbScale}
           defaultValue={0.5}
           help={HELP.outputBalance}
+          onDragStateChange={onBalanceDrag}
         />
       </div>
       <KnobControl
@@ -300,6 +301,7 @@ const OutputGainKnob: React.FC<{
         scale={gainDbScale}
         defaultValue={0.5}
         help={HELP.outputLevel}
+        onDragStateChange={onLevelDrag}
       />
     </div>
   );
@@ -333,11 +335,11 @@ export const Faceplate = React.memo(function Faceplate({
   inputMode,
   onInputModeChange,
 }: FaceplateProps) {
-  const [inputLevel, setInputLevel] = useParameter('inputLevel', 'slider');
-  const [toneBass, setToneBass] = useParameter('toneBass', 'slider');
-  const [toneMid, setToneMid] = useParameter('toneMid', 'slider');
-  const [toneTreble, setToneTreble] = useParameter('toneTreble', 'slider');
-  const [noiseGate, setNoiseGate] = useParameter('gateThreshold', 'slider');
+  const [inputLevel, setInputLevel, onInputDrag] = useParameter('inputLevel', 'slider');
+  const [toneBass, setToneBass, onBassDrag] = useParameter('toneBass', 'slider');
+  const [toneMid, setToneMid, onMidDrag] = useParameter('toneMid', 'slider');
+  const [toneTreble, setToneTreble, onTrebleDrag] = useParameter('toneTreble', 'slider');
+  const [noiseGate, setNoiseGate, onGateDrag] = useParameter('gateThreshold', 'slider');
   const [gateEnabled, setGateEnabled] = useParameter('gateEnabled', 'toggle');
   const [toneEqEnabled, setToneEqEnabled] = useParameter('toneEqEnabled', 'toggle');
 
@@ -368,6 +370,7 @@ export const Faceplate = React.memo(function Faceplate({
           scale={gainDbScale}
           defaultValue={0.5}
           help={HELP.inputLevel}
+          onDragStateChange={onInputDrag}
         />
         {stereoInput && (
           <InputModeButton mode={inputMode} branched={branched} onChange={onInputModeChange} />
@@ -392,6 +395,7 @@ export const Faceplate = React.memo(function Faceplate({
           scale={gateDbScale}
           defaultValue={gateDbScale.fromDisplay(-80)}
           help={HELP.gate}
+          onDragStateChange={onGateDrag}
         />
         <PowerButton
           on={gateEnabled}
@@ -418,6 +422,7 @@ export const Faceplate = React.memo(function Faceplate({
             scale={toneScale}
             defaultValue={toneScale.fromDisplay(5)}
             help={HELP.toneBass}
+            onDragStateChange={onBassDrag}
           />
           <KnobControl
             label="Middle"
@@ -427,6 +432,7 @@ export const Faceplate = React.memo(function Faceplate({
             scale={toneScale}
             defaultValue={toneScale.fromDisplay(5)}
             help={HELP.toneMiddle}
+            onDragStateChange={onMidDrag}
           />
           <KnobControl
             label="Treble"
@@ -436,6 +442,7 @@ export const Faceplate = React.memo(function Faceplate({
             scale={toneScale}
             defaultValue={toneScale.fromDisplay(5)}
             help={HELP.toneTreble}
+            onDragStateChange={onTrebleDrag}
           />
         </div>
         <PowerButton
