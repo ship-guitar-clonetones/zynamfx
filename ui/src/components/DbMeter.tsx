@@ -37,7 +37,7 @@ const DotColumn: React.FC<{ id: string; numDots: number }> = ({ id, numDots }) =
       style={{
         display: 'flex',
         flexDirection: 'column-reverse',
-        gap: `${DOT_GAP}px`,
+        gap: `${DOT_GAP}rem`,
         flexShrink: 0,
       }}
     >
@@ -54,8 +54,8 @@ const DotColumn: React.FC<{ id: string; numDots: number }> = ({ id, numDots }) =
             onClick={isClipDot && clipped ? clearClip : undefined}
             {...(isClipDot && clipped ? helpProps(HELP.clipDot) : {})}
             style={{
-              width: `${DOT_SIZE}px`,
-              height: `${DOT_SIZE}px`,
+              width: `${DOT_SIZE}rem`,
+              height: `${DOT_SIZE}rem`,
               borderRadius: '50%',
               backgroundColor: getGradientColor(position),
               opacity: isActive ? 1 : 0.22,
@@ -91,12 +91,12 @@ export const DbMeter: React.FC<DbMeterProps> = ({
     <div
       style={{
         position: 'relative',
-        height: `${actualMeterHeight}px`,
-        fontSize: '8px',
+        height: `${actualMeterHeight}rem`,
+        fontSize: '8rem',
         fontWeight: '500',
         color: LABEL_COLOR,
         flexShrink: 0,
-        width: '18px',
+        width: '18rem',
       }}
     >
       {scaleMarks.map((db) => (
@@ -104,11 +104,11 @@ export const DbMeter: React.FC<DbMeterProps> = ({
           key={db}
           style={{
             position: 'absolute',
-            bottom: `${dbToPixelPosition(db)}px`,
+            bottom: `${dbToPixelPosition(db)}rem`,
             right: 0,
             transform: 'translateY(50%)',
             textAlign: 'right',
-            width: '18px',
+            width: '18rem',
             lineHeight: 1,
             fontFamily: 'monospace',
           }}
@@ -128,7 +128,7 @@ export const DbMeter: React.FC<DbMeterProps> = ({
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'flex-end',
-        gap: `${LABEL_GAP}px`,
+        gap: `${LABEL_GAP}rem`,
       }}
     >
       {labelsPosition === 'left' && labels}
@@ -137,7 +137,7 @@ export const DbMeter: React.FC<DbMeterProps> = ({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'flex-end',
-          gap: `${COLUMN_GAP}px`,
+          gap: `${COLUMN_GAP}rem`,
         }}
       >
         {columns.map((id) => (

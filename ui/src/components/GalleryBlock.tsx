@@ -8,7 +8,7 @@ import {
   Power,
   Trash2,
   Upload,
-} from 'lucide-react';
+} from './icons';
 import { BlockEnergyBorder, BlockLed } from './BlockLed';
 import { ToneImage } from './GearIcon';
 import { LoadingDots } from './LoadingDots';
@@ -40,8 +40,8 @@ import { GRAY, ICON_SIZE, SURFACE, SURFACE_RAISED } from './theme';
 const DRAG_GHOST_OPACITY = 0.75;
 
 /** File-drag drop-target chrome (tone tiles + add tile). */
-const FILE_DROP_BORDER = '2px dashed rgba(0, 209, 59, 0.50)';
-const ADD_TILE_BORDER = '2px dashed rgba(141, 141, 147, 0.65)';
+const FILE_DROP_BORDER = '2rem dashed rgba(0, 209, 59, 0.50)';
+const ADD_TILE_BORDER = '2rem dashed rgba(141, 141, 147, 0.65)';
 const FILE_DROP_ICON_SIZE = 36;
 
 const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
@@ -78,8 +78,8 @@ const useTileMenu = () => {
     e.preventDefault();
     e.stopPropagation();
     suppressClickRef.current = true;
-    // Viewport coords: TileMenu portals to body (outside the CSS-zoom root)
-    // and positions with position:fixed, so no layout-space conversion.
+    // Viewport coords: TileMenu portals to body and positions with
+    // position:fixed at these real-px coordinates.
     setMenuAnchor({ clientX: e.clientX, clientY: e.clientY });
   }, []);
   const closeMenu = useCallback(() => setMenuAnchor(null), []);
@@ -140,8 +140,8 @@ const TileSurface: React.FC<{
     // outside the tile; kept for a stable size box around the face.
     <div
       style={{
-        width: `${size}px`,
-        height: `${size}px`,
+        width: `${size}rem`,
+        height: `${size}rem`,
         position: 'relative',
         flexShrink: 0,
       }}
@@ -153,9 +153,9 @@ const TileSurface: React.FC<{
         onClick={actions.onOpen}
         {...helpProps(toneTileHelp(tone.title))}
         style={{
-          width: `${size}px`,
-          height: `${size}px`,
-          borderRadius: '12px',
+          width: `${size}rem`,
+          height: `${size}rem`,
+          borderRadius: '12rem',
           backgroundColor: SURFACE,
           position: 'relative',
           overflow: 'hidden',
@@ -235,7 +235,7 @@ const TileSurface: React.FC<{
               top: 0,
               left: 0,
               right: 0,
-              height: '32px',
+              height: '32rem',
               background: 'rgba(0, 0, 0, 0.35)',
               pointerEvents: 'none',
             }}
@@ -256,7 +256,7 @@ const TileSurface: React.FC<{
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '4px',
+              padding: '4rem',
             }}
           >
             <ChromeIconButton
@@ -268,7 +268,7 @@ const TileSurface: React.FC<{
             >
               <Power size={ICON_SIZE} />
             </ChromeIconButton>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '16rem' }}>
               <ChromeIconButton
                 help={HELP.swapTone}
                 onClick={actions.onSwap}
@@ -293,7 +293,7 @@ const TileSurface: React.FC<{
 
       {!dropArmed && <BlockEnergyBorder meterId={outMeterId} borderRadius={12} />}
       {!dropArmed && (
-        <div style={{ position: 'absolute', bottom: '8px', right: '8px', zIndex: 4 }}>
+        <div style={{ position: 'absolute', bottom: '8rem', right: '8rem', zIndex: 4 }}>
           <BlockLed meterId={outMeterId} size={10} />
         </div>
       )}
@@ -423,9 +423,9 @@ export type AddTileRouting = 'left' | 'right' | 'both' | 'none';
 
 /** Face of the insert slot tile. */
 const addTileFaceStyle = (size: number): React.CSSProperties => ({
-  width: `${size}px`,
-  height: `${size}px`,
-  borderRadius: '12px',
+  width: `${size}rem`,
+  height: `${size}rem`,
+  borderRadius: '12rem',
   backgroundColor: SURFACE_RAISED,
   border: ADD_TILE_BORDER,
   position: 'relative',
@@ -488,8 +488,8 @@ export const AddTile: React.FC<AddTileProps> = ({
         position: 'absolute',
         top: '50%',
         [edge]: 0,
-        width: `${size / 2 - PLUS_CIRCLE_RADIUS}px`,
-        height: '1px',
+        width: `${size / 2 - PLUS_CIRCLE_RADIUS}rem`,
+        height: '1rem',
         backgroundColor: '#ffffff',
       }}
     />

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import DOMPurify from 'dompurify';
-import { X } from 'lucide-react';
+import { X } from './icons';
 import type { UpdateNoticeData } from '../hooks/useUpdateNotice';
 import { BORDER, MUTED, SURFACE, filledPillButtonStyle, iconButtonStyle } from './theme';
 
@@ -57,45 +57,45 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ notice, onRemindLate
         position: 'absolute',
         inset: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        backdropFilter: 'blur(4px)',
-        WebkitBackdropFilter: 'blur(4px)',
+        backdropFilter: 'blur(4rem)',
+        WebkitBackdropFilter: 'blur(4rem)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
+        padding: '24rem',
         zIndex: 2500,
       }}
     >
       <div
         style={{
           position: 'relative',
-          width: 420,
+          width: '420rem',
           maxWidth: '100%',
           backgroundColor: SURFACE,
           border: BORDER,
-          borderRadius: 16,
-          padding: 24,
+          borderRadius: '16rem',
+          padding: '24rem',
           color: '#fff',
           textAlign: 'center',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 16,
+          gap: '16rem',
         }}
       >
         <button
           type="button"
           onClick={() => onRemindLater(DISMISS_DAYS)}
           aria-label="Close"
-          style={{ ...iconButtonStyle(), position: 'absolute', top: 12, right: 12 }}
+          style={{ ...iconButtonStyle(), position: 'absolute', top: '12rem', right: '12rem' }}
         >
           <X size={16} />
         </button>
 
-        <div style={{ fontSize: 14, fontWeight: 400 }}>Update available: v{notice.version}</div>
+        <div style={{ fontSize: '14rem', fontWeight: 400 }}>Update available: v{notice.version}</div>
 
         <div
-          style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: MUTED, maxWidth: 340 }}
+          style={{ fontSize: '13rem', fontWeight: 400, lineHeight: 1.5, color: MUTED, maxWidth: '340rem' }}
           dangerouslySetInnerHTML={{ __html: messageHtml }}
         />
 
@@ -112,8 +112,8 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ notice, onRemindLate
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
-            fontSize: 12,
+            gap: '10rem',
+            fontSize: '12rem',
             fontWeight: 400,
             color: MUTED,
           }}
@@ -128,7 +128,7 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ notice, onRemindLate
                 background: 'transparent',
                 border: 'none',
                 padding: 0,
-                fontSize: 12,
+                fontSize: '12rem',
                 fontWeight: 400,
                 color: '#ffffff',
                 cursor: 'pointer',

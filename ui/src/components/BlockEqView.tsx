@@ -20,6 +20,7 @@ import {
   yToGain,
 } from './eqShared';
 import { BODY_PADDING } from './chainLayout';
+import { rem } from '../hooks/useUiScale';
 import { EqSliders } from './EqSliders';
 import { SpectrumBackdrop } from './SpectrumBackdrop';
 import { HELP, bandTypeHelp, helpProps, pinHelp, unpinHelp } from './helpText';
@@ -132,7 +133,7 @@ const EditableChip: React.FC<{
       }}
       style={{ ...style, cursor: disabled || editing ? undefined : 'text' }}
     >
-      <span style={{ fontSize: '12px', fontFamily: 'monospace', color: SUBTLE }}>{label}</span>
+      <span style={{ fontSize: '12rem', fontFamily: 'monospace', color: SUBTLE }}>{label}</span>
       {editing ? (
         <input
           ref={inputRef}
@@ -147,11 +148,11 @@ const EditableChip: React.FC<{
           inputMode="decimal"
           placeholder={editText}
           style={{
-            width: `${valueWidth}px`,
+            width: `${valueWidth}rem`,
             background: 'transparent',
             border: 'none',
             color: '#ffffff',
-            fontSize: '12px',
+            fontSize: '12rem',
             fontFamily: 'monospace',
             textAlign: 'left',
             outline: 'none',
@@ -161,8 +162,8 @@ const EditableChip: React.FC<{
       ) : (
         <span
           style={{
-            width: `${valueWidth}px`,
-            fontSize: '12px',
+            width: `${valueWidth}rem`,
+            fontSize: '12rem',
             fontFamily: 'monospace',
             color: '#ffffff',
             textAlign: 'left',
@@ -398,10 +399,10 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
   const chipStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
-    height: `${TEXT_BOX_HEIGHT}px`,
-    padding: '0 4px',
-    borderRadius: ICON_BOX_RADIUS,
+    gap: '6rem',
+    height: `${TEXT_BOX_HEIGHT}rem`,
+    padding: '0 4rem',
+    borderRadius: rem(ICON_BOX_RADIUS),
     border: 'none',
     backgroundColor: SEGMENTED_TRACK,
     boxSizing: 'border-box',
@@ -547,12 +548,12 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
         <div
           style={{
             position: 'absolute',
-            top: `${BODY_PADDING}px`,
-            left: `${BODY_PADDING}px`,
-            fontSize: '11px',
+            top: `${BODY_PADDING}rem`,
+            left: `${BODY_PADDING}rem`,
+            fontSize: '11rem',
             color: MUTED,
             pointerEvents: 'none',
-            textShadow: '0 1px 2px rgba(0, 0, 0, 0.9)',
+            textShadow: '0 1rem 2rem rgba(0, 0, 0, 0.9)',
           }}
         >
           <span style={{ color: '#FFFFFF' }}>Band {selected + 1}</span>
@@ -568,11 +569,11 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
         <div
           style={{
             position: 'absolute',
-            bottom: `${BODY_PADDING + 12}px`,
-            left: `${BODY_PADDING}px`,
+            bottom: `${BODY_PADDING + 12}rem`,
+            left: `${BODY_PADDING}rem`,
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '8rem',
           }}
         >
           {/* Curve type: outer bands choose shelf vs pass; bells show their
@@ -593,10 +594,13 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
                   }}
                 >
                   <svg
-                    width={ICON_SIZE}
-                    height={ICON_SIZE}
                     viewBox="0 0 16 14"
-                    style={{ display: 'block', flexShrink: 0 }}
+                    style={{
+                      width: rem(ICON_SIZE),
+                      height: rem(ICON_SIZE),
+                      display: 'block',
+                      flexShrink: 0,
+                    }}
                   >
                     <path
                       d={TYPE_GLYPHS[type]}

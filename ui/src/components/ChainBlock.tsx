@@ -10,8 +10,9 @@ import {
   Power,
   Share,
   Trash2,
-} from 'lucide-react';
+} from './icons';
 import { ToneImage } from './GearIcon';
+import { rem } from '../hooks/useUiScale';
 import { KnobControl } from './KnobControl';
 import { gainDbScale } from './knobScale';
 import { BusyOverlay, LoadingDots } from './LoadingDots';
@@ -67,9 +68,9 @@ const NORMALIZE_BUTTON_OFFSET = -(KNOB_SIZE_SECONDARY - ICON_BOX_SIZE) / 2;
 
 /** Downloads / models count with a leading icon (same pattern as ToneBrowser). */
 const CountStat: React.FC<{ icon: React.ReactNode; value: number }> = ({ icon, value }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '8rem' }}>
     <span style={{ display: 'grid', placeItems: 'center', color: GRAY }}>{icon}</span>
-    <span style={{ fontSize: '14px', fontWeight: 400, color: MUTED }}>
+    <span style={{ fontSize: '14rem', fontWeight: 400, color: MUTED }}>
       {value.toLocaleString()}
     </span>
   </div>
@@ -78,15 +79,13 @@ const CountStat: React.FC<{ icon: React.ReactNode; value: number }> = ({ icon, v
 /** EQ view glyphs: 16×16, stroke inherits selected/muted color. */
 const EqSlidersIcon: React.FC = () => (
   <svg
-    width={16}
-    height={16}
     viewBox="0 0 16 16"
     fill="none"
     stroke="currentColor"
     strokeWidth={1.33333}
     strokeLinecap="round"
     strokeLinejoin="round"
-    style={{ display: 'block', flexShrink: 0 }}
+    style={{ width: rem(16), height: rem(16), display: 'block', flexShrink: 0 }}
   >
     <path d="M11.3333 6.66669V12.6667" />
     <path d="M4.66675 3.33331V9.33331" />
@@ -97,14 +96,12 @@ const EqSlidersIcon: React.FC = () => (
 
 const EqCurveIcon: React.FC = () => (
   <svg
-    width={16}
-    height={16}
     viewBox="0 0 16 16"
     fill="none"
     stroke="currentColor"
     strokeWidth={1.5}
     strokeLinecap="round"
-    style={{ display: 'block', flexShrink: 0 }}
+    style={{ width: rem(16), height: rem(16), display: 'block', flexShrink: 0 }}
   >
     <path d="M1 13.5C5 13.5 5.5 2.5 8 2.5C10.5 2.5 11 13.5 15 13.5" />
   </svg>
@@ -398,7 +395,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        width: `${CARD_WIDTH}px`,
+        width: `${CARD_WIDTH}rem`,
         height: '100%',
         boxSizing: 'border-box',
         overflowY: showInfo ? 'auto' : 'hidden',
@@ -412,7 +409,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'stretch',
-          padding: showInfo ? '24px 0' : 0,
+          padding: showInfo ? '24rem 0' : 0,
         }}
       >
         {/* ← BLOCK sits above the bordered card (Figma: 16px mono, gap 16). */}
@@ -424,8 +421,8 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
             alignSelf: 'flex-start',
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
-            marginBottom: '16px',
+            gap: '16rem',
+            marginBottom: '16rem',
             flexShrink: 0,
             background: 'transparent',
             border: 'none',
@@ -439,7 +436,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
           <span
             style={{
               fontFamily: 'monospace',
-              fontSize: '16px',
+              fontSize: '16rem',
               fontWeight: 400,
               textTransform: 'uppercase',
               lineHeight: 1.4,
@@ -455,28 +452,28 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
             flexDirection: 'column',
             position: 'relative',
             width: '100%',
-            height: showInfo ? undefined : `${CARD_HEIGHT}px`,
-            minHeight: `${CARD_HEIGHT}px`,
+            height: showInfo ? undefined : `${CARD_HEIGHT}rem`,
+            minHeight: `${CARD_HEIGHT}rem`,
             boxSizing: 'border-box',
             border: BORDER,
-            borderRadius: `${CARD_RADIUS}px`,
+            borderRadius: `${CARD_RADIUS}rem`,
             overflow: 'hidden',
           }}
         >
           {/* Header: 16px inset, chrome centered in HEADER_HEIGHT. */}
           <div
             style={{
-              height: `${HEADER_HEIGHT}px`,
+              height: `${HEADER_HEIGHT}rem`,
               flexShrink: 0,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: `0 ${BODY_PADDING}px`,
+              padding: `0 ${BODY_PADDING}rem`,
               boxSizing: 'border-box',
               borderBottom: BORDER,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '24rem', flexShrink: 0 }}>
               <ChromeIconButton
                 tone="power"
                 on={enabled}
@@ -493,8 +490,8 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                 <span
                   {...helpProps(calibrationActive ? HELP.blockCalibrated : HELP.blockUncalibrated)}
                   style={{
-                    width: `${ICON_BOX_SIZE}px`,
-                    height: `${ICON_BOX_SIZE}px`,
+                    width: `${ICON_BOX_SIZE}rem`,
+                    height: `${ICON_BOX_SIZE}rem`,
                     display: 'grid',
                     placeItems: 'center',
                     color: calibrationActive ? WHITE : GRAY,
@@ -509,16 +506,16 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
               EQ stays rightmost in the submenu so opening grows left only.
               marginRight cancels the pill's right pad so EQ doesn't shift
               relative to info. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '24rem', flexShrink: 0 }}>
               <div
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: showEq ? '16px' : 0,
-                  padding: showEq ? '4px 12px' : 0,
+                  gap: showEq ? '16rem' : 0,
+                  padding: showEq ? '4rem 12rem' : 0,
                   // Pull back by the pill's right pad so EQ stays put vs share.
                   marginRight: showEq ? -12 : 0,
-                  borderRadius: showEq ? 100 : 0,
+                  borderRadius: showEq ? '100rem' : 0,
                   backgroundColor: showEq ? SEGMENTED_TRACK : 'transparent',
                   flexShrink: 0,
                   boxSizing: 'border-box',
@@ -607,17 +604,17 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
             knobs/model select and lets the right column grow. */}
           <div
             style={{
-              height: showInfo ? undefined : `${BODY_HEIGHT}px`,
+              height: showInfo ? undefined : `${BODY_HEIGHT}rem`,
               flexShrink: 0,
               display: 'flex',
               flexDirection: 'row',
               alignItems: 'stretch',
-              gap: showEq || showInfo ? 0 : '24px',
+              gap: showEq || showInfo ? 0 : '24rem',
               padding: showEq
                 ? 0
                 : showInfo
-                  ? `${BODY_PADDING}px ${BODY_PADDING}px 24px`
-                  : `${BODY_PADDING}px`,
+                  ? `${BODY_PADDING}rem ${BODY_PADDING}rem 24rem`
+                  : `${BODY_PADDING}rem`,
               boxSizing: 'border-box',
               position: 'relative',
               opacity: enabled ? 1 : 0.45,
@@ -648,7 +645,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                       flexDirection: 'column',
                       alignItems: 'center',
                       flexShrink: 0,
-                      gap: '12px',
+                      gap: '12rem',
                     }}
                   >
                     <div style={{ flex: 1, display: 'flex', alignItems: 'center', minHeight: 0 }}>
@@ -689,7 +686,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                       display: 'flex',
                       flexDirection: 'row',
                       alignItems: showInfo ? 'flex-start' : 'center',
-                      gap: '24px',
+                      gap: '24rem',
                       minWidth: 0,
                     }}
                   >
@@ -697,9 +694,9 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                     <div
                       style={{
                         position: 'relative',
-                        width: showInfo ? IMAGE_SIZE_INFO : IMAGE_SIZE,
-                        height: showInfo ? IMAGE_SIZE_INFO : IMAGE_SIZE,
-                        borderRadius: '8px',
+                        width: rem(showInfo ? IMAGE_SIZE_INFO : IMAGE_SIZE),
+                        height: rem(showInfo ? IMAGE_SIZE_INFO : IMAGE_SIZE),
+                        borderRadius: '8rem',
                         overflow: 'hidden',
                         flexShrink: 0,
                       }}
@@ -745,7 +742,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: showInfo ? '24px' : '16px',
+                        gap: showInfo ? '24rem' : '16rem',
                         minWidth: 0,
                         flex: 1,
                       }}
@@ -754,7 +751,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                         style={{
                           display: 'flex',
                           flexDirection: 'column',
-                          gap: '16px',
+                          gap: '16rem',
                           minWidth: 0,
                         }}
                       >
@@ -762,13 +759,13 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                           style={{
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '8px',
+                            gap: '8rem',
                             minWidth: 0,
                           }}
                         >
                           <span
                             style={{
-                              fontSize: '18px',
+                              fontSize: '18rem',
                               color: WHITE,
                               fontWeight: 700,
                               lineHeight: 1.4,
@@ -786,11 +783,11 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                               display: 'flex',
                               flexDirection: 'row',
                               alignItems: 'center',
-                              gap: '16px',
+                              gap: '16rem',
                             }}
                           >
                             {tone.gear && (
-                              <span style={{ fontSize: '14px', color: MUTED, fontWeight: 400 }}>
+                              <span style={{ fontSize: '14rem', color: MUTED, fontWeight: 400 }}>
                                 {gearLabel(tone.gear)}
                               </span>
                             )}
@@ -804,7 +801,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                               display: 'flex',
                               flexDirection: 'row',
                               alignItems: 'center',
-                              gap: '24px',
+                              gap: '24rem',
                             }}
                           >
                             <CountStat
@@ -819,11 +816,11 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                         )}
 
                         {tone.user && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12rem' }}>
                             <div
                               style={{
-                                width: '32px',
-                                height: '32px',
+                                width: '32rem',
+                                height: '32rem',
                                 borderRadius: '50%',
                                 overflow: 'hidden',
                                 flexShrink: 0,
@@ -835,7 +832,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                                 size={32}
                               />
                             </div>
-                            <span style={{ fontSize: '14px', color: GRAY, fontWeight: 400 }}>
+                            <span style={{ fontSize: '14rem', color: GRAY, fontWeight: 400 }}>
                               {tone.user.username}
                             </span>
                           </div>
@@ -923,7 +920,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                       flexDirection: 'column',
                       alignItems: 'flex-end',
                       flexShrink: 0,
-                      gap: '12px',
+                      gap: '12rem',
                     }}
                   >
                     <div
@@ -933,7 +930,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         minHeight: 0,
-                        width: `${KNOB_SIZE_SECONDARY}px`,
+                        width: `${KNOB_SIZE_SECONDARY}rem`,
                       }}
                     >
                       <BlockMeter meterId={meterId.blockOut(blockId)} length={RAIL_METER_HEIGHT} />
@@ -943,7 +940,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                         display: 'flex',
                         flexDirection: 'row',
                         alignItems: 'flex-end',
-                        gap: '10px',
+                        gap: '10rem',
                       }}
                     >
                       {isNam && showNormalizeControl && (
@@ -959,7 +956,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                           )}
                           style={{
                             display: 'inline-flex',
-                            transform: `translateY(${NORMALIZE_BUTTON_OFFSET}px)`,
+                            transform: `translateY(${NORMALIZE_BUTTON_OFFSET}rem)`,
                           }}
                         >
                           <ChromeIconButton

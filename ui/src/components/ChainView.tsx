@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getUiScale, rem } from '../hooks/useUiScale';
 import { DragDropProvider } from '@dnd-kit/react';
 import { isSortable } from '@dnd-kit/react/sortable';
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from '@dnd-kit/dom';
@@ -62,7 +63,8 @@ interface ChainViewProps {
   onFillToFaceplate?: (fill: boolean) => void;
 }
 
-/** A few px of travel before a drag engages, so tap/click stays a click. */
+/** Design-px of travel before a drag engages, so tap/click stays a click.
+    Scaled to real px per gesture so the feel tracks the rendered tile size. */
 const GALLERY_DRAG_DISTANCE_PX = 6;
 
 const sensors: Sensors = [
@@ -72,7 +74,9 @@ const sensors: Sensors = [
   // drags, so power/swap/trash stay clicks.
   PointerSensor.configure({
     activationConstraints: () => [
-      new PointerActivationConstraints.Distance({ value: GALLERY_DRAG_DISTANCE_PX }),
+      new PointerActivationConstraints.Distance({
+        value: GALLERY_DRAG_DISTANCE_PX * getUiScale(),
+      }),
     ],
   }),
   // Stock keyboard sorting: Space or Enter on a focused tile picks it up,
@@ -389,7 +393,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
       style={{
         marginLeft:
           branchLayout != null && side !== branchLayout.trunkSide
-            ? `${branchLayout.indentPx}px`
+            ? `${branchLayout.indentPx}rem`
             : 0,
         width: 'max-content',
       }}
@@ -422,7 +426,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
         alignItems: 'stretch',
         height: '100%',
         boxSizing: 'border-box',
-        padding: '0 24px',
+        padding: '0 24rem',
       }}
     >
       {stereo && <StereoPanRail />}
@@ -445,11 +449,11 @@ export const ChainView: React.FC<ChainViewProps> = ({
               style={{
                 position: 'absolute',
                 top: 0,
-                left: EDGE_FADE_WIDTH,
+                left: rem(EDGE_FADE_WIDTH),
                 zIndex: 1,
                 pointerEvents: 'none',
                 fontFamily: 'monospace',
-                fontSize: '16px',
+                fontSize: '16rem',
                 fontWeight: 400,
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
@@ -476,10 +480,10 @@ export const ChainView: React.FC<ChainViewProps> = ({
                 position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: `${LANE_GAP}px`,
+                gap: `${LANE_GAP}rem`,
                 width: 'max-content',
                 minWidth: '100%',
-                padding: `0 ${EDGE_FADE_WIDTH}px`,
+                padding: `0 ${EDGE_FADE_WIDTH}rem`,
                 boxSizing: 'border-box',
                 // No transform on this wrapper: a transformed ancestor becomes
                 // the containing block for position:fixed descendants, and

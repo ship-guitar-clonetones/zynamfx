@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Equal, Power } from 'lucide-react';
+import { rem } from '../hooks/useUiScale';
+import { Equal, Power } from './icons';
 import { KnobControl } from './KnobControl';
 import { offsetMsScale } from './knobScale';
 import { useParameter } from '../hooks/useParameter';
@@ -54,12 +55,12 @@ const ADVERT_HEIGHT = KNOB_SIZE_PRIMARY;
     directions so the arrows point inward (→ ALIGN ←) instead of out. */
 const AlignArrow: React.FC<{ direction: 'left' | 'right' }> = ({ direction }) => (
   <svg
-    width={20}
-    height={7}
     viewBox="0 0 24 10"
     fill="none"
     aria-hidden
     style={{
+      width: rem(20),
+      height: rem(7),
       flexShrink: 0,
       display: 'block',
       transform: direction === 'left' ? 'scaleX(-1)' : undefined,
@@ -82,15 +83,15 @@ const AdvertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     {...helpProps(HELP.alignAdvert)}
     style={{
       ...pillButtonStyle,
-      height: `${ADVERT_HEIGHT}px`,
-      width: `${IMAGE_GROUP_WIDTH}px`,
-      marginBottom: `${SECONDARY_CENTER_Y - ADVERT_HEIGHT / 2}px`,
+      height: `${ADVERT_HEIGHT}rem`,
+      width: `${IMAGE_GROUP_WIDTH}rem`,
+      marginBottom: `${SECONDARY_CENTER_Y - ADVERT_HEIGHT / 2}rem`,
       boxSizing: 'border-box',
-      borderRadius: `${ADVERT_HEIGHT / 2}px`,
+      borderRadius: `${ADVERT_HEIGHT / 2}rem`,
       padding: 0,
-      fontSize: '12px',
+      fontSize: '12rem',
       letterSpacing: '0.08em',
-      gap: '8px',
+      gap: '8rem',
     }}
   >
     <AlignArrow direction="right" />
@@ -164,7 +165,7 @@ export const AlignGroup: React.FC = () => {
         e.preventDefault();
         setOpen((prev) => !prev);
       }}
-      style={{ position: 'relative', width: `${IMAGE_GROUP_WIDTH}px`, boxSizing: 'border-box' }}
+      style={{ position: 'relative', width: `${IMAGE_GROUP_WIDTH}rem`, boxSizing: 'border-box' }}
     >
       {enabled ? (
         <div
@@ -173,7 +174,7 @@ export const AlignGroup: React.FC = () => {
             flexDirection: 'row',
             alignItems: 'flex-end',
             justifyContent: 'center',
-            gap: '10px',
+            gap: '10rem',
           }}
         >
           <AutoAlignButton />

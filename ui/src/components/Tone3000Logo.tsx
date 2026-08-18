@@ -1,4 +1,5 @@
 import React from 'react';
+import { rem } from '../hooks/useUiScale';
 
 /**
  * TONE3000 wordmark, ported from the web project's `components/icons/Logo.tsx`
@@ -7,11 +8,10 @@ import React from 'react';
  */
 export const Tone3000Logo: React.FC<{ height?: number }> = ({ height = 32 }) => (
   <svg
-    width={Math.round((height * 210) / 32)}
-    height={height}
     viewBox="0 0 210 32"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
+    style={{ width: rem(Math.round((height * 210) / 32)), height: rem(height) }}
   >
     <title>Tone3000 - NAM Captures and IRs</title>
     <g>

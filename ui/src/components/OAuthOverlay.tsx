@@ -31,14 +31,14 @@ export const OAuthOverlay: React.FC<OAuthOverlayProps> = ({ phase, error, onRetr
         position: 'absolute',
         inset: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        backdropFilter: 'blur(4px)',
-        WebkitBackdropFilter: 'blur(4px)',
+        backdropFilter: 'blur(4rem)',
+        WebkitBackdropFilter: 'blur(4rem)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 16,
-        padding: 24,
+        gap: '16rem',
+        padding: '24rem',
         textAlign: 'center',
         color: '#fff',
         zIndex: 3000,
@@ -48,10 +48,10 @@ export const OAuthOverlay: React.FC<OAuthOverlayProps> = ({ phase, error, onRetr
       {phase === 'error' && (
         <>
           {/* Body copy: reset the global 600 default. */}
-          <div style={{ fontSize: 14, fontWeight: 400, opacity: 0.95, maxWidth: 360 }}>
+          <div style={{ fontSize: '14rem', fontWeight: 400, opacity: 0.95, maxWidth: '360rem' }}>
             {error ?? 'Something went wrong completing TONE3000 sign-in.'}
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: '12rem' }}>
             <button type="button" onClick={onRetry} style={filledPillButtonStyle}>
               Try again
             </button>

@@ -264,12 +264,12 @@ export function useAppBanner(state: AudioDeviceState | null): {
 /** Primary = outlined pill; ignore = borderless muted text button. */
 const actionButtonStyle = (secondary: boolean): React.CSSProperties => ({
   background: 'none',
-  border: secondary ? 'none' : '1px solid #ffffff',
+  border: secondary ? 'none' : '1rem solid #ffffff',
   color: secondary ? MUTED : '#ffffff',
-  borderRadius: '7px',
-  fontSize: '11.5px',
+  borderRadius: '7rem',
+  fontSize: '11.5rem',
   fontWeight: 600,
-  padding: secondary ? '4px 4px' : '4px 11px',
+  padding: secondary ? '4rem 4rem' : '4rem 11rem',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
   flexShrink: 0,
@@ -284,16 +284,16 @@ export const AppBanner: React.FC<{
   <div
     role="alert"
     style={{
-      height: `${BANNER_HEIGHT}px`,
+      height: `${BANNER_HEIGHT}rem`,
       boxSizing: 'border-box',
       display: 'flex',
       alignItems: 'center',
-      gap: '10px',
-      padding: '0 24px',
+      gap: '10rem',
+      padding: '0 24rem',
       borderBottom: BORDER,
       backgroundColor: '#000000',
       color: '#ffffff',
-      fontSize: '12.5px',
+      fontSize: '12.5rem',
       lineHeight: 1.4,
       flexShrink: 0,
     }}

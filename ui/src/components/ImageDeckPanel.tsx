@@ -1,9 +1,10 @@
 import React, { useCallback } from 'react';
-import { Power } from 'lucide-react';
+import { Power } from './icons';
 import { KnobControl } from './KnobControl';
 import { crossoverHzScale, percentScale } from './knobScale';
 import type { KnobScale } from './knobScale';
 import { useParameter } from '../hooks/useParameter';
+import { rem } from '../hooks/useUiScale';
 import { useCorrelation } from '../hooks/useMeters';
 import { HELP, helpProps } from './helpText';
 import { ChromeIconButton } from './ChromeIconButton';
@@ -101,10 +102,10 @@ const CorrelationLed: React.FC = () => {
       {...helpProps(HELP.imageCorrelation)}
       style={{
         position: 'absolute',
-        top: '8px',
-        right: '8px',
-        width: '6px',
-        height: '6px',
+        top: '8rem',
+        right: '8rem',
+        width: '6rem',
+        height: '6rem',
         borderRadius: '50%',
         background: color,
       }}
@@ -130,7 +131,7 @@ const SectionKnob: React.FC<{
 }> = ({ label, value, onChange, scale, defaultValue, help, on, powerHelp, onPower, onDragStateChange }) => (
   <div
     style={{
-      width: SECTION_WIDTH,
+      width: rem(SECTION_WIDTH),
       position: 'relative',
       display: 'flex',
       justifyContent: 'center',
@@ -154,8 +155,8 @@ const SectionKnob: React.FC<{
       onClick={onPower}
       style={{
         position: 'absolute',
-        top: (KNOB_SIZE_SECONDARY - ICON_BOX_SIZE) / 2,
-        left: `calc(50% + ${KNOB_SIZE_SECONDARY / 2 + 6}px)`,
+        top: rem((KNOB_SIZE_SECONDARY - ICON_BOX_SIZE) / 2),
+        left: `calc(50% + ${KNOB_SIZE_SECONDARY / 2 + 6}rem)`,
       }}
     >
       <Power size={ICON_SIZE} />
@@ -183,17 +184,17 @@ export const ImageDeckPanel = React.forwardRef<
         position: 'absolute',
         // Splits the difference down toward the knob's top edge instead of
         // floating a full gap above the group.
-        bottom: 'calc(100% + 6px)',
+        bottom: 'calc(100% + 6rem)',
         ...(fromKnob ? { left: 0 } : { right: 0 }),
         backgroundColor: '#141416',
         border: BORDER,
-        borderRadius: '14px',
-        padding: '14px 16px 8px',
+        borderRadius: '14rem',
+        padding: '14rem 16rem 8rem',
         zIndex: 200,
         boxSizing: 'border-box',
         display: 'flex',
         alignItems: 'flex-end',
-        gap: '18px',
+        gap: '18rem',
       }}
     >
       <SectionKnob
@@ -225,16 +226,16 @@ export const ImageDeckPanel = React.forwardRef<
           and label baseline read evenly. */}
       <div
         style={{
-          width: SECTION_WIDTH,
+          width: rem(SECTION_WIDTH),
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: `${KNOB_LABEL_GAP}px`,
+          gap: `${KNOB_LABEL_GAP}rem`,
         }}
       >
         <div
           style={{
-            height: `${KNOB_SIZE_SECONDARY}px`,
+            height: `${KNOB_SIZE_SECONDARY}rem`,
             display: 'grid',
             placeItems: 'center',
           }}
@@ -250,9 +251,9 @@ export const ImageDeckPanel = React.forwardRef<
         </div>
         <span
           style={{
-            fontSize: 14,
+            fontSize: '14rem',
             fontWeight: 400,
-            letterSpacing: '1px',
+            letterSpacing: '1rem',
             color: GRAY,
             lineHeight: 1.2,
             whiteSpace: 'nowrap',

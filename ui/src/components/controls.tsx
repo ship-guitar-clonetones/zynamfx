@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown } from './icons';
 import { useDismissable } from '../hooks/useDismissable';
 import { MUTED, SUBTLE, BRAND_RED, BRAND_YELLOW, WHITE } from './theme';
 
@@ -10,7 +10,7 @@ import { MUTED, SUBTLE, BRAND_RED, BRAND_YELLOW, WHITE } from './theme';
  * borders, green pill switches, white radio/check indicators.
  */
 
-export const FIELD_BORDER = '1px solid #3f3f46';
+export const FIELD_BORDER = '1rem solid #3f3f46';
 
 /** Vertical gap between top-level settings sections. */
 export const SECTION_GAP = 48;
@@ -18,9 +18,9 @@ export const SECTION_GAP = 48;
 export const outlinedFieldStyle: React.CSSProperties = {
   backgroundColor: 'transparent',
   border: FIELD_BORDER,
-  borderRadius: '6px',
+  borderRadius: '6rem',
   color: '#ffffff',
-  fontSize: '14px',
+  fontSize: '14rem',
   fontWeight: 400,
   outline: 'none',
   boxSizing: 'border-box',
@@ -29,7 +29,7 @@ export const outlinedFieldStyle: React.CSSProperties = {
 // Only headers carry weight; everything else is regular (the app's global
 // stylesheet defaults heavier, so body copy sets 400 explicitly).
 export const sectionLabelStyle: React.CSSProperties = {
-  fontSize: '15px',
+  fontSize: '15rem',
   fontWeight: 600,
   color: '#ffffff',
 };
@@ -48,9 +48,9 @@ export const SettingsGroup: React.FC<{
   <section
     style={{
       border: FIELD_BORDER,
-      borderRadius: '10px',
-      padding: '20px',
-      marginBottom: `${SECTION_GAP}px`,
+      borderRadius: '10rem',
+      padding: '20rem',
+      marginBottom: `${SECTION_GAP}rem`,
       boxSizing: 'border-box',
       ...style,
     }}
@@ -59,14 +59,14 @@ export const SettingsGroup: React.FC<{
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '10px',
-        marginBottom: '24px',
+        gap: '10rem',
+        marginBottom: '24rem',
       }}
     >
       <span style={{ display: 'flex', color: '#ffffff', flexShrink: 0 }}>{icon}</span>
       <span
         style={{
-          fontSize: '16px',
+          fontSize: '16rem',
           fontWeight: 600,
           letterSpacing: '0.08em',
           color: '#ffffff',
@@ -76,26 +76,26 @@ export const SettingsGroup: React.FC<{
         {title}
       </span>
     </div>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>{children}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '28rem' }}>{children}</div>
   </section>
 );
 
 export const descriptionStyle: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: '13rem',
   fontWeight: 400,
   color: MUTED,
-  margin: '6px 0 0',
+  margin: '6rem 0 0',
   lineHeight: 1.45,
 };
 
 export const ctaButtonStyle: React.CSSProperties = {
   width: '100%',
-  padding: '12px 16px',
-  borderRadius: '10px',
-  border: '1px solid #ffffff',
+  padding: '12rem 16rem',
+  borderRadius: '10rem',
+  border: '1rem solid #ffffff',
   backgroundColor: 'transparent',
   color: '#ffffff',
-  fontSize: '15px',
+  fontSize: '15rem',
   fontWeight: 400,
   cursor: 'pointer',
   textAlign: 'center',
@@ -104,7 +104,7 @@ export const ctaButtonStyle: React.CSSProperties = {
 /** Fine-print caption under a field (locked notes, hints). */
 export const captionStyle: React.CSSProperties = {
   ...descriptionStyle,
-  fontSize: '12px',
+  fontSize: '12rem',
 };
 
 /** Green pill switch mirroring the web ToggleSimple: 40×24 track (zinc-500
@@ -119,14 +119,14 @@ export const PillToggle: React.FC<{ value: boolean; onChange: (value: boolean) =
     onClick={() => onChange(!value)}
     style={{
       position: 'relative',
-      width: '40px',
-      height: '24px',
-      borderRadius: '12px',
+      width: '40rem',
+      height: '24rem',
+      borderRadius: '12rem',
       border: 'none',
       padding: 0,
       cursor: 'pointer',
       backgroundColor: value ? '#00D13B' : '#71717a',
-      boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.15)',
+      boxShadow: 'inset 0 2rem 4rem rgba(0, 0, 0, 0.15)',
       flexShrink: 0,
       transition: 'background-color 0.3s ease-in-out',
     }}
@@ -134,14 +134,14 @@ export const PillToggle: React.FC<{ value: boolean; onChange: (value: boolean) =
     <span
       style={{
         position: 'absolute',
-        top: '4px',
-        left: '4px',
-        width: '16px',
-        height: '16px',
+        top: '4rem',
+        left: '4rem',
+        width: '16rem',
+        height: '16rem',
         borderRadius: '50%',
         backgroundColor: '#ffffff',
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
-        transform: value ? 'translateX(16px)' : 'translateX(0)',
+        boxShadow: '0 1rem 2rem rgba(0, 0, 0, 0.3)',
+        transform: value ? 'translateX(16rem)' : 'translateX(0)',
         transition: 'transform 0.3s ease-in-out',
         display: 'block',
       }}
@@ -193,8 +193,8 @@ export function SelectField<T extends string>({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '10px',
-          padding: '12px 16px',
+          gap: '10rem',
+          padding: '12rem 16rem',
           cursor: disabled ? 'default' : 'pointer',
           color: disabled || !selected ? MUTED : '#ffffff',
         }}
@@ -217,14 +217,14 @@ export function SelectField<T extends string>({
         <div
           style={{
             position: 'absolute',
-            top: 'calc(100% + 4px)',
+            top: 'calc(100% + 4rem)',
             left: 0,
             right: 0,
-            borderRadius: '6px',
+            borderRadius: '6rem',
             background: '#000000',
             border: FIELD_BORDER,
             overflow: 'hidden auto',
-            maxHeight: '264px',
+            maxHeight: '264rem',
             zIndex: 100,
           }}
         >
@@ -243,10 +243,10 @@ export function SelectField<T extends string>({
                 if (option.value !== value) e.currentTarget.style.background = 'transparent';
               }}
               style={{
-                padding: '12px 16px',
+                padding: '12rem 16rem',
                 cursor: 'pointer',
                 color: '#ffffff',
-                fontSize: '14px',
+                fontSize: '14rem',
                 fontWeight: 400,
                 // No dividers between rows; only the active/hover fill and the
                 // container border delineate options.
@@ -258,10 +258,10 @@ export function SelectField<T extends string>({
                 <span
                   style={{
                     display: 'block',
-                    fontSize: '11px',
+                    fontSize: '11rem',
                     fontWeight: 400,
                     color: SUBTLE,
-                    marginTop: '2px',
+                    marginTop: '2rem',
                   }}
                 >
                   {option.sublabel}
@@ -285,13 +285,13 @@ export const FieldRow: React.FC<{
   /** Drop the outer bottom margin (SettingsGroup stacks with gap instead). */
   flush?: boolean;
 }> = ({ label, help, labelExtra, children, flush = false }) => (
-  <div style={{ marginBottom: flush ? 0 : `${SECTION_GAP}px` }}>
+  <div style={{ marginBottom: flush ? 0 : `${SECTION_GAP}rem` }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <span style={sectionLabelStyle}>{label}</span>
       {labelExtra}
     </div>
-    {help && <p style={{ ...descriptionStyle, marginBottom: '12px' }}>{help}</p>}
-    {!help && <div style={{ height: '12px' }} />}
+    {help && <p style={{ ...descriptionStyle, marginBottom: '12rem' }}>{help}</p>}
+    {!help && <div style={{ height: '12rem' }} />}
     {children}
   </div>
 );
@@ -305,13 +305,13 @@ export const ToggleRow: React.FC<{
   children?: React.ReactNode;
   flush?: boolean;
 }> = ({ label, description, value, onChange, children, flush = false }) => (
-  <div style={{ marginBottom: flush ? 0 : `${SECTION_GAP}px` }}>
+  <div style={{ marginBottom: flush ? 0 : `${SECTION_GAP}rem` }}>
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '16px',
+        gap: '16rem',
       }}
     >
       <span style={sectionLabelStyle}>{label}</span>
@@ -330,10 +330,10 @@ export const ChoiceIndicator: React.FC<{ selected: boolean; square?: boolean }> 
   <span
     aria-hidden
     style={{
-      width: '18px',
-      height: '18px',
-      borderRadius: square ? '5px' : '50%',
-      border: `2px solid ${selected ? '#ffffff' : '#71717a'}`,
+      width: '18rem',
+      height: '18rem',
+      borderRadius: square ? '5rem' : '50%',
+      border: `2rem solid ${selected ? '#ffffff' : '#71717a'}`,
       boxSizing: 'border-box',
       display: 'flex',
       alignItems: 'center',
@@ -344,9 +344,9 @@ export const ChoiceIndicator: React.FC<{ selected: boolean; square?: boolean }> 
     {selected && (
       <span
         style={{
-          width: '8px',
-          height: '8px',
-          borderRadius: square ? '2px' : '50%',
+          width: '8rem',
+          height: '8rem',
+          borderRadius: square ? '2rem' : '50%',
           backgroundColor: '#ffffff',
           display: 'block',
         }}
@@ -363,7 +363,7 @@ export const RadioOption: React.FC<{
   onSelect: () => void;
   children?: React.ReactNode;
 }> = ({ selected, label, description, onSelect, children }) => (
-  <div style={{ marginBottom: '16px' }}>
+  <div style={{ marginBottom: '16rem' }}>
     <button
       type="button"
       role="radio"
@@ -372,7 +372,7 @@ export const RadioOption: React.FC<{
       style={{
         display: 'flex',
         alignItems: 'flex-start',
-        gap: '12px',
+        gap: '12rem',
         width: '100%',
         padding: 0,
         border: 'none',
@@ -382,14 +382,14 @@ export const RadioOption: React.FC<{
         color: 'inherit',
       }}
     >
-      <span style={{ marginTop: '1px', display: 'flex' }}>
+      <span style={{ marginTop: '1rem', display: 'flex' }}>
         <ChoiceIndicator selected={selected} />
       </span>
       <span style={{ minWidth: 0, flex: 1 }}>
         <span
           style={{
             display: 'block',
-            fontSize: '14px',
+            fontSize: '14rem',
             fontWeight: 400,
             color: '#ffffff',
             lineHeight: 1.3,
@@ -400,10 +400,10 @@ export const RadioOption: React.FC<{
         <span
           style={{
             display: 'block',
-            fontSize: '13px',
+            fontSize: '13rem',
             fontWeight: 400,
             color: MUTED,
-            marginTop: '4px',
+            marginTop: '4rem',
             lineHeight: 1.45,
           }}
         >
@@ -435,8 +435,8 @@ export function SegmentedControl<T extends string>({
         display: 'inline-flex',
         background: '#0a0a0a',
         border: FIELD_BORDER,
-        borderRadius: '8px',
-        padding: '2px',
+        borderRadius: '8rem',
+        padding: '2rem',
       }}
     >
       {options.map((option) => {
@@ -451,10 +451,10 @@ export function SegmentedControl<T extends string>({
               background: selected ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
               border: 'none',
               color: selected ? '#ffffff' : MUTED,
-              fontSize: '11px',
+              fontSize: '11rem',
               fontWeight: 600,
-              padding: '4px 12px',
-              borderRadius: '6px',
+              padding: '4rem 12rem',
+              borderRadius: '6rem',
               cursor: 'pointer',
             }}
           >
@@ -483,12 +483,12 @@ export const AlertIcon: React.FC<{ variant: AlertVariant }> = ({ variant }) => (
     aria-hidden
     style={{
       flexShrink: 0,
-      width: '16px',
-      height: '16px',
-      border: `1.6px solid ${ALERT_COLORS[variant]}`,
+      width: '16rem',
+      height: '16rem',
+      border: `1.6rem solid ${ALERT_COLORS[variant]}`,
       borderRadius: '50%',
       color: ALERT_COLORS[variant],
-      fontSize: '10px',
+      fontSize: '10rem',
       lineHeight: 1,
       display: 'flex',
       alignItems: 'center',
@@ -509,12 +509,12 @@ export interface AlertAction {
 
 const alertActionStyle = (secondary: boolean): React.CSSProperties => ({
   background: 'none',
-  border: secondary ? '1px solid #3f3f46' : `1px solid ${WHITE}`,
+  border: secondary ? '1rem solid #3f3f46' : `1rem solid ${WHITE}`,
   color: secondary ? MUTED : WHITE,
-  borderRadius: '7px',
-  fontSize: '11.5px',
+  borderRadius: '7rem',
+  fontSize: '11.5rem',
   fontWeight: 600,
-  padding: '4px 11px',
+  padding: '4rem 11rem',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
   flexShrink: 0,
@@ -536,19 +536,19 @@ export const AlertCard: React.FC<{
     role="alert"
     style={{
       display: 'flex',
-      gap: '10px',
+      gap: '10rem',
       alignItems: 'flex-start',
       background: '#000000',
       border: FIELD_BORDER,
-      borderRadius: '10px',
-      padding: '11px 13px',
-      fontSize: '12.5px',
+      borderRadius: '10rem',
+      padding: '11rem 13rem',
+      fontSize: '12.5rem',
       color: '#ffffff',
       lineHeight: 1.5,
       ...style,
     }}
   >
-    <span style={{ marginTop: '1px', display: 'flex' }}>
+    <span style={{ marginTop: '1rem', display: 'flex' }}>
       <AlertIcon variant={variant} />
     </span>
     <span style={{ flex: 1, minWidth: 0, fontWeight: 400 }}>{children}</span>

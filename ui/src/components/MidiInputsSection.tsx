@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Bluetooth } from 'lucide-react';
+import { Bluetooth } from './icons';
 import type { AudioDevice } from '../hooks/useAudioDevice';
 import { ChoiceIndicator, FieldRow, FIELD_BORDER, outlinedFieldStyle } from './controls';
 import { MUTED, SUBTLE } from './theme';
@@ -35,14 +35,14 @@ export const MidiInputsSection: React.FC<{ device: AudioDevice }> = ({ device })
       label="MIDI Inputs"
       help="Enable the devices you want to control the plugin with. Set what each knob or pedal does in Plugin Settings → MIDI Mapping."
     >
-      <div style={{ border: FIELD_BORDER, borderRadius: '10px', overflow: 'hidden' }}>
+      <div style={{ border: FIELD_BORDER, borderRadius: '10rem', overflow: 'hidden' }}>
         {inputs.length === 0 ? (
           <p
             style={{
               margin: 0,
-              padding: '20px',
+              padding: '20rem',
               textAlign: 'center',
-              fontSize: '12px',
+              fontSize: '12rem',
               fontWeight: 400,
               fontStyle: 'italic',
               color: SUBTLE,
@@ -60,9 +60,9 @@ export const MidiInputsSection: React.FC<{ device: AudioDevice }> = ({ device })
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: '12rem',
                 width: '100%',
-                padding: '11px 13px',
+                padding: '11rem 13rem',
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
@@ -77,7 +77,7 @@ export const MidiInputsSection: React.FC<{ device: AudioDevice }> = ({ device })
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  fontSize: '14px',
+                  fontSize: '14rem',
                   fontWeight: 400,
                   color: input.enabled ? '#ffffff' : MUTED,
                   overflow: 'hidden',
@@ -88,7 +88,7 @@ export const MidiInputsSection: React.FC<{ device: AudioDevice }> = ({ device })
                 {input.name}
               </span>
               {input.enabled && (
-                <span style={{ fontSize: '11px', fontWeight: 400, color: SUBTLE, flexShrink: 0 }}>
+                <span style={{ fontSize: '11rem', fontWeight: 400, color: SUBTLE, flexShrink: 0 }}>
                   enabled
                 </span>
               )}
@@ -102,15 +102,15 @@ export const MidiInputsSection: React.FC<{ device: AudioDevice }> = ({ device })
           style={{
             ...outlinedFieldStyle,
             width: '100%',
-            marginTop: '10px',
-            padding: '12px 16px',
+            marginTop: '10rem',
+            padding: '12rem 16rem',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '8px',
+            gap: '8rem',
             fontWeight: 600,
-            fontSize: '13px',
+            fontSize: '13rem',
           }}
         >
           <Bluetooth size={14} />

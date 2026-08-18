@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { X as XIcon, Laptop, Info, Gauge } from 'lucide-react';
+import { X as XIcon, Laptop, Info, Gauge } from './icons';
 import { useParameter } from '../hooks/useParameter';
 import { useNativeFunction } from '../hooks/useFunction';
 import { setHintsEnabled, useHintsEnabled } from './helpText';
@@ -97,7 +97,7 @@ const TabBar: React.FC<{
   return (
     <div
       role="tablist"
-      style={{ display: 'flex', borderBottom: FIELD_BORDER, marginBottom: '28px' }}
+      style={{ display: 'flex', borderBottom: FIELD_BORDER, marginBottom: '28rem' }}
     >
       {tabs.map((tab) => {
         const selected = tab.id === active;
@@ -112,14 +112,14 @@ const TabBar: React.FC<{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px',
-              padding: '12px 0',
+              gap: '8rem',
+              padding: '12rem 0',
               background: 'transparent',
               border: 'none',
-              borderBottom: `2px solid ${selected ? '#ffffff' : 'transparent'}`,
-              marginBottom: '-1px',
+              borderBottom: `2rem solid ${selected ? '#ffffff' : 'transparent'}`,
+              marginBottom: '-1rem',
               color: selected ? '#ffffff' : SUBTLE,
-              fontSize: '14px',
+              fontSize: '14rem',
               fontWeight: 600,
               cursor: 'pointer',
             }}
@@ -204,10 +204,10 @@ export const Settings: React.FC<SettingsProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '20px',
+        marginBottom: '20rem',
       }}
     >
-      <span style={{ fontSize: '22px', fontWeight: 600, color: '#ffffff' }}>Settings</span>
+      <span style={{ fontSize: '22rem', fontWeight: 600, color: '#ffffff' }}>Settings</span>
       <button
         onClick={onClose}
         style={{
@@ -217,7 +217,7 @@ export const Settings: React.FC<SettingsProps> = ({
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          padding: '4px',
+          padding: '4rem',
         }}
       >
         <XIcon size={20} />
@@ -235,12 +235,12 @@ export const Settings: React.FC<SettingsProps> = ({
       />
 
       <div
-        style={{ marginBottom: `${SECTION_GAP}px` }}
+        style={{ marginBottom: `${SECTION_GAP}rem` }}
         role="radiogroup"
         aria-label="NAM A2 Size"
       >
         <span style={sectionLabelStyle}>NAM A2 Size</span>
-        <p style={{ ...descriptionStyle, marginBottom: '18px' }}>
+        <p style={{ ...descriptionStyle, marginBottom: '18rem' }}>
           Applies to every NAM tone in this plugin instance and saves with your
           session; also switchable from LITE/FULL in the info bar.
         </p>
@@ -269,7 +269,7 @@ export const Settings: React.FC<SettingsProps> = ({
         onChange={setCalibrationEnabled}
       >
         {calibrationEnabled && (
-          <div style={{ marginTop: '14px' }}>
+          <div style={{ marginTop: '14rem' }}>
             {/* Kill the webkit number-input chrome (spinners, focus ring). */}
             <style>
               {`.settings-number-input::-webkit-outer-spin-button,
@@ -297,7 +297,7 @@ export const Settings: React.FC<SettingsProps> = ({
                 style={{
                   ...outlinedFieldStyle,
                   width: '100%',
-                  padding: '12px 52px 12px 16px',
+                  padding: '12rem 52rem 12rem 16rem',
                   appearance: 'none',
                   WebkitAppearance: 'none',
                 }}
@@ -305,11 +305,11 @@ export const Settings: React.FC<SettingsProps> = ({
               <span
                 style={{
                   position: 'absolute',
-                  right: '16px',
+                  right: '16rem',
                   top: '50%',
                   transform: 'translateY(-50%)',
                   color: GRAY,
-                  fontSize: '14px',
+                  fontSize: '14rem',
                   fontWeight: 700,
                   pointerEvents: 'none',
                 }}
@@ -317,7 +317,7 @@ export const Settings: React.FC<SettingsProps> = ({
                 dBu
               </span>
             </div>
-            <p style={{ ...descriptionStyle, fontSize: '12px', marginTop: '8px' }}>
+            <p style={{ ...descriptionStyle, fontSize: '12rem', marginTop: '8rem' }}>
               Set the dBu level that matches your DAW's max digital level. Typical values: +12 dBu
               (professional gear), +4 dBu (semi-pro).{' '}
               <a
@@ -333,23 +333,23 @@ export const Settings: React.FC<SettingsProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: '8px',
-                margin: '14px 0 0',
-                fontSize: '12px',
+                gap: '8rem',
+                margin: '14rem 0 0',
+                fontSize: '12rem',
                 fontWeight: 400,
                 color: WHITE,
                 lineHeight: 1.45,
               }}
             >
-              <Info size={14} style={{ flexShrink: 0, marginTop: '1px', color: WHITE }} aria-hidden />
+              <Info size={14} style={{ flexShrink: 0, marginTop: '1rem', color: WHITE }} aria-hidden />
               <span>
                 Captures that include calibration data show a{' '}
                 <Gauge
                   size={12}
                   style={{
                     display: 'inline',
-                    verticalAlign: '-1px',
-                    margin: '0 2px',
+                    verticalAlign: '-1rem',
+                    margin: '0 2rem',
                     color: WHITE,
                   }}
                   aria-label="gauge"
@@ -371,13 +371,13 @@ export const Settings: React.FC<SettingsProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            marginTop: '4px',
+            gap: '12rem',
+            marginTop: '4rem',
           }}
         >
           <span
             style={{
-              fontSize: '13px',
+              fontSize: '13rem',
               fontWeight: 400,
               color: osEnabled ? '#ffffff' : SUBTLE,
               flexShrink: 0,
@@ -385,7 +385,7 @@ export const Settings: React.FC<SettingsProps> = ({
           >
             Rate
           </span>
-          <div style={{ width: '148px', flexShrink: 0 }}>
+          <div style={{ width: '148rem', flexShrink: 0 }}>
             <SelectField
               value={String(osFactorIndex) as '0' | '1' | '2'}
               options={OS_FACTOR_OPTIONS}
@@ -406,18 +406,18 @@ export const Settings: React.FC<SettingsProps> = ({
 
       {/* MIDI Learn/mapping is plugin-level (reads the processor's MIDI
           buffer), so it belongs here and works in DAW builds too. */}
-      <div style={{ marginBottom: `${SECTION_GAP}px` }}>
+      <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
         <span style={sectionLabelStyle}>MIDI Mapping</span>
-        <p style={{ ...descriptionStyle, marginBottom: '16px' }}>
+        <p style={{ ...descriptionStyle, marginBottom: '16rem' }}>
           Control the plugin from pedals and knobs. Mappings are saved with the plugin and work in
           your DAW too.
         </p>
         <MidiMapSettings chain={chain} chainRight={chainRight} />
       </div>
 
-      <div style={{ marginBottom: `${SECTION_GAP}px` }}>
+      <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
         <span style={sectionLabelStyle}>Diagnostics</span>
-        <p style={{ ...descriptionStyle, marginBottom: '16px' }}>
+        <p style={{ ...descriptionStyle, marginBottom: '16rem' }}>
           Copy recent diagnostic logs to the clipboard and paste them into a bug report.
         </p>
         <button onClick={handleCopyLogs} style={ctaButtonStyle}>
@@ -429,22 +429,22 @@ export const Settings: React.FC<SettingsProps> = ({
             background: 'transparent',
             border: 'none',
             color: SUBTLE,
-            fontSize: '12px',
+            fontSize: '12rem',
             cursor: 'pointer',
-            padding: '10px 0 0',
+            padding: '10rem 0 0',
           }}
         >
           Reveal log file on disk
         </button>
         {logStatus && (
-          <p style={{ ...descriptionStyle, fontSize: '12px', marginTop: '8px' }}>{logStatus}</p>
+          <p style={{ ...descriptionStyle, fontSize: '12rem', marginTop: '8rem' }}>{logStatus}</p>
         )}
       </div>
 
       {/* Version footer. When the startup check found a newer build (even if
           its modal was dismissed), offer the update here too. */}
       {(version || update) && (
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: '8rem' }}>
           {update && (
             <a
               href={update.url}
@@ -455,14 +455,14 @@ export const Settings: React.FC<SettingsProps> = ({
                 display: 'block',
                 boxSizing: 'border-box',
                 textDecoration: 'none',
-                marginBottom: '12px',
+                marginBottom: '12rem',
               }}
             >
               Update to v{update.version}
             </a>
           )}
           {version && (
-            <p style={{ ...descriptionStyle, fontSize: '12px', color: SUBTLE, margin: 0 }}>
+            <p style={{ ...descriptionStyle, fontSize: '12rem', color: SUBTLE, margin: 0 }}>
               TONE3000 v{version}
             </p>
           )}
@@ -486,9 +486,9 @@ export const Settings: React.FC<SettingsProps> = ({
     >
       <div
         style={{
-          maxWidth: '480px',
+          maxWidth: '480rem',
           margin: '0 auto',
-          padding: '28px 24px 40px',
+          padding: '28rem 24rem 40rem',
           color: '#ffffff',
           boxSizing: 'border-box',
         }}

@@ -5,6 +5,7 @@ import { formatFreq } from './eqMath';
 import { clamp, hasGain, TYPE_GLYPHS } from './eqShared';
 import { BODY_PADDING } from './chainLayout';
 import { HELP, helpProps, pinHelp, unpinHelp } from './helpText';
+import { getUiScale } from '../hooks/useUiScale';
 
 /**
  * Mesa-style graphic-EQ view: six gain faders mirroring the same bands as
@@ -71,12 +72,14 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
   const trackW = Math.max(4, Math.round(size * 0.27));
   const thumbPad = Math.ceil(capH / 2); // keeps the cap inside the travel
 
+  // Pointer math runs in real px (rects and clientY), so the design-space
+  // thumbPad has to be scaled up to match (1 design px = getUiScale() px).
   const travelOf = (e: React.PointerEvent<HTMLDivElement>) =>
-    Math.max(1, e.currentTarget.getBoundingClientRect().height - 2 * thumbPad);
+    Math.max(1, e.currentTarget.getBoundingClientRect().height - 2 * thumbPad * getUiScale());
 
   const gainFromEvent = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const t = clamp((e.clientY - rect.top - thumbPad) / travelOf(e), 0, 1);
+    const t = clamp((e.clientY - rect.top - thumbPad * getUiScale()) / travelOf(e), 0, 1);
     return (1 - t) * 2 * EQ_MAX_ABS_GAIN_DB - EQ_MAX_ABS_GAIN_DB;
   };
 
@@ -137,7 +140,7 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
         flexDirection: 'column',
         // Spectrum/dB rules bleed edge-to-edge behind; faders + labels keep
         // the card body's BODY_PADDING gutters.
-        padding: `${BODY_PADDING}px 0 ${AXIS_LABEL_INSET}px`,
+        padding: `${BODY_PADDING}rem 0 ${AXIS_LABEL_INSET}rem`,
         boxSizing: 'border-box',
       }}
     >
@@ -149,8 +152,8 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
             position: 'absolute',
             left: 0,
             right: 0,
-            top: `${thumbPad}px`,
-            bottom: `${thumbPad}px`,
+            top: `${thumbPad}rem`,
+            bottom: `${thumbPad}rem`,
             pointerEvents: 'none',
           }}
         >
@@ -162,7 +165,7 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
                 left: 0,
                 right: 0,
                 top: dbTop(db),
-                height: '1px',
+                height: '1rem',
                 backgroundColor: `rgba(235, 235, 245, ${db === 0 ? 0.18 : 0.06})`,
               }}
             />
@@ -174,10 +177,10 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
               key={`label-${db}`}
               style={{
                 position: 'absolute',
-                left: `${BODY_PADDING}px`,
+                left: `${BODY_PADDING}rem`,
                 top: dbTop(db),
-                transform: 'translateY(2px)',
-                fontSize: '9px',
+                transform: 'translateY(2rem)',
+                fontSize: '9rem',
                 lineHeight: 1,
                 color: AXIS_LABEL_COLOR,
                 whiteSpace: 'nowrap',
@@ -193,7 +196,7 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
             position: 'absolute',
             inset: 0,
             display: 'flex',
-            padding: `0 ${BODY_PADDING}px`,
+            padding: `0 ${BODY_PADDING}rem`,
           }}
         >
           {bands.map((band, i) => {
@@ -225,9 +228,9 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
                     position: 'absolute',
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    top: `${thumbPad}px`,
-                    bottom: `${thumbPad}px`,
-                    width: `${trackW}px`,
+                    top: `${thumbPad}rem`,
+                    bottom: `${thumbPad}rem`,
+                    width: `${trackW}rem`,
                     backgroundColor: 'rgba(50, 50, 50, 0.8)',
                   }}
                 />
@@ -239,9 +242,9 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
                       position: 'absolute',
                       left: '50%',
                       transform: 'translateX(-50%)',
-                      width: `${trackW}px`,
-                      bottom: `${thumbPad}px`,
-                      height: `calc((100% - ${2 * thumbPad}px) * ${t.toFixed(4)})`,
+                      width: `${trackW}rem`,
+                      bottom: `${thumbPad}rem`,
+                      height: `calc((100% - ${2 * thumbPad}rem) * ${t.toFixed(4)})`,
                       background: SLIDER_FILL_GRADIENT,
                     }}
                   />
@@ -251,18 +254,18 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
                   style={{
                     position: 'absolute',
                     left: '50%',
-                    top: `calc((100% - ${2 * thumbPad}px) * ${(1 - t).toFixed(4)} + ${thumbPad}px)`,
+                    top: `calc((100% - ${2 * thumbPad}rem) * ${(1 - t).toFixed(4)} + ${thumbPad}rem)`,
                     transform: 'translate(-50%, -50%)',
-                    width: `${capW}px`,
-                    height: `${capH}px`,
+                    width: `${capW}rem`,
+                    height: `${capH}rem`,
                     background: 'linear-gradient(180deg, #FFFFFF 0%, #D6D6DB 100%)',
-                    border: '1px solid #000000',
+                    border: '1rem solid #000000',
                     boxSizing: 'border-box',
                     display: 'flex',
                     alignItems: 'center',
                   }}
                 >
-                  <div style={{ width: '100%', height: '2px', backgroundColor: '#000000' }} />
+                  <div style={{ width: '100%', height: '2rem', backgroundColor: '#000000' }} />
                 </div>
               </div>
             );
@@ -275,10 +278,10 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
           visible without a dedicated row. */}
       <div
         style={{
-          height: `${SLIDER_FREQ_ROW_H}px`,
+          height: `${SLIDER_FREQ_ROW_H}rem`,
           display: 'flex',
           flexShrink: 0,
-          padding: `0 ${BODY_PADDING}px`,
+          padding: `0 ${BODY_PADDING}rem`,
           boxSizing: 'border-box',
         }}
       >
@@ -296,8 +299,8 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '4px',
-                fontSize: '9px',
+                gap: '4rem',
+                fontSize: '9rem',
                 color: showReadout ? '#ffffff' : AXIS_LABEL_COLOR,
                 fontVariantNumeric: 'tabular-nums',
                 whiteSpace: 'nowrap',
@@ -308,7 +311,10 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
               ) : (
                 <>
                   {showGlyph && (
-                    <svg width={12} height={11} viewBox="0 0 16 14" style={{ flexShrink: 0 }}>
+                    <svg
+                      viewBox="0 0 16 14"
+                      style={{ width: '12rem', height: '11rem', flexShrink: 0 }}
+                    >
                       <path
                         d={TYPE_GLYPHS[band.type]}
                         fill="none"

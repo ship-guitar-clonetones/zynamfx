@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, Equal, Power } from 'lucide-react';
+import { rem } from '../hooks/useUiScale';
+import { ChevronDown, Equal, Power } from './icons';
 import { KnobControl } from './KnobControl';
 import { balanceDbScale, gainDbScale, gateDbScale, toneScale } from './knobScale';
 import { SpreadGroup } from './SpreadControls';
@@ -59,12 +60,10 @@ const PowerButton: React.FC<{
 /** Two overlapping circles, the classic stereo glyph (lucide has none). */
 const StereoIcon: React.FC<{ style?: React.CSSProperties }> = ({ style }) => (
   <svg
-    width={17}
-    height={10}
     viewBox="0 0 17 10"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    style={{ display: 'block', flexShrink: 0, ...style }}
+    style={{ width: rem(17), height: rem(10), display: 'block', flexShrink: 0, ...style }}
   >
     <circle cx="5" cy="5" r="4.375" stroke="currentColor" strokeWidth="1.25" />
     <circle cx="11.6665" cy="5" r="4.375" stroke="currentColor" strokeWidth="1.25" />
@@ -82,7 +81,7 @@ const InputModeGlyph: React.FC<{ mode: InputMode }> = ({ mode }) =>
   mode === 'stereo' ? (
     <StereoIcon />
   ) : (
-    <span style={{ fontFamily: 'monospace', fontSize: '11px', fontWeight: 700, lineHeight: 1 }}>
+    <span style={{ fontFamily: 'monospace', fontSize: '11rem', fontWeight: 700, lineHeight: 1 }}>
       {mode === 'left' ? 'L' : 'R'}
     </span>
   );
@@ -120,7 +119,7 @@ const InputModeButton: React.FC<{
       ref={rootRef}
       style={{
         position: 'relative',
-        transform: `translateY(${CHROME_LIFT}px)`,
+        transform: `translateY(${CHROME_LIFT}rem)`,
         zIndex: open ? 300 : undefined,
       }}
     >
@@ -132,19 +131,19 @@ const InputModeButton: React.FC<{
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '3px',
-          height: `${ICON_BOX_SIZE}px`,
-          padding: '0 2px',
+          gap: '3rem',
+          height: `${ICON_BOX_SIZE}rem`,
+          padding: '0 2rem',
           boxSizing: 'border-box',
           background: mode !== 'stereo' ? HIGHLIGHT : 'transparent',
-          border: '1px solid transparent',
-          borderRadius: `${ICON_BOX_RADIUS}px`,
+          border: '1rem solid transparent',
+          borderRadius: `${ICON_BOX_RADIUS}rem`,
           color: WHITE,
           cursor: 'pointer',
           flexShrink: 0,
         }}
       >
-        <span style={{ display: 'grid', placeItems: 'center', width: `${ICON_SIZE + 3}px` }}>
+        <span style={{ display: 'grid', placeItems: 'center', width: `${ICON_SIZE + 3}rem` }}>
           <InputModeGlyph mode={mode} />
         </span>
         <ChevronDown size={10} style={{ display: 'block', flexShrink: 0, color: MUTED }} />
@@ -154,21 +153,21 @@ const InputModeButton: React.FC<{
         <div
           style={{
             position: 'absolute',
-            bottom: 'calc(100% + 14px)',
+            bottom: 'calc(100% + 14rem)',
             left: 0,
-            minWidth: '172px',
+            minWidth: '172rem',
             backgroundColor: '#141416',
             border: BORDER,
-            borderRadius: '14px',
-            padding: '12px 8px 8px',
+            borderRadius: '14rem',
+            padding: '12rem 8rem 8rem',
             zIndex: 200,
             boxSizing: 'border-box',
           }}
         >
           <div
             style={{
-              padding: '0 12px 8px',
-              fontSize: '11px',
+              padding: '0 12rem 8rem',
+              fontSize: '11rem',
               fontWeight: 600,
               letterSpacing: '0.05em',
               color: SUBTLE,
@@ -189,14 +188,14 @@ const InputModeButton: React.FC<{
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: '12rem',
                 width: '100%',
-                padding: '9px 12px',
+                padding: '9rem 12rem',
                 background: 'transparent',
                 border: 'none',
-                borderRadius: '8px',
+                borderRadius: '8rem',
                 color: option.mode === mode ? WHITE : MUTED,
-                fontSize: '13px',
+                fontSize: '13rem',
                 fontWeight: 400,
                 textAlign: 'left',
                 cursor: 'pointer',
@@ -207,7 +206,7 @@ const InputModeButton: React.FC<{
                 style={{
                   display: 'grid',
                   placeItems: 'center',
-                  width: `${ICON_BOX_SIZE}px`,
+                  width: `${ICON_BOX_SIZE}rem`,
                   flexShrink: 0,
                 }}
               >
@@ -275,7 +274,7 @@ const OutputGainKnob: React.FC<{
   // the group's footprint is constant; toggling stereo/spread must not
   // shift the plate (it's laid out with space-between).
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: '10px' }}>
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: '10rem' }}>
       <div style={{ visibility: autoBalance ? 'visible' : 'hidden' }}>
         <AutoBalanceButton />
       </div>
@@ -347,7 +346,7 @@ export const Faceplate = React.memo(function Faceplate({
     <div
       style={{
         width: '100%',
-        height: `${PLATE_HEIGHT}px`,
+        height: `${PLATE_HEIGHT}rem`,
         display: 'flex',
         // Five peers (Input, Gate, Tone, Spread/Align, Output) share the
         // plate width. flex-end keeps the secondary Gate on the same label
@@ -357,11 +356,11 @@ export const Faceplate = React.memo(function Faceplate({
         flexShrink: 0,
         borderTop: BORDER,
         background: '#1C1C1E',
-        padding: '16px 24px',
+        padding: '16rem 24rem',
         boxSizing: 'border-box',
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', gap: '10rem' }}>
         <KnobControl
           label="Input"
           value={inputLevel}
@@ -382,7 +381,7 @@ export const Faceplate = React.memo(function Faceplate({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'flex-end',
-          gap: '10px',
+          gap: '10rem',
           opacity: gateEnabled ? 1 : 0.55,
         }}
       >
@@ -409,11 +408,11 @@ export const Faceplate = React.memo(function Faceplate({
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'flex-end',
-          gap: '10px',
+          gap: '10rem',
           opacity: toneEqEnabled ? 1 : 0.55,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24rem' }}>
           <KnobControl
             label="Bass"
             value={toneBass}

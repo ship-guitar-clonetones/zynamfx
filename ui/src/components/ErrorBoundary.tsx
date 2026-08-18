@@ -65,27 +65,27 @@ export class ErrorBoundary extends React.Component<
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 16,
-          padding: 32,
+          gap: '16rem',
+          padding: '32rem',
           textAlign: 'center',
           fontFamily: 'system-ui, -apple-system, sans-serif',
         }}
       >
-        <div style={{ fontSize: 14, fontWeight: 400 }}>Something went wrong</div>
+        <div style={{ fontSize: '14rem', fontWeight: 400 }}>Something went wrong</div>
         <div
           style={{
-            fontSize: 13,
+            fontSize: '13rem',
             fontWeight: 400,
             color: MUTED,
-            maxWidth: 360,
-            maxHeight: 120,
+            maxWidth: '360rem',
+            maxHeight: '120rem',
             overflow: 'hidden',
             wordBreak: 'break-word',
           }}
         >
           {this.state.error.message}
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: '12rem' }}>
           <button type="button" onClick={this.reload} style={filledPillButtonStyle}>
             Reload UI
           </button>
@@ -93,7 +93,7 @@ export class ErrorBoundary extends React.Component<
             Copy logs
           </button>
         </div>
-        <div style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>
+        <div style={{ fontSize: '12rem', fontWeight: 400, color: MUTED }}>
           The error has been written to the TONE3000 log file.
         </div>
       </div>

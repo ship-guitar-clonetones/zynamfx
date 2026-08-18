@@ -17,11 +17,11 @@ export const LoadingDots: React.FC = () => (
       <span
         key={i}
         style={{
-          width: '8px',
-          height: '8px',
+          width: '8rem',
+          height: '8rem',
           borderRadius: '50%',
           backgroundColor: '#e4e4e7',
-          margin: '0 2px',
+          margin: '0 2rem',
           animation: 't3kDotsBlink 1.4s infinite both',
           animationDelay: `${i * 0.2}s`,
         }}
@@ -44,10 +44,10 @@ export const BusyOverlay: React.FC<BusyOverlayProps> = ({ align = 'top', zIndex 
       display: 'flex',
       alignItems: align === 'top' ? 'flex-start' : 'center',
       justifyContent: 'center',
-      paddingTop: align === 'top' ? '64px' : 0,
+      paddingTop: align === 'top' ? '64rem' : 0,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      backdropFilter: 'blur(4px)',
-      WebkitBackdropFilter: 'blur(4px)',
+      backdropFilter: 'blur(4rem)',
+      WebkitBackdropFilter: 'blur(4rem)',
       zIndex,
     }}
   >

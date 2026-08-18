@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowUpDown, Link, PlusCircle } from 'lucide-react';
+import { ArrowUpDown, Link, PlusCircle } from './icons';
 import { GalleryBlock, AddTile } from './GalleryBlock';
 import type { AddTileRouting } from './GalleryBlock';
 import { KnobControl } from './KnobControl';
@@ -71,8 +71,8 @@ export const gapCenterX = (gapIndex: number, tileSize: number) =>
 
 /** Filled white disc; set-branch and clear-branch share the same look. */
 const branchDotStyle: React.CSSProperties = {
-  width: `${BRANCH_CIRCLE_SIZE}px`,
-  height: `${BRANCH_CIRCLE_SIZE}px`,
+  width: `${BRANCH_CIRCLE_SIZE}rem`,
+  height: `${BRANCH_CIRCLE_SIZE}rem`,
   borderRadius: '50%',
   backgroundColor: WHITE,
   border: 'none',
@@ -86,10 +86,10 @@ const branchDotStyle: React.CSSProperties = {
     run is the hit/hover area, the button itself stays hidden until then. */
 const branchGapStyle = (centerX: number): React.CSSProperties => ({
   position: 'absolute',
-  left: `${centerX - TILE_GAP / 2}px`,
+  left: `${centerX - TILE_GAP / 2}rem`,
   top: 0,
   bottom: 0,
-  width: `${TILE_GAP}px`,
+  width: `${TILE_GAP}rem`,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -171,7 +171,7 @@ const GhostRail: React.FC<{ slots: number; tileSize: number }> = ({ slots, tileS
       display: 'flex',
       flexDirection: 'row',
       alignItems: 'center',
-      gap: `${TILE_GAP}px`,
+      gap: `${TILE_GAP}rem`,
       pointerEvents: 'none',
       zIndex: 1,
     }}
@@ -180,8 +180,8 @@ const GhostRail: React.FC<{ slots: number; tileSize: number }> = ({ slots, tileS
       <span
         key={`${i}-rail`}
         style={{
-          width: `${tileSize}px`,
-          height: `${tileSize}px`,
+          width: `${tileSize}rem`,
+          height: `${tileSize}rem`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -193,10 +193,10 @@ const GhostRail: React.FC<{ slots: number; tileSize: number }> = ({ slots, tileS
           <div
             style={{
               position: 'absolute',
-              left: `${-(TILE_GAP + tileSize / 2 - RAIL_CIRCLE_RADIUS)}px`,
+              left: `${-(TILE_GAP + tileSize / 2 - RAIL_CIRCLE_RADIUS)}rem`,
               top: '50%',
-              width: `${TILE_GAP + tileSize - 2 * RAIL_CIRCLE_RADIUS}px`,
-              height: '1px',
+              width: `${TILE_GAP + tileSize - 2 * RAIL_CIRCLE_RADIUS}rem`,
+              height: '1rem',
               backgroundColor: '#ffffff',
             }}
           />
@@ -263,7 +263,7 @@ export const GalleryLane: React.FC<{
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
-        gap: `${TILE_GAP}px`,
+        gap: `${TILE_GAP}rem`,
         position: 'relative',
         zIndex: 2,
       }}
@@ -311,7 +311,7 @@ const PanRailChips: React.FC<{
 }> = ({ solo, invert, soloHelp, invertHelp, onSolo, onInvert }) => {
   const cell = (on: boolean): React.CSSProperties => ({
     ...segmentedCellStyle(false),
-    minWidth: `${ICON_BOX_SIZE}px`,
+    minWidth: `${ICON_BOX_SIZE}rem`,
     color: on ? BLACK : MUTED,
     backgroundColor: on ? BRAND_YELLOW : 'transparent',
   });
@@ -384,13 +384,13 @@ export const StereoPanRail: React.FC = () => {
     flex: 1,
     width: 0,
     borderLeft: BORDER,
-    margin: '6px 0',
+    margin: '6rem 0',
   };
   const panKnobWrap: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 6,
+    gap: '6rem',
   };
 
   return (
@@ -400,7 +400,7 @@ export const StereoPanRail: React.FC = () => {
         flexDirection: 'column',
         alignItems: 'center',
         alignSelf: 'center',
-        height: `${STEREO_TILE_SIZE * 2 + LANE_GAP}px`,
+        height: `${STEREO_TILE_SIZE * 2 + LANE_GAP}rem`,
         flexShrink: 0,
       }}
     >
@@ -438,10 +438,10 @@ export const StereoPanRail: React.FC = () => {
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: '4px',
+          gap: '4rem',
           border: BORDER,
-          borderRadius: '9999px',
-          padding: '3px 5px',
+          borderRadius: '9999rem',
+          padding: '3rem 5rem',
         }}
       >
         <ChromeIconButton
@@ -516,19 +516,19 @@ export const BranchElbow: React.FC<{ x: number; tileSize: number; trunkOnTop: bo
       <div
         style={{
           ...line,
-          left: `${x}px`,
-          top: `${topLaneCenter}px`,
-          width: '1px',
-          height: `${bottomLaneCenter - topLaneCenter}px`,
+          left: `${x}rem`,
+          top: `${topLaneCenter}rem`,
+          width: '1rem',
+          height: `${bottomLaneCenter - topLaneCenter}rem`,
         }}
       />
       <div
         style={{
           ...line,
-          left: `${x}px`,
-          top: `${stubY}px`,
-          width: `${TILE_GAP / 2}px`,
-          height: '1px',
+          left: `${x}rem`,
+          top: `${stubY}rem`,
+          width: `${TILE_GAP / 2}rem`,
+          height: '1rem',
         }}
       />
     </>
@@ -543,8 +543,13 @@ export const EdgeFade: React.FC<{ side: 'left' | 'right' }> = ({ side }) => (
       position: 'absolute',
       top: 0,
       bottom: 0,
-      [side]: 0,
-      width: `${EDGE_FADE_WIDTH}px`,
+      // Overhang the outer edge by a design px: at fractional UI scales the
+      // scrollport's clip edge and this overlay can round to different
+      // device pixels, which would leave a subpixel strip of content visible
+      // just past the fade. The overhang end is solid black over the black
+      // background, so it never shows.
+      [side]: '-1rem',
+      width: `${EDGE_FADE_WIDTH + 1}rem`,
       background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, #000000, rgba(0, 0, 0, 0))`,
       pointerEvents: 'none',
       zIndex: 3,

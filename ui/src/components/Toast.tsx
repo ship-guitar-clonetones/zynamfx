@@ -64,22 +64,22 @@ export const ToastProvider: React.FC<{
           style={{
             position: 'absolute',
             left: '50%',
-            bottom: `${bottom}px`,
+            bottom: `${bottom}rem`,
             transform: 'translateX(-50%)',
             backgroundColor: WHITE,
             color: BLACK,
-            fontSize: '16px',
+            fontSize: '16rem',
             fontWeight: 700,
             lineHeight: 1,
-            padding: '14px 24px',
-            borderRadius: '16px',
+            padding: '14rem 24rem',
+            borderRadius: '16rem',
             whiteSpace: 'nowrap',
             zIndex: 1000,
             pointerEvents: 'none',
             animation: 'toast-in 0.16s ease-out',
           }}
         >
-          <style>{`@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 6px); } }`}</style>
+          <style>{`@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 6rem); } }`}</style>
           {message}
         </div>
       )}

@@ -9,7 +9,7 @@ import {
   Save,
   Search,
   Trash2,
-} from 'lucide-react';
+} from './icons';
 import { DragDropProvider } from '@dnd-kit/react';
 import { isSortable, useSortable } from '@dnd-kit/react/sortable';
 import { arrayMove } from '@dnd-kit/helpers';
@@ -37,12 +37,12 @@ const PANEL_BG = '#141416';
 
 const panelStyle: React.CSSProperties = {
   position: 'absolute',
-  top: 'calc(100% + 10px)',
-  left: '-8px',
+  top: 'calc(100% + 10rem)',
+  left: '-8rem',
   backgroundColor: PANEL_BG,
   border: BORDER,
-  borderRadius: '14px',
-  padding: '16px',
+  borderRadius: '14rem',
+  padding: '16rem',
   zIndex: 200,
   boxSizing: 'border-box',
 };
@@ -52,20 +52,20 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
   backgroundColor: '#1C1C1E',
   border: BORDER,
-  borderRadius: '10px',
+  borderRadius: '10rem',
   color: '#ffffff',
-  fontSize: '13px',
+  fontSize: '13rem',
   // Typed text and placeholders are body text: reset the global 600 default.
   fontWeight: 400,
-  padding: '9px 12px',
+  padding: '9rem 12rem',
   outline: 'none',
 };
 
 const sectionHeaderStyle: React.CSSProperties = {
   color: GRAY,
-  fontSize: '14px',
+  fontSize: '14rem',
   fontWeight: 700,
-  padding: '8px 4px',
+  padding: '8rem 4rem',
 };
 
 const iconButtonStyle: React.CSSProperties = {
@@ -76,8 +76,8 @@ const iconButtonStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   cursor: 'pointer',
-  borderRadius: '4px',
-  padding: '5px',
+  borderRadius: '4rem',
+  padding: '5rem',
 };
 
 type PresetGroup = 'factory' | 'user';
@@ -126,13 +126,13 @@ const PresetRow: React.FC<PresetRowProps> = ({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        height: '32px',
-        padding: '0 4px',
+        gap: '8rem',
+        height: '32rem',
+        padding: '0 4rem',
         opacity: isDragging ? 0.75 : 1,
       }}
     >
-      <span style={{ width: '16px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+      <span style={{ width: '16rem', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         {isActive && <Check size={14} color="#ffffff" />}
       </span>
       {isRenaming ? (
@@ -145,7 +145,7 @@ const PresetRow: React.FC<PresetRowProps> = ({
             if (e.key === 'Enter') onCommitRename();
             if (e.key === 'Escape') onCancelRename();
           }}
-          style={{ ...inputStyle, padding: '4px 8px', borderRadius: '6px', flex: 1 }}
+          style={{ ...inputStyle, padding: '4rem 8rem', borderRadius: '6rem', flex: 1 }}
         />
       ) : (
         <button
@@ -156,7 +156,7 @@ const PresetRow: React.FC<PresetRowProps> = ({
             border: 'none',
             textAlign: 'left',
             color: isActive ? '#ffffff' : MUTED,
-            fontSize: '14px',
+            fontSize: '14rem',
             fontWeight: 400,
             cursor: 'pointer',
             padding: 0,
@@ -176,7 +176,7 @@ const PresetRow: React.FC<PresetRowProps> = ({
           {...helpProps(HELP.presetDrag)}
           style={{
             ...iconButtonStyle,
-            padding: '3px',
+            padding: '3rem',
             flexShrink: 0,
             cursor: isDragging ? 'grabbing' : 'grab',
             // Keep the list from claiming the gesture on touch.
@@ -192,14 +192,14 @@ const PresetRow: React.FC<PresetRowProps> = ({
             <button
               onClick={onStartRename}
               {...helpProps(HELP.presetRename)}
-              style={{ ...iconButtonStyle, padding: '3px' }}
+              style={{ ...iconButtonStyle, padding: '3rem' }}
             >
               <Pencil size={13} />
             </button>
             <button
               onClick={onDelete}
               {...helpProps(HELP.presetDelete)}
-              style={{ ...iconButtonStyle, padding: '3px' }}
+              style={{ ...iconButtonStyle, padding: '3rem' }}
             >
               <Trash2 size={13} />
             </button>
@@ -314,7 +314,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
     alignItems: 'center',
     justifyContent: 'center',
     cursor: presets.length > 0 ? 'pointer' : 'default',
-    padding: '0 4px',
+    padding: '0 4rem',
     alignSelf: 'stretch',
   };
 
@@ -379,17 +379,17 @@ export const PresetBar: React.FC<PresetBarProps> = ({
   return (
     <div
       ref={containerRef}
-      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8rem' }}
     >
       {/* ‹ name › pill */}
       <div
         style={{
           display: 'flex',
           alignItems: 'stretch',
-          height: '36px',
-          borderRadius: '8px',
+          height: '36rem',
+          borderRadius: '8rem',
           backgroundColor: '#1C1C1E',
-          padding: '0 4px',
+          padding: '0 4rem',
           flexShrink: 0,
         }}
       >
@@ -403,19 +403,19 @@ export const PresetBar: React.FC<PresetBarProps> = ({
             background: 'transparent',
             border: 'none',
             color: active ? '#ffffff' : MUTED,
-            fontSize: '14px',
+            fontSize: '14rem',
             fontWeight: 400,
             cursor: 'pointer',
             // Constant width so the pill never resizes with the name; long
             // names ellipsize. Full pill height is the click target.
-            width: '150px',
+            width: '150rem',
             height: '100%',
-            lineHeight: '36px',
+            lineHeight: '36rem',
             textAlign: 'center',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            padding: '0 6px',
+            padding: '0 6rem',
           }}
         >
           {active?.name ?? 'Presets'}
@@ -432,9 +432,9 @@ export const PresetBar: React.FC<PresetBarProps> = ({
 
       {/* Save popover */}
       {open === 'save' && (
-        <div style={{ ...panelStyle, width: '280px' }}>
+        <div style={{ ...panelStyle, width: '280rem' }}>
           <div
-            style={{ color: '#ffffff', fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}
+            style={{ color: '#ffffff', fontSize: '14rem', fontWeight: 600, marginBottom: '12rem' }}
           >
             Save Preset
           </div>
@@ -453,13 +453,13 @@ export const PresetBar: React.FC<PresetBarProps> = ({
             disabled={!saveName.trim()}
             style={{
               width: '100%',
-              marginTop: '12px',
-              padding: '9px 0',
-              borderRadius: '999px',
-              border: '1px solid rgba(235, 235, 245, 0.6)',
+              marginTop: '12rem',
+              padding: '9rem 0',
+              borderRadius: '999rem',
+              border: '1rem solid rgba(235, 235, 245, 0.6)',
               background: 'transparent',
               color: saveName.trim() ? '#ffffff' : MUTED,
-              fontSize: '13px',
+              fontSize: '13rem',
               cursor: saveName.trim() ? 'pointer' : 'default',
             }}
           >
@@ -474,19 +474,19 @@ export const PresetBar: React.FC<PresetBarProps> = ({
         <div
           style={{
             ...panelStyle,
-            width: '360px',
-            padding: '12px 12px 0',
+            width: '360rem',
+            padding: '12rem 12rem 0',
             overflow: 'hidden',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6rem' }}>
             <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
               <Search
                 size={14}
                 color={MUTED}
                 style={{
                   position: 'absolute',
-                  left: '12px',
+                  left: '12rem',
                   top: '50%',
                   transform: 'translateY(-50%)',
                 }}
@@ -496,7 +496,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search presets"
-                style={{ ...inputStyle, padding: '8px 12px 8px 32px', borderRadius: '10px' }}
+                style={{ ...inputStyle, padding: '8rem 12rem 8rem 32rem', borderRadius: '10rem' }}
               />
             </div>
             {presets.length > 1 && (
@@ -506,7 +506,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
                 {...helpProps(HELP.presetReorder)}
                 style={{
                   ...iconButtonStyle,
-                  padding: '7px',
+                  padding: '7rem',
                   flexShrink: 0,
                   color: reordering ? '#ffffff' : MUTED,
                   background: reordering ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
@@ -518,8 +518,8 @@ export const PresetBar: React.FC<PresetBarProps> = ({
           </div>
 
           <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="hide-scrollbar" style={{ maxHeight: '362px', overflowY: 'auto' }}>
-              <div style={{ padding: '10px 0 12px' }}>
+            <div className="hide-scrollbar" style={{ maxHeight: '362rem', overflowY: 'auto' }}>
+              <div style={{ padding: '10rem 0 12rem' }}>
                 {userPresets.length > 0 && (
                   <>
                     <div style={sectionHeaderStyle}>Your Presets</div>
@@ -534,7 +534,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
                 )}
                 {filtered.length === 0 && (
                   <div
-                    style={{ color: MUTED, fontSize: '13px', fontWeight: 400, padding: '12px 4px' }}
+                    style={{ color: MUTED, fontSize: '13rem', fontWeight: 400, padding: '12rem 4rem' }}
                   >
                     {presets.length === 0
                       ? 'No presets yet. Save one to get started.'

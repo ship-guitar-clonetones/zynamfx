@@ -1,4 +1,5 @@
 import React from 'react';
+import { rem } from '../hooks/useUiScale';
 
 /**
  * Compact colorful "T3K" mark, ported inline from `public/t3k-mark.svg`
@@ -10,12 +11,15 @@ import React from 'react';
  */
 export const T3kMark: React.FC<{ height?: number }> = ({ height = 12 }) => (
   <svg
-    width={Math.round((height * 36) / 12)}
-    height={height}
     viewBox="0 0 36 12"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    style={{ display: 'block', flexShrink: 0 }}
+    style={{
+      width: rem(Math.round((height * 36) / 12)),
+      height: rem(height),
+      display: 'block',
+      flexShrink: 0,
+    }}
   >
     <title>T3K</title>
     <g>

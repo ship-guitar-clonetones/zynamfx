@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import { installSpacePassthrough } from './spacePassthrough.ts';
-import { installLegacyZoomPointerFix } from './legacyZoomPointerFix.ts';
 import './index.css';
 
 // A file dropped anywhere on the plugin would make the webview navigate away
@@ -14,10 +13,6 @@ window.addEventListener('drop', (e) => e.preventDefault());
 // Space is the DAW's play/stop key, not ours: swallow it and hand it to the
 // host (see spacePassthrough.ts).
 installSpacePassthrough();
-
-// On legacy-zoom engines, report pointer coordinates in the same space as
-// element rects (see legacyZoomPointerFix.ts).
-installLegacyZoomPointerFix();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

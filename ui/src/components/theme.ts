@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { rem } from '../hooks/useUiScale';
 
 /**
  * Shared theme tokens. The palette is deliberately tiny: black surfaces,
@@ -54,7 +55,7 @@ export const GRAY = '#8D8D93';
 /** Pressed/active fill behind white icons and segmented buttons. */
 export const HIGHLIGHT = 'rgba(235, 235, 245, 0.18)';
 /** Hairline used by every card/section/segment border. */
-export const BORDER = '1px solid rgba(84, 84, 88, 0.65)';
+export const BORDER = '1rem solid rgba(84, 84, 88, 0.65)';
 /** Card body background. */
 export const SURFACE = '#151517';
 /** Raised chrome (card headers, faceplate, pills). */
@@ -69,12 +70,12 @@ export const pillButtonStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  gap: '8px',
-  padding: '7px 16px',
-  fontSize: '13px',
+  gap: '8rem',
+  padding: '7rem 16rem',
+  fontSize: '13rem',
   fontWeight: 400,
-  borderRadius: '9999px',
-  border: `1px solid ${WHITE}`,
+  borderRadius: '9999rem',
+  border: `1rem solid ${WHITE}`,
   backgroundColor: 'transparent',
   color: WHITE,
   cursor: 'pointer',
@@ -92,10 +93,10 @@ export const filledPillButtonStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: '10px 20px',
-  fontSize: '14px',
+  padding: '10rem 20rem',
+  fontSize: '14rem',
   fontWeight: 400,
-  borderRadius: '9999px',
+  borderRadius: '9999rem',
   border: 'none',
   backgroundColor: WHITE,
   color: BLACK,
@@ -108,13 +109,13 @@ export const filledPillButtonStyle: CSSProperties = {
  *  quirks are what made Power look low in the expanded block header. */
 export const iconButtonStyle = (size = ICON_BOX_SIZE): CSSProperties => ({
   background: 'transparent',
-  border: '1px solid transparent',
+  border: '1rem solid transparent',
   outline: 'none',
   color: MUTED,
   cursor: 'pointer',
-  width: `${size}px`,
-  height: `${size}px`,
-  borderRadius: ICON_BOX_RADIUS,
+  width: `${size}rem`,
+  height: `${size}rem`,
+  borderRadius: rem(ICON_BOX_RADIUS),
   display: 'grid',
   placeItems: 'center',
   padding: 0,
@@ -126,13 +127,13 @@ export const iconButtonStyle = (size = ICON_BOX_SIZE): CSSProperties => ({
 
 /** Text chrome box (EQ, PRE, static LITE/FULL label): fixed height, mono. */
 export const textBoxStyle = (): CSSProperties => ({
-  height: `${TEXT_BOX_HEIGHT}px`,
-  borderRadius: ICON_BOX_RADIUS,
+  height: `${TEXT_BOX_HEIGHT}rem`,
+  borderRadius: rem(ICON_BOX_RADIUS),
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: '0 4px',
-  fontSize: '12px',
+  padding: '0 4rem',
+  fontSize: '12rem',
   fontWeight: 400,
   fontFamily: 'monospace',
   lineHeight: 1,
@@ -153,8 +154,8 @@ export const segmentedGroupStyle = (): CSSProperties => ({
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'stretch',
-  height: `${TEXT_BOX_HEIGHT}px`,
-  borderRadius: ICON_BOX_RADIUS,
+  height: `${TEXT_BOX_HEIGHT}rem`,
+  borderRadius: rem(ICON_BOX_RADIUS),
   border: 'none',
   backgroundColor: SEGMENTED_TRACK,
   overflow: 'hidden',
@@ -174,8 +175,8 @@ export const segmentedCellStyle = (icon = false): CSSProperties => ({
   border: 'none',
   cursor: 'pointer',
   backgroundColor: 'transparent',
-  padding: '0 4px',
-  fontSize: icon ? 0 : '12px',
+  padding: '0 4rem',
+  fontSize: icon ? 0 : '12rem',
   fontWeight: icon ? undefined : 400,
   fontFamily: icon ? undefined : 'monospace',
   lineHeight: icon ? 0 : 1,

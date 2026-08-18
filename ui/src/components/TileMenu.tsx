@@ -2,7 +2,6 @@ import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { helpProps } from './helpText';
 import { useDismissable } from '../hooks/useDismissable';
-import { DESIGN_WIDTH } from '../hooks/useUiScale';
 import { BORDER, HIGHLIGHT, MUTED, WHITE } from './theme';
 
 /**
@@ -11,11 +10,9 @@ import { BORDER, HIGHLIGHT, MUTED, WHITE } from './theme';
  * border, 14px radius, icon + label rows with the shared hover highlight.
  *
  * Portaled to document.body with position:fixed at the click's viewport
- * coords. CSS zoom on the plugin root would otherwise desync layout-space
- * offsets from the cursor as the window scales. Size is matched via
- * transform:scale (same factor as useUiScale); applying CSS zoom here would
- * also scale left/top and shove the panel away from the cursor. Dismissed
- * on outside press, Escape, or picking a row.
+ * coords (numeric left/top = real px; the rem-denominated sizes scale with
+ * the UI like everything else). Dismissed on outside press, Escape, or
+ * picking a row.
  */
 
 export interface TileMenuItem {
@@ -44,12 +41,11 @@ export const TileMenu: React.FC<{
   onClose: () => void;
 }> = ({ anchor, items, onClose }) => {
   const rootRef = useRef<HTMLDivElement>(null);
-  const scale = Math.max(1, document.documentElement.clientWidth / DESIGN_WIDTH);
 
   useDismissable(true, rootRef, onClose);
 
-  // Zoom can change under an open menu (window resize): just dismiss;
-  // reopening at the old client point would look wrong anyway.
+  // A resize reflows the content under the fixed menu: just dismiss;
+  // keeping it at the old client point would look wrong anyway.
   useEffect(() => {
     window.addEventListener('resize', onClose);
     return () => window.removeEventListener('resize', onClose);
@@ -67,19 +63,16 @@ export const TileMenu: React.FC<{
         e.stopPropagation();
       }}
       style={{
-        // Fixed to the viewport at the click point. Match UI size with
-        // transform:scale, since CSS zoom on this node would also scale left/top,
-        // shoving the panel right/down as the window grows.
+        // Fixed to the viewport at the click point: pointer coords are real
+        // px, so left/top stay numeric (px), never rem.
         position: 'fixed',
-        left: `${anchor.clientX + CURSOR_OFFSET}px`,
-        top: `${anchor.clientY + CURSOR_OFFSET}px`,
-        width: `${MENU_WIDTH}px`,
-        transform: `scale(${scale})`,
-        transformOrigin: 'top left',
+        left: anchor.clientX + CURSOR_OFFSET,
+        top: anchor.clientY + CURSOR_OFFSET,
+        width: `${MENU_WIDTH}rem`,
         backgroundColor: '#141416',
         border: BORDER,
-        borderRadius: '14px',
-        padding: `${PANEL_PADDING}px`,
+        borderRadius: '14rem',
+        padding: `${PANEL_PADDING}rem`,
         zIndex: 1000,
         boxSizing: 'border-box',
       }}
@@ -99,15 +92,15 @@ export const TileMenu: React.FC<{
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: '12rem',
             width: '100%',
-            padding: '9px 12px',
+            padding: '9rem 12rem',
             background: 'transparent',
             border: 'none',
-            borderRadius: '8px',
+            borderRadius: '8rem',
             color: item.disabled ? MUTED : WHITE,
             opacity: item.disabled ? 0.4 : 1,
-            fontSize: '13px',
+            fontSize: '13rem',
             fontWeight: 400,
             textAlign: 'left',
             cursor: item.disabled ? 'default' : 'pointer',

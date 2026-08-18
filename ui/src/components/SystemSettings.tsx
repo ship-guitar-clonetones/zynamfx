@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Volume2 } from 'lucide-react';
+import { rem } from '../hooks/useUiScale';
+import { Volume2 } from './icons';
 import type { AudioDevice } from '../hooks/useAudioDevice';
 import { useAudioInputLevels } from '../hooks/useAudioDevice';
 import type { AudioDeviceState, AudioInputChannel } from '../types/audioDevice';
@@ -23,7 +24,7 @@ import { MUTED, SUBTLE } from './theme';
 
 /** Hardcase / interface glyph for the AUDIO INTERFACE group header. */
 const AudioInterfaceIcon: React.FC = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
+  <svg viewBox="0 0 20 20" fill="none" aria-hidden style={{ width: rem(20), height: rem(20) }}>
     <path
       d="M8.33398 13.3333H8.34232"
       stroke="currentColor"
@@ -72,7 +73,7 @@ const InlineBannerAlert: React.FC<{ id: string; state: AudioDeviceState; show?: 
   // the main-window banner (e.g. no-input lives in the channel picker).
   if (!(show ?? rule.when(state))) return null;
   return (
-    <AlertCard variant={rule.variant} style={{ marginTop: '12px' }}>
+    <AlertCard variant={rule.variant} style={{ marginTop: '12rem' }}>
       {rule.content(state)}
     </AlertCard>
   );
@@ -133,11 +134,11 @@ const ChannelRow: React.FC<{
     style={{
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
+      gap: '12rem',
       width: '100%',
-      padding: '8px 4px',
+      padding: '8rem 4rem',
       border: 'none',
-      borderRadius: '8px',
+      borderRadius: '8rem',
       background: 'transparent',
       cursor: 'pointer',
       textAlign: 'left',
@@ -149,17 +150,17 @@ const ChannelRow: React.FC<{
     <ChoiceIndicator selected={selected} square={square} />
     <span
       style={{
-        fontSize: '14px',
+        fontSize: '14rem',
         fontWeight: 400,
         color: selected ? '#ffffff' : MUTED,
-        minWidth: '16px',
+        minWidth: '16rem',
       }}
     >
       {channel.index + 1}
     </span>
     <span
       style={{
-        fontSize: '11px',
+        fontSize: '11rem',
         color: SUBTLE,
         fontFamily: 'monospace',
         overflow: 'hidden',
@@ -267,7 +268,7 @@ const InputChannelPicker: React.FC<{
     >
       {channels.length > 0 && (
         <>
-          <div style={{ maxHeight: '296px', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          <div style={{ maxHeight: '296rem', overflowY: 'auto', overscrollBehavior: 'contain' }}>
             {channels.map((channel) => (
               <ChannelRow
                 key={channel.index}
@@ -280,7 +281,7 @@ const InputChannelPicker: React.FC<{
             ))}
           </div>
           {mode === 'stereo' && (
-            <p style={{ ...captionStyle, marginTop: '8px' }}>
+            <p style={{ ...captionStyle, marginTop: '8rem' }}>
               Pick any two. Selecting a third swaps out your oldest pick.
             </p>
           )}
@@ -370,7 +371,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
       {state.micPermission === 'denied' && (
         <AlertCard
           variant="error"
-          style={{ marginBottom: `${SECTION_GAP}px` }}
+          style={{ marginBottom: `${SECTION_GAP}rem` }}
           actions={[{ label: 'Allow Access', onClick: () => apply(actions.openMicSettings) }]}
         >
           <b>Microphone access is off.</b> TONE3000 can’t hear your instrument until you allow it in
@@ -380,7 +381,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
       {inlineError && (
         <AlertCard
           variant="error"
-          style={{ marginBottom: `${SECTION_GAP}px` }}
+          style={{ marginBottom: `${SECTION_GAP}rem` }}
           actions={[
             {
               label: 'Retry',
@@ -461,7 +462,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
 
         {/* Output device + test tone. */}
         <FieldRow flush label="Output Device" help="Select where you want to hear the sound.">
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8rem' }}>
             {state.separateIO && (
               <div style={{ flex: 1, minWidth: 0 }}>
                 <SelectField
@@ -483,13 +484,13 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
               disabled={testDisabled || testPlaying}
               style={{
                 ...outlinedFieldStyle,
-                width: '104px',
+                width: '104rem',
                 flexShrink: 0,
-                padding: '12px 0',
+                padding: '12rem 0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '7px',
+                gap: '7rem',
                 cursor: testDisabled || testPlaying ? 'default' : 'pointer',
                 color: testPlaying ? '#00D13B' : testDisabled ? SUBTLE : '#ffffff',
               }}
@@ -569,16 +570,16 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
             label="Driver Settings"
             help="Buffer and clock options live in the manufacturer's app for this driver."
           >
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8rem' }}>
               <button
                 onClick={() => apply(actions.openControlPanel)}
-                style={{ ...outlinedFieldStyle, padding: '12px 16px', cursor: 'pointer', flex: 1 }}
+                style={{ ...outlinedFieldStyle, padding: '12rem 16rem', cursor: 'pointer', flex: 1 }}
               >
                 Open Control Panel
               </button>
               <button
                 onClick={() => apply(actions.restartDevice)}
-                style={{ ...outlinedFieldStyle, padding: '12px 16px', cursor: 'pointer', flex: 1 }}
+                style={{ ...outlinedFieldStyle, padding: '12rem 16rem', cursor: 'pointer', flex: 1 }}
               >
                 Reset Device
               </button>

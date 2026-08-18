@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { ChevronDown, ChevronUp, ExternalLink } from './icons';
 import type { Tone } from '../types/tone';
 import { HELP, helpProps } from './helpText';
 import { BORDER, GRAY, WHITE, filledPillButtonStyle, pillButtonStyle } from './theme';
@@ -8,14 +8,14 @@ import { BORDER, GRAY, WHITE, filledPillButtonStyle, pillButtonStyle } from './t
 const DESC_CLAMP_LINES = 3;
 
 const sectionTitleStyle: React.CSSProperties = {
-  fontSize: '14px',
+  fontSize: '14rem',
   fontWeight: 700,
   color: WHITE,
   lineHeight: 1.4,
 };
 
 const sectionBodyStyle: React.CSSProperties = {
-  fontSize: '14px',
+  fontSize: '14rem',
   fontWeight: 400,
   color: GRAY,
   lineHeight: 1.4,
@@ -42,7 +42,7 @@ const InfoSection: React.FC<{ title: string; children: React.ReactNode }> = ({
   title,
   children,
 }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignSelf: 'stretch' }}>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '8rem', alignSelf: 'stretch' }}>
     <div style={sectionTitleStyle}>{title}</div>
     {children}
   </div>
@@ -57,13 +57,13 @@ const promptStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: '16px',
-  padding: '8px 0',
+  gap: '16rem',
+  padding: '8rem 0',
   textAlign: 'center',
 };
 
 const promptTextStyle: React.CSSProperties = {
-  fontSize: '14px',
+  fontSize: '14rem',
   fontWeight: 400,
   color: WHITE,
   lineHeight: 1.4,
@@ -98,7 +98,7 @@ const DescriptionBlock: React.FC<{ text: string }> = ({ text }) => {
           ...(expanded
             ? {}
             : {
-                maxHeight: `${14 * 1.4 * DESC_CLAMP_LINES}px`,
+                maxHeight: `${14 * 1.4 * DESC_CLAMP_LINES}rem`,
                 overflow: 'hidden',
               }),
         }}
@@ -112,14 +112,14 @@ const DescriptionBlock: React.FC<{ text: string }> = ({ text }) => {
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '8px',
+            gap: '8rem',
             padding: 0,
             border: 'none',
             background: 'transparent',
             color: WHITE,
             cursor: 'pointer',
             fontFamily: 'monospace',
-            fontSize: '14px',
+            fontSize: '14rem',
             fontWeight: 400,
             lineHeight: 1.4,
             textTransform: 'uppercase',
@@ -175,7 +175,7 @@ export const BlockInfoPanel: React.FC<BlockInfoPanelProps> = ({
         display: 'flex',
         flexDirection: 'column',
         alignSelf: 'stretch',
-        gap: '24px',
+        gap: '24rem',
         minWidth: 0,
       }}
     >
@@ -214,7 +214,7 @@ export const BlockInfoPanel: React.FC<BlockInfoPanelProps> = ({
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'stretch',
-                  gap: '4px',
+                  gap: '4rem',
                 }}
               >
                 {/* A make's name can pack several lines; each gets its own row. */}
@@ -235,18 +235,18 @@ export const BlockInfoPanel: React.FC<BlockInfoPanelProps> = ({
                   display: 'flex',
                   flexWrap: 'wrap',
                   alignItems: 'center',
-                  gap: '8px',
+                  gap: '8rem',
                 }}
               >
                 {tags.map((name) => (
                   <span
                     key={name}
                     style={{
-                      padding: '8px 16px',
-                      borderRadius: 1000,
+                      padding: '8rem 16rem',
+                      borderRadius: '1000rem',
                       border: BORDER,
                       color: WHITE,
-                      fontSize: '12px',
+                      fontSize: '12rem',
                       fontWeight: 400,
                       lineHeight: 1.4,
                       whiteSpace: 'nowrap',
@@ -271,9 +271,9 @@ export const BlockInfoPanel: React.FC<BlockInfoPanelProps> = ({
             {...helpProps(HELP.viewOnT3k)}
             style={{
               ...pillButtonStyle,
-              borderRadius: '8px',
-              padding: '8px 16px',
-              fontSize: '14px',
+              borderRadius: '8rem',
+              padding: '8rem 16rem',
+              fontSize: '14rem',
               textDecoration: 'none',
               width: 'fit-content',
             }}

@@ -4,6 +4,14 @@
   box-sizing: border-box;
 }
 
+/* Design-space scaling: 1rem = 1 design px x the UI scale. useUiScale keeps
+   this at `scale`px (viewportWidth / 1024, min 1); the static 1px here makes
+   the pre-hydration first paint correct at 1x. Every length in the app is
+   authored in rem. */
+html {
+  font-size: 1px;
+}
+
 html,
 body {
   /* Native-app feel: no rubber-band overscroll, no double-tap zoom, no
@@ -17,6 +25,9 @@ body {
 
 body {
   font-family: 'Arial', monospace;
+  /* Inherited default for anything without an explicit font-size: 16 design
+     px, i.e. what the browser default was before the 1px root above. */
+  font-size: 16rem;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #000000;
@@ -149,14 +160,14 @@ input[type='range'] {
 /* Fallback for browsers that don't support webkit/moz pseudo-elements */
 input[type='range'] {
   background: linear-gradient(to right, #ffffff 0%, #ffffff 100%);
-  background-size: 100% 4px;
+  background-size: 100% 4rem;
   background-repeat: no-repeat;
   background-position: center;
 }
 
 input[type='range']::-webkit-slider-track {
   width: 100%;
-  height: 4px;
+  height: 4rem;
   background: #ffffff;
   border: none;
   border-radius: 0;
@@ -165,27 +176,27 @@ input[type='range']::-webkit-slider-track {
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  height: 20px;
-  width: 20px;
+  height: 20rem;
+  width: 20rem;
   background: #ffffff;
-  border: 2px solid #000000;
+  border: 2rem solid #000000;
   cursor: pointer;
   border-radius: 0;
 }
 
 input[type='range']::-moz-range-track {
   width: 100%;
-  height: 4px;
+  height: 4rem;
   background: #ffffff;
   border: none;
   border-radius: 0;
 }
 
 input[type='range']::-moz-range-thumb {
-  height: 20px;
-  width: 20px;
+  height: 20rem;
+  width: 20rem;
   background: #ffffff;
-  border: 2px solid #000000;
+  border: 2rem solid #000000;
   cursor: pointer;
   border-radius: 0;
 }

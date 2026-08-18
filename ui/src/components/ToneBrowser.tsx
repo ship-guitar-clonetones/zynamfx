@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Download, FolderClosed, Search as SearchIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Download, FolderClosed, Search as SearchIcon } from './icons';
 import type { T3KClient } from '../t3k/tone3000-client';
 import type { Tone } from '../types/tone';
 import { formatLabel, gearLabel, GEAR_FILTERS } from '../t3k/labels';
@@ -101,7 +101,7 @@ const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => vo
   active,
   onChange,
 }) => (
-  <div role="tablist" style={{ display: 'flex', gap: '28px', borderBottom: BORDER }}>
+  <div role="tablist" style={{ display: 'flex', gap: '28rem', borderBottom: BORDER }}>
     {TABS.map((tab) => {
       const selected = tab.id === active;
       return (
@@ -114,11 +114,11 @@ const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => vo
           style={{
             background: 'transparent',
             border: 'none',
-            padding: '0 0 12px',
-            marginBottom: '-1px',
-            borderBottom: `2px solid ${selected ? WHITE : 'transparent'}`,
+            padding: '0 0 12rem',
+            marginBottom: '-1rem',
+            borderBottom: `2rem solid ${selected ? WHITE : 'transparent'}`,
             color: selected ? WHITE : MUTED,
-            fontSize: '14px',
+            fontSize: '14rem',
             fontWeight: 400,
             cursor: 'pointer',
             whiteSpace: 'nowrap',
@@ -138,10 +138,10 @@ const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => vo
     height. */
 const browseButtonStyle: React.CSSProperties = {
   ...pillButtonStyle,
-  height: '40px',
-  padding: '0 22px',
-  gap: '10px',
-  fontSize: '15px',
+  height: '40rem',
+  padding: '0 22rem',
+  gap: '10rem',
+  fontSize: '15rem',
 };
 
 /** Outline pill CTA that opens the full-catalog Select flow: the header's
@@ -172,13 +172,13 @@ const GearFilterPill: React.FC<{
     style={{
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
+      gap: '8rem',
       flexShrink: 0,
-      padding: '8px 16px',
-      fontSize: '14px',
+      padding: '8rem 16rem',
+      fontSize: '14rem',
       fontWeight: 400,
-      borderRadius: '9999px',
-      border: active ? `1px solid ${WHITE}` : BORDER,
+      borderRadius: '9999rem',
+      border: active ? `1rem solid ${WHITE}` : BORDER,
       backgroundColor: 'transparent',
       color: active ? WHITE : MUTED,
       cursor: 'pointer',
@@ -204,8 +204,8 @@ const GearFilterRow: React.FC<{ active: string | null; onChange: (id: string | n
   <div
     style={{
       position: 'relative',
-      marginLeft: `-${EDGE_FADE_WIDTH}px`,
-      marginRight: `-${EDGE_FADE_WIDTH}px`,
+      marginLeft: `-${EDGE_FADE_WIDTH}rem`,
+      marginRight: `-${EDGE_FADE_WIDTH}rem`,
     }}
   >
     <div
@@ -214,9 +214,15 @@ const GearFilterRow: React.FC<{ active: string | null; onChange: (id: string | n
       className="hide-scrollbar"
       style={{
         display: 'flex',
-        gap: '10px',
+        gap: '10rem',
         overflowX: 'auto',
-        padding: `0 ${EDGE_FADE_WIDTH}px`,
+        // overflow-x:auto also clips vertically at the scrollport, and at
+        // fractional UI scales the pill height can round a subpixel taller
+        // than the row, shaving the bottom border. The vertical padding
+        // gives the pills breathing room inside the scrollport; the negative
+        // margins cancel it outside so the surrounding layout is unchanged.
+        padding: `2rem ${EDGE_FADE_WIDTH}rem`,
+        margin: '-2rem 0',
       }}
     >
       {GEAR_FILTERS.map((g) => (
@@ -246,13 +252,13 @@ const SignInPrompt: React.FC<{ heading: string; onSignIn: () => void }> = ({
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      gap: '16px',
-      padding: '48px 24px',
+      gap: '16rem',
+      padding: '48rem 24rem',
       textAlign: 'center',
     }}
   >
     <T3kMark height={28} />
-    <span style={{ fontSize: '14px', fontWeight: 400, color: '#ffffff', maxWidth: '420px' }}>
+    <span style={{ fontSize: '14rem', fontWeight: 400, color: '#ffffff', maxWidth: '420rem' }}>
       {heading}
     </span>
     <button type="button" onClick={onSignIn} style={filledPillButtonStyle}>
@@ -263,7 +269,7 @@ const SignInPrompt: React.FC<{ heading: string; onSignIn: () => void }> = ({
 
 /** Count with a small leading icon (downloads / models). */
 const CountStat: React.FC<{ icon: React.ReactNode; value: number }> = ({ icon, value }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '6rem' }}>
     {icon}
     <span>{value.toLocaleString()}</span>
   </div>
@@ -288,7 +294,7 @@ const ToneCard: React.FC<{
     style={{
       position: 'relative',
       width: '100%',
-      borderRadius: '12px',
+      borderRadius: '12rem',
       backgroundColor: SURFACE,
       cursor: disabled ? 'default' : 'pointer',
       opacity: disabled && !loading ? 0.45 : 1,
@@ -299,15 +305,15 @@ const ToneCard: React.FC<{
       display: 'flex',
       flexDirection: 'row',
       alignItems: 'center',
-      gap: '16px',
-      padding: '12px',
+      gap: '16rem',
+      padding: '12rem',
     }}
   >
     <div
       style={{
-        width: `${CARD_IMAGE_SIZE}px`,
-        height: `${CARD_IMAGE_SIZE}px`,
-        borderRadius: '8px',
+        width: `${CARD_IMAGE_SIZE}rem`,
+        height: `${CARD_IMAGE_SIZE}rem`,
+        borderRadius: '8rem',
         overflow: 'hidden',
         flexShrink: 0,
         backgroundColor: SURFACE_RAISED,
@@ -329,7 +335,7 @@ const ToneCard: React.FC<{
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '8rem',
         minWidth: 0,
         flex: 1,
         textAlign: 'left',
@@ -337,7 +343,7 @@ const ToneCard: React.FC<{
     >
       <span
         style={{
-          fontSize: '14px',
+          fontSize: '14rem',
           fontWeight: 600,
           color: '#ffffff',
           overflow: 'hidden',
@@ -351,10 +357,10 @@ const ToneCard: React.FC<{
         {tone.title}
       </span>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10rem', minWidth: 0 }}>
         <span
           style={{
-            fontSize: '13px',
+            fontSize: '13rem',
             color: MUTED,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -375,20 +381,20 @@ const ToneCard: React.FC<{
         style={{
           display: 'flex',
           flexDirection: 'row',
-          gap: '16px',
+          gap: '16rem',
           color: MUTED,
-          fontSize: '13px',
+          fontSize: '13rem',
         }}
       >
         <CountStat icon={<Download size={14} />} value={tone.downloads_count ?? 0} />
         <CountStat icon={<FolderClosed size={14} />} value={tone.models_count ?? 0} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8rem', minWidth: 0 }}>
         <div
           style={{
-            width: '22px',
-            height: '22px',
+            width: '22rem',
+            height: '22rem',
             borderRadius: '50%',
             overflow: 'hidden',
             flexShrink: 0,
@@ -398,7 +404,7 @@ const ToneCard: React.FC<{
         </div>
         <span
           style={{
-            fontSize: '13px',
+            fontSize: '13rem',
             color: '#ffffff',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -445,12 +451,12 @@ const Paginator: React.FC<{
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    padding: '4px',
+    padding: '4rem',
   };
 
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8rem' }}>
         {page > 1 && (
           <button
             aria-label="Previous page"
@@ -464,7 +470,7 @@ const Paginator: React.FC<{
           p === '...' ? (
             <span
               key={`ellipsis-${idx}`}
-              style={{ padding: '4px 8px', color: MUTED, fontSize: '13px' }}
+              style={{ padding: '4rem 8rem', color: MUTED, fontSize: '13rem' }}
             >
               …
             </span>
@@ -473,12 +479,12 @@ const Paginator: React.FC<{
               key={p}
               onClick={() => onPageChange(p)}
               style={{
-                padding: '4px 12px',
-                borderRadius: '6px',
-                border: p === page ? '1px solid #ffffff' : BORDER,
+                padding: '4rem 12rem',
+                borderRadius: '6rem',
+                border: p === page ? '1rem solid #ffffff' : BORDER,
                 backgroundColor: 'transparent',
                 color: p === page ? '#ffffff' : MUTED,
-                fontSize: '13px',
+                fontSize: '13rem',
                 cursor: 'pointer',
               }}
             >
@@ -652,12 +658,12 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '16px',
-            padding: '48px 24px',
+            gap: '16rem',
+            padding: '48rem 24rem',
             textAlign: 'center',
           }}
         >
-          <span style={{ fontSize: '14px', fontWeight: 400, color: WHITE, maxWidth: '340px' }}>
+          <span style={{ fontSize: '14rem', fontWeight: 400, color: WHITE, maxWidth: '340rem' }}>
             {error}
           </span>
           <button onClick={() => setRetryKey((k) => k + 1)} style={filledPillButtonStyle}>
@@ -671,7 +677,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
       // First load (nothing to dim yet): dots alone in the empty area.
       if (loading) {
         return (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '64px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '64rem 0' }}>
             <LoadingDots />
           </div>
         );
@@ -679,9 +685,9 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
       return (
         <div
           style={{
-            padding: '64px 24px',
+            padding: '64rem 24rem',
             color: MUTED,
-            fontSize: '13px',
+            fontSize: '13rem',
             fontWeight: 400,
             textAlign: 'center',
           }}
@@ -699,7 +705,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
           style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: '16px',
+            gap: '16rem',
             pointerEvents: loading ? 'none' : 'auto',
           }}
         >
@@ -762,17 +768,17 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
           backgroundColor: '#000000',
         }}
       >
-        <div style={{ maxWidth: `${COLUMN_MAX_WIDTH}px`, margin: '0 auto', width: '100%' }}>
+        <div style={{ maxWidth: `${COLUMN_MAX_WIDTH}rem`, margin: '0 auto', width: '100%' }}>
           <div
             style={{
               display: 'flex',
               // Top-align with the band (Browse is taller); arrow + label stay
               // centered on each other inside the back button.
               alignItems: 'flex-start',
-              gap: '16px',
+              gap: '16rem',
               // Top inset comes from Plugin's shared 24px middle-band pad.
               // No side inset; flush with the 800px column like ← BLOCK.
-              padding: '0 0 16px',
+              padding: '0 0 16rem',
             }}
           >
             <button
@@ -782,7 +788,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '16px',
+                gap: '16rem',
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
@@ -796,7 +802,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
               <span
                 style={{
                   fontFamily: 'monospace',
-                  fontSize: '16px',
+                  fontSize: '16rem',
                   fontWeight: 400,
                   textTransform: 'uppercase',
                   lineHeight: 1.4,
@@ -816,22 +822,22 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
           has air above the faceplate (Select fills the center column to
           the faceplate; this pad lives in the scroll content, not the
           shared meter band). */}
-      <div style={{ maxWidth: `${COLUMN_MAX_WIDTH}px`, margin: '0 auto', width: '100%' }}>
-        <div style={{ padding: '20px 0 24px' }}>
+      <div style={{ maxWidth: `${COLUMN_MAX_WIDTH}rem`, margin: '0 auto', width: '100%' }}>
+        <div style={{ padding: '20rem 0 24rem' }}>
           {!showSignInPrompt && (
             <GearFilterRow active={gearFilter} onChange={handleGearFilterChange} />
           )}
 
           {pickError && (
-            <div style={{ marginTop: '16px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 400, color: BRAND_RED }}>
+            <div style={{ marginTop: '16rem' }}>
+              <span style={{ fontSize: '12rem', fontWeight: 400, color: BRAND_RED }}>
                 {pickError}
               </span>
             </div>
           )}
 
           {/* Tone grid / empty state / sign-in prompt */}
-          <div style={{ marginTop: '24px', marginBottom: showPaginator ? '16px' : 0 }}>{body}</div>
+          <div style={{ marginTop: '24rem', marginBottom: showPaginator ? '16rem' : 0 }}>{body}</div>
 
           {showPaginator && (
             <div
@@ -848,7 +854,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
 
           {showTrendingFooter &&
             (authenticated ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '48rem 24rem' }}>
                 <BrowseButton onClick={onBrowseTone3000} />
               </div>
             ) : (

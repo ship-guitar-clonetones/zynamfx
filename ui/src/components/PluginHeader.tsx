@@ -1,5 +1,6 @@
 import React from 'react';
-import { Undo2, Redo2 } from 'lucide-react';
+import { rem } from '../hooks/useUiScale';
+import { Undo2, Redo2 } from './icons';
 import { AccountMenu } from './AccountMenu';
 import { IconButton } from './IconButton';
 import { PresetBar } from './PresetBar';
@@ -15,14 +16,13 @@ type PresetStore = ReturnType<typeof usePresets>;
 // Lucide has no tuning fork, so this mimics its 24x24 stroke style.
 const TuningForkIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
   <svg
-    width={size}
-    height={size}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
+    style={{ width: rem(size), height: rem(size) }}
   >
     <path d="M8 3v7a4 4 0 0 0 8 0V3" />
     <line x1="12" y1="14" x2="12" y2="21" />
@@ -73,13 +73,13 @@ export const PluginHeader = React.memo(function PluginHeader({
     <div
       style={{
         width: '100%',
-        height: '64px',
+        height: '64rem',
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         backgroundColor: '#000000',
-        padding: '0 24px',
+        padding: '0 24rem',
         boxSizing: 'border-box',
         borderBottom: BORDER,
       }}
@@ -88,12 +88,12 @@ export const PluginHeader = React.memo(function PluginHeader({
         href="https://www.tone3000.com"
         target="_blank"
         rel="noopener noreferrer"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16rem' }}
       >
-        <img src="/t3k.svg" alt="T3K" style={{ width: '160px' }} />
+        <img src="/t3k.svg" alt="T3K" style={{ width: '160rem' }} />
       </a>
       {/* 40px between header items; tight pairs (undo/redo) group inside. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '40rem' }}>
         <PresetBar
           active={activePreset}
           presets={presetStore.presets}
@@ -113,7 +113,7 @@ export const PluginHeader = React.memo(function PluginHeader({
         >
           <TuningForkIcon size={18} />
         </IconButton>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16rem' }}>
           <IconButton onClick={onUndo} disabled={!canUndo} help={HELP.undo} size={28}>
             <Undo2 size={18} />
           </IconButton>

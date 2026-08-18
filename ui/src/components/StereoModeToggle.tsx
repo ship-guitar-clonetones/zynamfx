@@ -1,5 +1,6 @@
 import React from 'react';
-import { Circle } from 'lucide-react';
+import { rem } from '../hooks/useUiScale';
+import { Circle } from './icons';
 import { HELP, helpProps } from './helpText';
 import { GRAY, HIGHLIGHT, SURFACE_RAISED } from './theme';
 
@@ -18,13 +19,12 @@ const StereoCirclesIcon: React.FC<{ size?: number }> = ({ size = 12 }) => {
   const width = size + overlap;
   return (
     <svg
-      width={width}
-      height={size}
       viewBox={`0 0 ${width} ${size}`}
       fill="none"
       stroke="currentColor"
       strokeWidth={1.5}
       strokeLinecap="round"
+      style={{ width: rem(width), height: rem(size) }}
     >
       <circle cx={r} cy={r} r={r - 1} />
       <circle cx={overlap + r} cy={r} r={r - 1} />
@@ -52,8 +52,8 @@ export const StereoModeToggle: React.FC<{
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: `${SEGMENT_WIDTH}px`,
-    height: '36px',
+    width: `${SEGMENT_WIDTH}rem`,
+    height: '36rem',
     border: 'none',
     background: 'transparent',
     cursor: 'pointer',
@@ -68,11 +68,11 @@ export const StereoModeToggle: React.FC<{
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
-        width: `${SELECTOR_WIDTH}px`,
-        height: '36px',
-        padding: `0 ${OUTER_INSET}px`,
+        width: `${SELECTOR_WIDTH}rem`,
+        height: '36rem',
+        padding: `0 ${OUTER_INSET}rem`,
         boxSizing: 'border-box',
-        borderRadius: '18px',
+        borderRadius: '18rem',
         backgroundColor: SURFACE_RAISED,
         flexShrink: 0,
       }}
@@ -82,13 +82,13 @@ export const StereoModeToggle: React.FC<{
         aria-hidden
         style={{
           position: 'absolute',
-          top: '4px',
-          left: `${OUTER_INSET}px`,
-          width: `${HIGHLIGHT_WIDTH}px`,
-          height: '28px',
-          borderRadius: '14px',
+          top: '4rem',
+          left: `${OUTER_INSET}rem`,
+          width: `${HIGHLIGHT_WIDTH}rem`,
+          height: '28rem',
+          borderRadius: '14rem',
           backgroundColor: HIGHLIGHT,
-          transform: stereoEnabled ? `translateX(${HIGHLIGHT_TRAVEL}px)` : 'translateX(0)',
+          transform: stereoEnabled ? `translateX(${HIGHLIGHT_TRAVEL}rem)` : 'translateX(0)',
         }}
       />
       <button

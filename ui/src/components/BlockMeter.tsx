@@ -44,7 +44,7 @@ export const DotMeter: React.FC<DotMeterProps> = React.memo(function DotMeter({
         // Level rises bottom→top when vertical, left→right when horizontal.
         flexDirection: orientation === 'vertical' ? 'column-reverse' : 'row',
         justifyContent: 'flex-start',
-        gap: `${DOT_GAP}px`,
+        gap: `${DOT_GAP}rem`,
         flexShrink: 0,
         alignSelf: 'center',
       }}
@@ -63,8 +63,8 @@ export const DotMeter: React.FC<DotMeterProps> = React.memo(function DotMeter({
             onClick={clearable ? onClearClip : undefined}
             {...(clearable ? helpProps(HELP.clipDot) : {})}
             style={{
-              width: `${DOT_SIZE}px`,
-              height: `${DOT_SIZE}px`,
+              width: `${DOT_SIZE}rem`,
+              height: `${DOT_SIZE}rem`,
               borderRadius: '50%',
               backgroundColor: getGradientColor(position),
               opacity: isActive ? 1 : 0.22,

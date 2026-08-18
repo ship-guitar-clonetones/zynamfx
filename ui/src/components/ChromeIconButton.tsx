@@ -63,31 +63,31 @@ const toneChrome = (
       return {
         color: on ? WHITE : GRAY,
         backgroundColor: on ? 'transparent' : HIGHLIGHT,
-        border: '1px solid transparent',
+        border: '1rem solid transparent',
       };
     case 'armed':
       return {
         color: on ? BLACK : GRAY,
         backgroundColor: on ? BRAND_YELLOW : 'transparent',
-        border: on ? `1px solid ${BRAND_YELLOW}` : BORDER,
+        border: on ? `1rem solid ${BRAND_YELLOW}` : BORDER,
       };
     case 'link':
       return {
         color: on ? WHITE : GRAY,
         backgroundColor: 'transparent',
-        border: '1px solid transparent',
+        border: '1rem solid transparent',
       };
     case 'outline':
       return {
         color: on ? WHITE : GRAY,
         backgroundColor: 'transparent',
-        border: on ? `1px solid ${WHITE}` : BORDER,
+        border: on ? `1rem solid ${WHITE}` : BORDER,
       };
     default:
       return {
         color: WHITE,
         backgroundColor: filled ? HIGHLIGHT : 'transparent',
-        border: '1px solid transparent',
+        border: '1rem solid transparent',
       };
   }
 };
@@ -149,12 +149,12 @@ export const ChromeIconButton: React.FC<ChromeIconButtonProps> = ({
         ? {
             color: BLACK,
             backgroundColor: WHITE,
-            border: `1px solid ${WHITE}`,
+            border: `1rem solid ${WHITE}`,
           }
         : {}),
       opacity: disabled ? 0.3 : 1,
       cursor: disabled ? 'default' : 'pointer',
-      transform: offsetY !== undefined ? `translateY(${offsetY}px)` : undefined,
+      transform: offsetY !== undefined ? `translateY(${offsetY}rem)` : undefined,
       ...style,
     }}
   >
@@ -186,14 +186,14 @@ const textChrome = (
     return {
       color: BLACK,
       backgroundColor: WHITE,
-      border: `1px solid ${WHITE}`,
+      border: `1rem solid ${WHITE}`,
     };
   }
   if (armed) {
     return {
       color: BLACK,
       backgroundColor: BRAND_YELLOW,
-      border: `1px solid ${BRAND_YELLOW}`,
+      border: `1rem solid ${BRAND_YELLOW}`,
     };
   }
   return {

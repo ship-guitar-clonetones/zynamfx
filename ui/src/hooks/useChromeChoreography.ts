@@ -12,7 +12,7 @@ export const BANNER_ANIM_MS = 180;
  * The chrome strips grow the window instead of squishing the 578px core UI,
  * which means three systems have to agree on the height: the React layout,
  * the native window (setExtraContentHeight -> JUCE setSize, async across the
- * bridge), and the CSS zoom (recomputed from the viewport). Naively mounting
+ * bridge), and the UI scale (recomputed from the viewport). Naively mounting
  * the banner shifts everything down a frame before the window grows; this
  * hook orders the steps so existing content never jumps:
  *
@@ -91,14 +91,14 @@ export function useChromeChoreography(
 
   // waiting -> entering once the window has actually grown, so the slide
   // plays into space that exists. The expected height mirrors the native
-  // aspect lock: viewport = design box * the width-derived zoom.
+  // aspect lock: viewport = design box * the width-derived scale.
   useEffect(() => {
     if (phase !== 'waiting') return;
     const target = DESIGN_HEIGHT + BANNER_HEIGHT + hintExtra;
     const check = () => {
       const el = document.documentElement;
       const scale = Math.max(1, el.clientWidth / DESIGN_WIDTH);
-      // 2px tolerance for setSize/zoom rounding.
+      // 2px tolerance for setSize/scale rounding.
       if (el.clientHeight >= target * scale - 2) setPhase('entering');
     };
     check();

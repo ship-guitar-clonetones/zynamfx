@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw } from './icons';
 import { HELP, helpProps } from './helpText';
 import { filledPillButtonStyle } from './theme';
 
@@ -15,11 +15,11 @@ export const RetryLoadBadge: React.FC<{ onRetry: () => void }> = ({ onRetry }) =
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      gap: 8,
+      gap: '8rem',
       textAlign: 'center',
     }}
   >
-    <span style={{ fontSize: 11, fontWeight: 400, color: '#ffffff', opacity: 0.9 }}>
+    <span style={{ fontSize: '11rem', fontWeight: 400, color: '#ffffff', opacity: 0.9 }}>
       Download failed
     </span>
     <button
@@ -31,9 +31,9 @@ export const RetryLoadBadge: React.FC<{ onRetry: () => void }> = ({ onRetry }) =
       {...helpProps(HELP.retryLoad)}
       style={{
         ...filledPillButtonStyle,
-        gap: 6,
-        padding: '5px 12px',
-        fontSize: 12,
+        gap: '6rem',
+        padding: '5rem 12rem',
+        fontSize: '12rem',
       }}
     >
       <RotateCcw size={12} />

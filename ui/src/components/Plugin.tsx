@@ -92,9 +92,9 @@ export const Plugin: React.FC = () => {
   // (standalone only). Both the banner (top) and the hint bar (bottom) are
   // chrome strips that grow the window rather than squish the 578px core.
   const { banner, dismiss: dismissBanner } = useAppBanner(standalone ? audioDevice.state : null);
-  // Whole-UI proportional scaling: the root div below is a fixed 1024-wide
-  // design-space box and this ref's CSS zoom stretches it to the window.
-  const uiScaleRef = useUiScale<HTMLDivElement>();
+  // Whole-UI proportional scaling: keeps the root font-size at the current
+  // scale so the rem-denominated design space below tracks the window.
+  useUiScale();
   const hintsVisible = useHintsEnabled();
   // Chrome choreography: reports the strip heights to native (before paint)
   // and sequences the banner mount against the window resize so existing
@@ -325,16 +325,15 @@ export const Plugin: React.FC = () => {
 
   return (
     <div
-      ref={uiScaleRef}
       style={{
         position: 'relative',
-        // Explicit design-space box: the useUiScale zoom stretches it to the
-        // real window size, so every hard-coded px inside scales with it.
-        width: `${DESIGN_WIDTH}px`,
+        // Explicit design-space box: rem lengths track the root font-size
+        // (useUiScale), so this and every dimension inside scale together.
+        width: `${DESIGN_WIDTH}rem`,
         // The window grows by the chrome-strip height (see useChromeChoreography),
         // so the 578px core UI between them keeps its full space.
         // (Figma's 600 includes a 22px mock OS title bar outside JUCE setSize.)
-        height: `${DESIGN_HEIGHT + chrome.rootExtraHeight}px`,
+        height: `${DESIGN_HEIGHT + chrome.rootExtraHeight}rem`,
         // While the banner slides, the root and the banner wrapper animate
         // height with the same curve, so the flex middle (root minus fixed
         // strips) stays exactly constant and nothing inside moves.
@@ -356,7 +355,7 @@ export const Plugin: React.FC = () => {
           // edge. The window has already grown before the slide starts.
           <div
             style={{
-              height: `${chrome.bannerSlotHeight}px`,
+              height: `${chrome.bannerSlotHeight}rem`,
               overflow: 'hidden',
               flexShrink: 0,
               display: 'flex',
@@ -408,7 +407,7 @@ export const Plugin: React.FC = () => {
               backgroundColor: '#000000',
               overflow: 'hidden',
               minHeight: 0,
-              padding: '0 24px',
+              padding: '0 24rem',
               boxSizing: 'border-box',
             }}
           >

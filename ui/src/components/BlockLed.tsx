@@ -87,8 +87,8 @@ export const BlockLed: React.FC<BlockLedProps> = React.memo(function BlockLed({
       }}
       {...helpProps(HELP.clipDot)}
       style={{
-        width: `${size}px`,
-        height: `${size}px`,
+        width: `${size}rem`,
+        height: `${size}rem`,
         borderRadius: '50%',
         backgroundColor: 'rgb(255, 0, 0)',
         cursor: 'pointer',
@@ -123,7 +123,7 @@ export const BlockEnergyBorder: React.FC<BlockEnergyBorderProps> = React.memo(
     const blur = INSET_BLUR_MIN_PX + presence * (INSET_BLUR_MAX_PX - INSET_BLUR_MIN_PX);
     const shadow =
       presence > 0
-        ? `inset 0 0 ${blur.toFixed(1)}px 0 rgba(${color[0]}, ${color[1]}, ${color[2]}, ${(INSET_OPACITY * presence).toFixed(2)})`
+        ? `inset 0 0 ${blur.toFixed(1)}rem 0 rgba(${color[0]}, ${color[1]}, ${color[2]}, ${(INSET_OPACITY * presence).toFixed(2)})`
         : 'none';
 
     return (
@@ -131,7 +131,7 @@ export const BlockEnergyBorder: React.FC<BlockEnergyBorderProps> = React.memo(
         style={{
           position: 'absolute',
           inset: 0,
-          borderRadius: `${borderRadius}px`,
+          borderRadius: `${borderRadius}rem`,
           boxShadow: shadow,
           mixBlendMode: 'screen',
           pointerEvents: 'none',

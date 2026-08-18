@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { RotateCcw, X } from 'lucide-react';
+import { RotateCcw, X } from './icons';
 import { useMidiMap } from '../hooks/useMidiMap';
 import type { MidiMapping } from '../types/midiMap';
 import type { ChainItem, ToneBlock } from '../types/chain';
@@ -41,8 +41,8 @@ const blockPowerTarget = (targetId: string): { index: number; right: boolean } |
 /** Borderless row action, house icon-chrome style: muted at rest, white on
     hover, with no box like the faceplate's icon buttons. */
 const rowIconButtonStyle: React.CSSProperties = {
-  width: '26px',
-  height: '26px',
+  width: '26rem',
+  height: '26rem',
   flexShrink: 0,
   display: 'grid',
   placeItems: 'center',
@@ -73,14 +73,14 @@ const RowIconButton: React.FC<{
 const rowStyle = (first: boolean): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
-  gap: '14px',
-  padding: '11px 14px',
+  gap: '14rem',
+  padding: '11rem 14rem',
   borderTop: first ? 'none' : BORDER,
 });
 
 const rowTitleStyle: React.CSSProperties = {
   display: 'block',
-  fontSize: '14px',
+  fontSize: '14rem',
   fontWeight: 600,
   color: '#ffffff',
   overflow: 'hidden',
@@ -90,10 +90,10 @@ const rowTitleStyle: React.CSSProperties = {
 
 const rowSubtitleStyle: React.CSSProperties = {
   display: 'block',
-  fontSize: '11px',
+  fontSize: '11rem',
   fontWeight: 400,
   color: SUBTLE,
-  marginTop: '3px',
+  marginTop: '3rem',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
@@ -121,7 +121,7 @@ const MappingRow: React.FC<{
       <span
         style={{
           display: 'block',
-          fontSize: '13px',
+          fontSize: '13rem',
           fontWeight: 400,
           fontFamily: 'monospace',
           color: '#ffffff',
@@ -132,7 +132,7 @@ const MappingRow: React.FC<{
       </span>
       <span style={{ ...rowSubtitleStyle, textAlign: 'right' }}>{behaviorLabel(mapping)}</span>
     </span>
-    <span style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+    <span style={{ display: 'flex', gap: '2rem', flexShrink: 0 }}>
       <RowIconButton label="Re-learn" onClick={onRelearn}>
         <RotateCcw size={14} />
       </RowIconButton>
@@ -156,8 +156,8 @@ const LearningRow: React.FC<{
         flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        fontSize: '12px',
+        gap: '8rem',
+        fontSize: '12rem',
         fontWeight: 400,
         color: '#ffffff',
         whiteSpace: 'nowrap',
@@ -167,8 +167,8 @@ const LearningRow: React.FC<{
       <span
         aria-hidden
         style={{
-          width: '7px',
-          height: '7px',
+          width: '7rem',
+          height: '7rem',
           borderRadius: '50%',
           background: BRAND_YELLOW,
           flexShrink: 0,
@@ -181,10 +181,10 @@ const LearningRow: React.FC<{
       style={{
         background: 'none',
         border: 'none',
-        padding: '4px 2px',
+        padding: '4rem 2rem',
         flexShrink: 0,
         color: '#ffffff',
-        fontSize: '12px',
+        fontSize: '12rem',
         fontWeight: 600,
         cursor: 'pointer',
       }}
@@ -273,8 +273,8 @@ export const MidiMapSettings: React.FC<{
     <>
       <style>{`@keyframes t3kMidiListen { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
 
-      <div style={{ marginBottom: '28px' }}>
-        <div style={{ border: FIELD_BORDER, borderRadius: '10px', overflow: 'hidden' }}>
+      <div style={{ marginBottom: '28rem' }}>
+        <div style={{ border: FIELD_BORDER, borderRadius: '10rem', overflow: 'hidden' }}>
           {state.mappings.map((mapping, index) =>
             mapping.targetId === learnTargetId ? (
               <LearningRow
@@ -307,9 +307,9 @@ export const MidiMapSettings: React.FC<{
             <p
               style={{
                 margin: 0,
-                padding: '20px',
+                padding: '20rem',
                 textAlign: 'center',
-                fontSize: '12px',
+                fontSize: '12rem',
                 fontWeight: 400,
                 fontStyle: 'italic',
                 color: SUBTLE,
@@ -321,7 +321,7 @@ export const MidiMapSettings: React.FC<{
         </div>
 
         {unmappedOptions.length > 0 && (
-          <div style={{ marginTop: '12px' }}>
+          <div style={{ marginTop: '12rem' }}>
             <SelectField
               value={null}
               placeholder="Choose a control"
@@ -331,7 +331,7 @@ export const MidiMapSettings: React.FC<{
             />
           </div>
         )}
-        <p style={{ ...captionStyle, marginTop: '10px' }}>
+        <p style={{ ...captionStyle, marginTop: '10rem' }}>
           Map Previous / Next Preset to step through presets from CC or note buttons. Program
           change messages also switch presets directly, in the order shown in the preset
           browser.

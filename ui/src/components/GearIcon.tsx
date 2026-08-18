@@ -1,5 +1,6 @@
 import React from 'react';
 import { GRAY, SURFACE } from './theme';
+import { rem } from '../hooks/useUiScale';
 
 /**
  * Gear-type glyphs ported from the web app (tone3000 components/icons/Gear.tsx),
@@ -15,7 +16,7 @@ interface Props {
 }
 
 const FullRig = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 56 56" fill="none" aria-label="Amp + Cab">
+  <svg viewBox="0 0 56 56" fill="none" aria-label="Amp + Cab" style={{ width: rem(size), height: rem(size) }}>
     <path
       fillRule="evenodd"
       clipRule="evenodd"
@@ -56,7 +57,7 @@ const FullRig = ({ size = 40, color = GRAY }: Props) => (
 );
 
 const Amp = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 128 128" fill="none" aria-label="Amp">
+  <svg viewBox="0 0 128 128" fill="none" aria-label="Amp" style={{ width: rem(size), height: rem(size) }}>
     <path
       fillRule="evenodd"
       clipRule="evenodd"
@@ -79,7 +80,7 @@ const Amp = ({ size = 40, color = GRAY }: Props) => (
 );
 
 const Pedal = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 56 56" fill="none" aria-label="Pedal">
+  <svg viewBox="0 0 56 56" fill="none" aria-label="Pedal" style={{ width: rem(size), height: rem(size) }}>
     {/* The web version wraps these in a full-rect clipPath (a no-op), dropped
         here to avoid duplicate SVG ids when several pedals render at once. */}
     <path
@@ -128,7 +129,7 @@ const Pedal = ({ size = 40, color = GRAY }: Props) => (
 );
 
 const Outboard = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-label="Outboard">
+  <svg viewBox="0 0 40 40" fill="none" aria-label="Outboard" style={{ width: rem(size), height: rem(size) }}>
     <path
       fillRule="evenodd"
       clipRule="evenodd"
@@ -151,7 +152,7 @@ const Outboard = ({ size = 40, color = GRAY }: Props) => (
 );
 
 const SpeakerCab = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-label="Cabinet">
+  <svg viewBox="0 0 20 20" fill="none" aria-label="Cabinet" style={{ width: rem(size), height: rem(size) }}>
     <path
       fillRule="evenodd"
       clipRule="evenodd"
@@ -186,7 +187,7 @@ const SpeakerCab = ({ size = 40, color = GRAY }: Props) => (
 );
 
 const Space = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-label="Spaces">
+  <svg viewBox="0 0 20 20" fill="none" aria-label="Spaces" style={{ width: rem(size), height: rem(size) }}>
     <path
       d="M9.23661 15.7115H2.65918"
       stroke={color}
@@ -226,7 +227,7 @@ const Space = ({ size = 40, color = GRAY }: Props) => (
 );
 
 const Experimental = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-label="Experimental">
+  <svg viewBox="0 0 20 20" fill="none" aria-label="Experimental" style={{ width: rem(size), height: rem(size) }}>
     <path
       d="M10 11C10.5523 11 11 10.5523 11 10C11 9.44772 10.5523 9 10 9C9.44772 9 9 9.44772 9 10C9 10.5523 9.44772 11 10 11Z"
       fill={color}
@@ -251,7 +252,7 @@ const Experimental = ({ size = 40, color = GRAY }: Props) => (
 /** Local-file fallback (drag-and-drop .nam / IR): no catalog artwork or gear
     id. Stroke is authored on a 64 viewBox so it scales with `size`. */
 const FileIcon = ({ size = 64, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-label="File">
+  <svg viewBox="0 0 64 64" fill="none" aria-label="File" style={{ width: rem(size), height: rem(size) }}>
     <path
       d="M20 52C18.9391 52 17.9217 51.5786 17.1716 50.8284C16.4214 50.0783 16 49.0609 16 48V16C16 14.9391 16.4214 13.9217 17.1716 13.1716C17.9217 12.4214 18.9391 12 20 12H36C36.6331 11.999 37.2602 12.1232 37.8451 12.3655C38.43 12.6079 38.9611 12.9635 39.408 13.412L46.584 20.588C47.0337 21.035 47.3903 21.5667 47.6334 22.1523C47.8764 22.738 48.001 23.3659 48 24V48C48 49.0609 47.5786 50.0783 46.8284 50.8284C46.0783 51.5786 45.0609 52 44 52H20Z"
       stroke={color}
@@ -270,7 +271,7 @@ const FileIcon = ({ size = 64, color = GRAY }: Props) => (
 );
 
 const Ir = ({ size = 40, color = GRAY }: Props) => (
-  <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-label="Impulse Response">
+  <svg viewBox="0 0 40 40" fill="none" aria-label="Impulse Response" style={{ width: rem(size), height: rem(size) }}>
     <path
       d="M35 20H31.28C30.6245 19.9986 29.9865 20.212 29.4637 20.6075C28.9409 21.0029 28.562 21.5588 28.385 22.19L24.86 34.73C24.8373 34.8079 24.7899 34.8763 24.725 34.925C24.6601 34.9737 24.5811 35 24.5 35C24.4189 35 24.3399 34.9737 24.275 34.925C24.2101 34.8763 24.1627 34.8079 24.14 34.73L15.86 5.27C15.8373 5.19211 15.7899 5.12368 15.725 5.075C15.6601 5.02632 15.5811 5 15.5 5C15.4189 5 15.3399 5.02632 15.275 5.075C15.2101 5.12368 15.1627 5.19211 15.14 5.27L11.615 17.81C11.4387 18.4387 11.0621 18.9928 10.5423 19.388C10.0225 19.7833 9.38798 19.9981 8.735 20H5"
       stroke={color}

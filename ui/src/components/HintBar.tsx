@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { X } from './icons';
 import { HELP, helpProps, setHintsEnabled, useHelpText, useHintsEnabled } from './helpText';
 import { useCpuPercent } from '../hooks/useMeters';
 import {
@@ -50,8 +50,8 @@ const CpuReadout: React.FC = () => {
       style={{
         display: 'flex',
         alignItems: 'baseline',
-        gap: '6px',
-        fontSize: '12px',
+        gap: '6rem',
+        fontSize: '12rem',
         fontWeight: 400,
         color: MUTED,
         fontVariantNumeric: 'tabular-nums',
@@ -60,7 +60,7 @@ const CpuReadout: React.FC = () => {
       }}
     >
       <span>CPU</span>
-      <span style={{ minWidth: '38px', textAlign: 'right' }}>{cpu.toFixed(1)}%</span>
+      <span style={{ minWidth: '38rem', textAlign: 'right' }}>{cpu.toFixed(1)}%</span>
     </span>
   );
 };
@@ -82,14 +82,14 @@ export const HintBar: React.FC<HintBarProps> = ({ namFullSize, onNamFullSizeChan
     <div
       style={{
         width: '100%',
-        height: `${HINT_HEIGHT}px`,
+        height: `${HINT_HEIGHT}rem`,
         display: 'flex',
         alignItems: 'center',
-        gap: '16px',
+        gap: '16rem',
         flexShrink: 0,
         borderTop: BORDER,
         background: '#000000',
-        padding: '0 24px',
+        padding: '0 24rem',
         boxSizing: 'border-box',
       }}
     >
@@ -97,7 +97,7 @@ export const HintBar: React.FC<HintBarProps> = ({ namFullSize, onNamFullSizeChan
         style={{
           flex: 1,
           minWidth: 0,
-          fontSize: '13px',
+          fontSize: '13rem',
           // Hint sentences are body text: reset the global 600 default.
           fontWeight: 400,
           lineHeight: 1.35,
@@ -122,7 +122,7 @@ export const HintBar: React.FC<HintBarProps> = ({ namFullSize, onNamFullSizeChan
           border: 'none',
           color: WHITE,
           cursor: 'pointer',
-          padding: '2px',
+          padding: '2rem',
           flexShrink: 0,
         }}
       >

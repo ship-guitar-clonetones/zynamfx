@@ -6,6 +6,7 @@ import type { KnobScale } from './knobScale';
 import { percentScale } from './knobScale';
 import { helpProps, pinHelp, unpinHelp } from './helpText';
 import { GRAY, KNOB_LABEL_GAP, SURFACE_RAISED, WHITE } from './theme';
+import { getUiScale, rem } from '../hooks/useUiScale';
 
 /**
  * Knob interaction conventions (matching typical plugin UX):
@@ -193,11 +194,12 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       if (!draggingRef.current) return;
       const shift = e.shiftKey || e.getModifierState?.('Shift');
       if (shift !== fineRef.current) setFineMode(shift);
-      // clientY (not movementY): the WKWebView zoom pointer fix patches
-      // client coordinates so layout px and pointer px stay aligned.
+      // clientY is real px; divide by the UI scale so sensitivity stays
+      // constant in design px (the same drag distance relative to the knob's
+      // rendered size always covers the same value range).
       applyLive(
         liveRef.current +
-          (lastYRef.current - e.clientY) *
+          ((lastYRef.current - e.clientY) / getUiScale()) *
             (fineRef.current ? BASE_SENSITIVITY / FINE_FACTOR : BASE_SENSITIVITY)
       );
       lastYRef.current = e.clientY;
@@ -345,13 +347,13 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   const labelText = (
     <span
       style={{
-        fontSize: LABEL_SIZE,
+        fontSize: rem(LABEL_SIZE),
         fontWeight: 400,
         textAlign: 'center',
         // Idle labels are muted by default; pan-rail labels pass
         // labelBright to read as section titles. Readout is always white.
         color: showReadout || labelBright ? WHITE : GRAY,
-        letterSpacing: showReadout ? 'normal' : '1px',
+        letterSpacing: showReadout ? 'normal' : '1rem',
         whiteSpace: 'nowrap',
         fontVariantNumeric: 'tabular-nums',
       }}
@@ -374,13 +376,13 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       inputMode="decimal"
       style={{
         width: '100%',
-        height: slotHeight + 4,
+        height: rem(slotHeight + 4),
         boxSizing: 'border-box',
         background: SURFACE_RAISED,
-        border: '1px solid rgba(235, 235, 245, 0.3)',
-        borderRadius: '4px',
+        border: '1rem solid rgba(235, 235, 245, 0.3)',
+        borderRadius: '4rem',
         color: '#ffffff',
-        fontSize: 11,
+        fontSize: '11rem',
         textAlign: 'center',
         outline: 'none',
         padding: 0,
@@ -396,7 +398,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         flexDirection: labelBottom ? 'column' : 'column-reverse',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: `${KNOB_LABEL_GAP}px`,
+        gap: `${KNOB_LABEL_GAP}rem`,
       }}
     >
       <KnobHeadless
@@ -415,8 +417,8 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         onDoubleClick={openEditor}
         className="knob"
         style={{
-          width: size,
-          height: size,
+          width: rem(size),
+          height: rem(size),
           position: 'relative',
           userSelect: 'none',
           outline: 'none',
@@ -430,8 +432,8 @@ export const KnobControl: React.FC<KnobControlProps> = ({
 
       <div
         style={{
-          width: size,
-          height: slotHeight,
+          width: rem(size),
+          height: rem(slotHeight),
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -439,7 +441,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         }}
       >
         {editing ? (
-          <span style={{ width: size, flexShrink: 0, display: 'inline-block' }}>{editInput}</span>
+          <span style={{ width: rem(size), flexShrink: 0, display: 'inline-block' }}>{editInput}</span>
         ) : (
           labelText
         )}

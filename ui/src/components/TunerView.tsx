@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X as XIcon } from 'lucide-react';
+import { X as XIcon } from './icons';
 import { useNativeFunction } from '../hooks/useFunction';
 import { BRAND_BLUE, BRAND_RED, BRAND_YELLOW, GRAY } from './theme';
 
@@ -130,7 +130,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: '12px',
+          gap: '12rem',
         }}
       >
         {indices.map((i) => {
@@ -139,8 +139,8 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div
               key={i}
               style={{
-                width: `${BAR_WIDTH}px`,
-                height: `${BAR_HEIGHT}px`,
+                width: `${BAR_WIDTH}rem`,
+                height: `${BAR_HEIGHT}rem`,
                 backgroundColor: SIDE_COLORS[i],
                 clipPath,
                 opacity: lit ? 1 : DIM_OPACITY,
@@ -158,8 +158,8 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const triangle = (direction: 'up' | 'down', lit: boolean) => (
     <div
       style={{
-        width: '61px',
-        height: '53px',
+        width: '61rem',
+        height: '53rem',
         backgroundColor: BRAND_BLUE,
         clipPath:
           direction === 'up'
@@ -191,15 +191,15 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         aria-label="Close tuner"
         style={{
           position: 'absolute',
-          top: '16px',
-          right: '20px',
+          top: '16rem',
+          right: '20rem',
           background: 'transparent',
           border: 'none',
           color: '#ffffff',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          padding: '4px',
+          padding: '4rem',
           zIndex: 1,
         }}
       >
@@ -211,7 +211,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '40px',
+          gap: '40rem',
         }}
       >
         {renderBars('left', leftLit)}
@@ -225,8 +225,8 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '36px',
-            minWidth: '120px',
+            gap: '36rem',
+            minWidth: '120rem',
           }}
         >
           {/* Top triangle points down: lit when sharp ("tune down") or in tune */}
@@ -234,7 +234,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           <div style={{ position: 'relative' }}>
             <div
               style={{
-                fontSize: '110px',
+                fontSize: '110rem',
                 lineHeight: 1,
                 fontWeight: 700,
                 color: '#ffffff',
@@ -272,8 +272,8 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 top: '100%',
                 left: 0,
                 right: 0,
-                marginTop: '-6px',
-                fontSize: '13px',
+                marginTop: '-6rem',
+                fontSize: '13rem',
                 fontWeight: 400,
                 fontFamily: 'monospace',
                 textAlign: 'center',

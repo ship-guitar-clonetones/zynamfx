@@ -1,6 +1,7 @@
 import React from 'react';
 import { KnobFace } from './KnobFace';
 import type { KnobTone } from './KnobFace';
+import { rem } from '../hooks/useUiScale';
 
 /**
  * Knob geometry variants. The artwork is the same hardware-style knob in
@@ -59,8 +60,8 @@ export const KnobInner: React.FC<KnobInnerProps> = React.memo(function KnobInner
   return (
     <div
       style={{
-        width: size,
-        height: size,
+        width: rem(size),
+        height: rem(size),
         position: 'relative',
         pointerEvents: 'none',
       }}

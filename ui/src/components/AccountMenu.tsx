@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { LogIn, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { rem } from '../hooks/useUiScale';
+import { LogIn, LogOut, Settings as SettingsIcon } from './icons';
 import type { User } from '../types/tone';
 import { AvatarImage } from './AvatarFallback';
 import { useDismissable } from '../hooks/useDismissable';
@@ -15,7 +16,7 @@ import { BORDER, SURFACE_RAISED } from './theme';
 
 /** Web navbar hamburger glyph (Lucide `Menu` is too tall for the pill). */
 const HamburgerIcon: React.FC = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+  <svg viewBox="0 0 24 24" fill="none" style={{ width: rem(18), height: rem(18) }}>
     <path d="M4 6H20" stroke="white" strokeWidth="2" strokeLinecap="round" />
     <path d="M4 12H20" stroke="white" strokeWidth="2" strokeLinecap="round" />
     <path d="M4 18H20" stroke="white" strokeWidth="2" strokeLinecap="round" />
@@ -25,14 +26,14 @@ const HamburgerIcon: React.FC = () => (
 const itemStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: '12px',
+  gap: '12rem',
   width: '100%',
-  padding: '10px 12px',
+  padding: '10rem 12rem',
   background: 'transparent',
   border: 'none',
-  borderRadius: '8px',
+  borderRadius: '8rem',
   color: '#ffffff',
-  fontSize: '14px',
+  fontSize: '14rem',
   // Menu rows are body text: reset the global 600 default.
   fontWeight: 400,
   textAlign: 'left',
@@ -69,21 +70,21 @@ export const AccountMenu: React.FC<AccountMenuProps> = ({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          height: '40px',
-          padding: '0 5px 0 12px',
+          gap: '10rem',
+          height: '40rem',
+          padding: '0 5rem 0 12rem',
           boxSizing: 'border-box',
           backgroundColor: 'transparent',
           border: BORDER,
-          borderRadius: '9999px',
+          borderRadius: '9999rem',
           cursor: 'pointer',
         }}
       >
         <HamburgerIcon />
         <div
           style={{
-            width: '24px',
-            height: '24px',
+            width: '24rem',
+            height: '24rem',
             borderRadius: '50%',
             overflow: 'hidden',
             flexShrink: 0,
@@ -97,13 +98,13 @@ export const AccountMenu: React.FC<AccountMenuProps> = ({
         <div
           style={{
             position: 'absolute',
-            top: 'calc(100% + 8px)',
+            top: 'calc(100% + 8rem)',
             right: 0,
-            minWidth: '190px',
+            minWidth: '190rem',
             backgroundColor: SURFACE_RAISED,
             border: BORDER,
-            borderRadius: '12px',
-            padding: '8px',
+            borderRadius: '12rem',
+            padding: '8rem',
             display: 'flex',
             flexDirection: 'column',
             zIndex: 1000,

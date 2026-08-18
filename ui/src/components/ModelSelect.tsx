@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, FolderClosed } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FolderClosed } from './icons';
 import { useDismissable } from '../hooks/useDismissable';
 import { LoadingDots } from './LoadingDots';
 
@@ -78,15 +78,15 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
     >
       <div
         style={{
-          borderRadius: '8px',
+          borderRadius: '8rem',
           background: 'rgba(120, 120, 128, 0.36)',
-          height: `${height}px`,
-          padding: '0 12px',
+          height: `${height}rem`,
+          padding: '0 12rem',
           display: 'flex',
           alignItems: 'center',
           width: '100%',
           boxSizing: 'border-box',
-          gap: '10px',
+          gap: '10rem',
           userSelect: 'none',
         }}
       >
@@ -97,7 +97,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
           style={{
             background: 'none',
             border: 'none',
-            padding: '12px 0',
+            padding: '12rem 0',
             cursor: currentIndex > 0 ? 'pointer' : 'default',
             opacity: currentIndex > 0 ? 1 : 0.4,
             display: 'flex',
@@ -117,10 +117,10 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '6px',
+            gap: '6rem',
             overflow: 'hidden',
             cursor: 'pointer',
-            padding: '12px 0',
+            padding: '12rem 0',
           }}
         >
           <span
@@ -129,7 +129,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
               whiteSpace: 'nowrap',
               textOverflow: 'ellipsis',
               color: 'white',
-              fontSize: '14px',
+              fontSize: '14rem',
               fontWeight: '400',
             }}
           >
@@ -144,7 +144,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
           style={{
             background: 'none',
             border: 'none',
-            padding: '12px 0',
+            padding: '12rem 0',
             cursor: currentIndex < options.length - 1 ? 'pointer' : 'default',
             opacity: currentIndex < options.length - 1 ? 1 : 0.4,
             display: 'flex',
@@ -158,9 +158,9 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
         {/* Divider + model count */}
         <div
           style={{
-            width: '1px',
+            width: '1rem',
             alignSelf: 'stretch',
-            margin: '8px 0',
+            margin: '8rem 0',
             backgroundColor: 'rgba(84, 84, 88, 0.65)',
             flexShrink: 0,
           }}
@@ -169,9 +169,9 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '6rem',
             color: 'rgba(255, 255, 255, 0.6)',
-            fontSize: '13px',
+            fontSize: '13rem',
             fontWeight: '400',
             whiteSpace: 'nowrap',
             flexShrink: 0,
@@ -192,11 +192,11 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
             bottom: '100%',
             left: 0,
             right: 0,
-            marginBottom: '4px',
-            borderRadius: '8px',
+            marginBottom: '4rem',
+            borderRadius: '8rem',
             background: '#39393D',
             // 6 rows + their 1px dividers; anything longer scrolls.
-            maxHeight: `${MAX_VISIBLE_OPTIONS * OPTION_ROW_HEIGHT + (MAX_VISIBLE_OPTIONS - 1)}px`,
+            maxHeight: `${MAX_VISIBLE_OPTIONS * OPTION_ROW_HEIGHT + (MAX_VISIBLE_OPTIONS - 1)}rem`,
             overflowY: 'auto',
             zIndex: 1000,
           }}
@@ -206,18 +206,18 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
               key={option.id}
               onClick={() => handleSelect(option.id)}
               style={{
-                padding: '12px 16px',
+                padding: '12rem 16rem',
                 cursor: 'pointer',
                 color: 'white',
-                fontSize: '14px',
-                lineHeight: '17px',
+                fontSize: '14rem',
+                lineHeight: '17rem',
                 fontWeight: '400',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 background: option.id === value ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
                 borderBottom:
-                  index < options.length - 1 ? '1px solid rgba(84, 84, 88, 0.65)' : 'none',
+                  index < options.length - 1 ? '1rem solid rgba(84, 84, 88, 0.65)' : 'none',
               }}
               onMouseEnter={(e) => {
                 if (option.id !== value) {
@@ -238,8 +238,8 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
               style={{
                 display: 'flex',
                 justifyContent: 'center',
-                padding: '10px 16px',
-                borderTop: '1px solid rgba(84, 84, 88, 0.65)',
+                padding: '10rem 16rem',
+                borderTop: '1rem solid rgba(84, 84, 88, 0.65)',
               }}
             >
               <LoadingDots />
