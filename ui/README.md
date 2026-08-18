@@ -62,3 +62,12 @@ load natively with no browser or auth; see
 
 Styling is inline styles with shared design tokens in
 `src/components/theme.ts`; global resets live in `src/index.css`.
+
+Every length is authored in `rem` against a 1024x578 design space:
+`useUiScale` keeps the root font-size at `scale`px (viewport width / 1024,
+min 1), so `1rem` is exactly one design px at the current window scale and
+the whole UI grows proportionally with the window. Write new dimensions as
+`rem` strings (or `rem(n)` from `hooks/useUiScale` for computed values);
+raw `px` is only for real viewport coordinates (pointer positions, rect
+math), which must be multiplied by `getUiScale()` before mixing with
+design-space numbers.

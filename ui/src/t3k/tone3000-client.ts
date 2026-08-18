@@ -395,13 +395,26 @@ export class T3KClient {
   /**
    * Fetch that attaches a Bearer token when a session exists but degrades to
    * a plain anonymous request otherwise, for the handful of endpoints the
-   * API documents as auth-optional (e.g. Trending Tones), so signed-out users
-   * still get a public teaser feed instead of being routed through
-   * `onAuthRequired`.
+   * API documents as auth-optional (Trending Tones, the plugin version check),
+   * so signed-out users still get a public payload instead of being routed
+   * through `onAuthRequired`. A stored token that can't be refreshed also
+   * degrades rather than throwing.
    */
   private async fetchOptionalAuth(path: string, init?: RequestInit): Promise<Response> {
     if (!this.getTokens()) return globalThis.fetch(`${T3K_API}${path}`, init);
-    return this.fetch(path, init);
+    try {
+      return await this.fetch(path, init);
+    } catch {
+      return globalThis.fetch(`${T3K_API}${path}`, init);
+    }
+  }
+
+  /** Published plugin version. Auth is optional: a Bearer token lets the
+      server return a user-specific payload (e.g. a beta build), and
+      signed-out users still get the public release. The caller attaches
+      `X-Device-Id` (JUCE machine hash) on every check. */
+  fetchPluginVersion(init?: RequestInit): Promise<Response> {
+    return this.fetchOptionalAuth('/api/v1/plugin/version', init);
   }
 
   /** Top 10 trending tones, the same feed as the homepage's trending lanes

@@ -20,12 +20,12 @@ export const rem = (designPx: number): string => `${designPx}rem`;
 /**
  * Proportional UI scaling: sets the root font-size to `scale`px (with
  * scale = viewportWidth / 1024) so every rem-denominated length in the UI
- * (knobs, fonts, spacing — the whole design space is authored in rem, one
- * rem per design px) grows with the window. Unlike the CSS `zoom` this
- * replaced, layout runs directly at the real size: text and SVG rasterize
- * crisp, scrolling composites normally, and pointer coordinates, element
- * rects, and position:fixed all agree in real viewport px on every engine
- * (no legacy-zoom pointer patching, no portal special cases).
+ * (knobs, fonts, spacing, the whole design space is authored in rem, one
+ * rem per design px) grows with the window. Unlike CSS `zoom`, layout runs
+ * directly at the real size: text and SVG rasterize crisp, scrolling
+ * composites normally, and pointer coordinates, element rects, and
+ * position:fixed all agree in real viewport px on every engine (no pointer
+ * patching, no portal special cases).
  *
  * The scale follows the *actual* viewport, never a requested size: a host
  * that refuses a resize leaves the page width (and therefore the scale)

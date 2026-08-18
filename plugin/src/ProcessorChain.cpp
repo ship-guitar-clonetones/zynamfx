@@ -167,8 +167,10 @@ juce::var TONE3000Processor::makeToneSummary(const juce::var& toneVar) {
   // v2-architecture total; the plugin only loads A2 weights.
   out->setProperty("models_count", tone->getProperty("models_count"));
   out->setProperty("a2_models_count", tone->getProperty("a2_models_count"));
-  // Tone-info stats row (downloads next to the models folder count).
+  // Tone-info stats row: downloads, bookmarks, models (same order as the
+  // TONE3000 tone card).
   out->setProperty("downloads_count", tone->getProperty("downloads_count"));
+  out->setProperty("favorites_count", tone->getProperty("favorites_count"));
 
   // Canonical public page URL (title slug + id); the UI's share action
   // copies it. Skipped when absent (very old stored tone JSON) so the UI

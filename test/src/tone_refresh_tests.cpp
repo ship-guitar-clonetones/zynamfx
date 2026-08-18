@@ -21,9 +21,11 @@ namespace {
 // A fresh /tones/{id}-style payload whose models array deliberately names a
 // model the block does NOT store, so "stored models survive" can't pass
 // vacuously.
-juce::String freshPayload(int toneId, const juce::String& title, int downloads) {
+juce::String freshPayload(int toneId, const juce::String& title, int downloads,
+                          int favorites = 0) {
   return "{\"id\":" + juce::String(toneId) + ",\"title\":\"" + title +
          "\",\"format\":\"ir\",\"downloads_count\":" + juce::String(downloads) +
+         ",\"favorites_count\":" + juce::String(favorites) +
          ",\"url\":\"https://tone3000.com/tones/fresh-" + juce::String(toneId) +
          "\",\"models\":[{\"id\":999,\"name\":\"served-model\","
          "\"model_url\":\"https://test.invalid/served.wav\"}]}";
@@ -56,7 +58,7 @@ TEST(ToneRefreshTest, UpdatesMetadataAcrossLanesAndPreservesStoredModels) {
 
   const bool couldUndoBefore = static_cast<bool>(proc.getChainState(-1)["canUndo"]);
 
-  EXPECT_TRUE(proc.refreshToneMetadata(freshPayload(1, "Fresh Title", 42)));
+  EXPECT_TRUE(proc.refreshToneMetadata(freshPayload(1, "Fresh Title", 42, 7)));
 
   const juce::var after = proc.getChainState(-1);
   for (const char* laneKey : {"chain", "chainRight"}) {
@@ -64,6 +66,7 @@ TEST(ToneRefreshTest, UpdatesMetadataAcrossLanesAndPreservesStoredModels) {
     ASSERT_TRUE(block.isObject()) << laneKey;
     EXPECT_EQ(block["tone"]["title"].toString(), "Fresh Title") << laneKey;
     EXPECT_EQ(static_cast<int>(block["tone"]["downloads_count"]), 42) << laneKey;
+    EXPECT_EQ(static_cast<int>(block["tone"]["favorites_count"]), 7) << laneKey;
     EXPECT_EQ(block["tone"]["url"].toString(), "https://tone3000.com/tones/fresh-1") << laneKey;
     // The stored models array survives: still exactly the block's own active
     // model, not the payload's "served-model".

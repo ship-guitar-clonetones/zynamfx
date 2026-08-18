@@ -601,6 +601,14 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             return juce::var(JucePlugin_VersionString);
           }))
       .withNativeFunction(
+          // Stable machine hash (survives storage/peripheral changes; a CPU
+          // or motherboard swap invalidates it). The UI sends it on every
+          // version check so the API can target betas per install. Empty
+          // when JUCE can't compute one.
+          "getUniqueDeviceID", guarded(0, juce::var(""), [](const juce::Array<juce::var>&) {
+            return juce::var(juce::SystemStats::getUniqueDeviceID());
+          }))
+      .withNativeFunction(
           // Called by the main webview after the OAuth Select flow completes
           // (and again on every refresh). Stored on the processor so that
           // background model downloads can attach the Bearer header.

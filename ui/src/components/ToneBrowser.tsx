@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Download, FolderClosed, Search as SearchIcon } from './icons';
+import { ArrowLeft, ArrowRight, Bookmark, Download, FolderClosed, Search as SearchIcon } from './icons';
 import type { T3KClient } from '../t3k/tone3000-client';
 import type { Tone } from '../types/tone';
+import { formatCount } from '../t3k/formatCount';
 import { formatLabel, gearLabel, GEAR_FILTERS } from '../t3k/labels';
 import { AvatarImage } from './AvatarFallback';
 import { FormatBadge } from './FormatBadge';
@@ -267,11 +268,11 @@ const SignInPrompt: React.FC<{ heading: string; onSignIn: () => void }> = ({
   </div>
 );
 
-/** Count with a small leading icon (downloads / models). */
+/** Count with a small leading icon (downloads, bookmarks, models). */
 const CountStat: React.FC<{ icon: React.ReactNode; value: number }> = ({ icon, value }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '6rem' }}>
     {icon}
-    <span>{value.toLocaleString()}</span>
+    <span>{formatCount(value)}</span>
   </div>
 );
 
@@ -387,6 +388,7 @@ const ToneCard: React.FC<{
         }}
       >
         <CountStat icon={<Download size={14} />} value={tone.downloads_count ?? 0} />
+        <CountStat icon={<Bookmark size={14} />} value={tone.favorites_count ?? 0} />
         <CountStat icon={<FolderClosed size={14} />} value={tone.models_count ?? 0} />
       </div>
 

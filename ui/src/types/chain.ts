@@ -123,8 +123,9 @@ export interface ToneSummary {
       only loads v2 architectures. */
   models_count: number;
   a2_models_count: number;
-  /** Public download tally for the tone-info stats row. */
+  /** Public tallies for the tone-info stats row (downloads, then bookmarks). */
   downloads_count: number;
+  favorites_count: number;
   /** Canonical public page URL (title slug + id) for the share action.
       Absent on tones stored before native shipped it. */
   url?: string;

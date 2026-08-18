@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowLeftRight,
+  Bookmark,
   Download,
   Equal,
   FolderClosed,
@@ -36,6 +37,7 @@ import {
   BODY_HEIGHT,
   BODY_PADDING,
 } from './chainLayout';
+import { formatCount } from '../t3k/formatCount';
 import { formatLabel, gearLabel } from '../t3k/labels';
 import { AvatarImage } from './AvatarFallback';
 import { FormatBadge } from './FormatBadge';
@@ -66,13 +68,11 @@ const RAIL_METER_HEIGHT = 160;
 /** Centers the normalize (=) chrome box on the Out knob. */
 const NORMALIZE_BUTTON_OFFSET = -(KNOB_SIZE_SECONDARY - ICON_BOX_SIZE) / 2;
 
-/** Downloads / models count with a leading icon (same pattern as ToneBrowser). */
+/** Downloads / bookmarks / models count with a leading icon (same pattern as ToneBrowser). */
 const CountStat: React.FC<{ icon: React.ReactNode; value: number }> = ({ icon, value }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '8rem' }}>
     <span style={{ display: 'grid', placeItems: 'center', color: GRAY }}>{icon}</span>
-    <span style={{ fontSize: '14rem', fontWeight: 400, color: MUTED }}>
-      {value.toLocaleString()}
-    </span>
+    <span style={{ fontSize: '14rem', fontWeight: 400, color: MUTED }}>{formatCount(value)}</span>
   </div>
 );
 
@@ -807,6 +807,10 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                             <CountStat
                               icon={<Download size={16} />}
                               value={tone.downloads_count ?? 0}
+                            />
+                            <CountStat
+                              icon={<Bookmark size={16} />}
+                              value={tone.favorites_count ?? 0}
                             />
                             <CountStat
                               icon={<FolderClosed size={16} />}

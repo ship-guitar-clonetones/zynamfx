@@ -75,7 +75,7 @@ const READOUT_HOLD_MS = 250;
 
 /** Bipolar center detent (coarse drag only): values within the snap window
     collapse to exactly 0.5 so the DSP's "center = skip processing" branch
-    is reachable by drag. Shift/fine skips the magnet — a 40-step dead zone
+    is reachable by drag. Shift/fine skips the magnet: a 40-step dead zone
     at 0.1 ms resolution is what made Offset feel sticky. */
 const roundKnobValue = (x: number, snapCenter: boolean, fine: boolean) => {
   if (snapCenter && !fine && Math.abs(x - 0.5) < 0.02) return 0.5;
@@ -107,11 +107,17 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   // The pointerup listener lives on `document` (releases can land anywhere),
   // so it must ignore releases that don't belong to this knob's drag.
   const draggingRef = useRef(false);
-  // Accumulated drag value. react-knob-headless applies each event as
-  // `props.value + thisDelta`, so any native echo (or a second move before
-  // React re-renders) drops prior deltas: the knob sticks, then jumps.
-  // We own the math with this ref so every pixel counts.
+  // Accumulated drag value, deliberately UN-snapped. react-knob-headless
+  // applies each event as `props.value + thisDelta`, so any native echo (or
+  // a second move before React re-renders) drops prior deltas: the knob
+  // sticks, then jumps. We own the math with this ref so every pixel counts.
+  // The bipolar detent must never feed back into this accumulator: snapping
+  // the accumulator itself discards each move's progress across the noon
+  // window, so only a single fast event could ever escape it (a slow drag
+  // would pin at center and then jump).
   const liveRef = useRef(value);
+  // Last value actually emitted/shown (the detent-snapped one).
+  const emittedRef = useRef(value);
   const lastYRef = useRef(0);
   const fineRef = useRef(false);
 
@@ -143,6 +149,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   useEffect(() => {
     if (!draggingRef.current) {
       liveRef.current = value;
+      emittedRef.current = value;
       setLiveValue(value);
     }
   }, [value]);
@@ -157,20 +164,21 @@ export const KnobControl: React.FC<KnobControlProps> = ({
     };
 
     const applyLive = (next: number) => {
-      let v = clamp(next, minRef.current, maxRef.current);
+      // Accumulate raw: the detent is applied to the emitted value only, so
+      // drag progress keeps counting while the readout rests on center and
+      // the knob glides out the far side of the window.
+      const raw = clamp(next, minRef.current, maxRef.current);
+      liveRef.current = raw;
       // Coarse bipolar detent only; Shift skips it so Offset can land on
       // sub-millisecond values next to zero. No 0.01 quantum here: that
       // was aria rounding, and applying it live is the "stuck then jump"
       // the faceplate knobs had.
-      if (
-        variantRef.current === 'bipolar' &&
-        !fineRef.current &&
-        Math.abs(v - 0.5) < 0.02
-      ) {
-        v = 0.5;
-      }
-      if (v === liveRef.current) return;
-      liveRef.current = v;
+      const v =
+        variantRef.current === 'bipolar' && !fineRef.current && Math.abs(raw - 0.5) < 0.02
+          ? 0.5
+          : raw;
+      if (v === emittedRef.current) return;
+      emittedRef.current = v;
       setLiveValue(v);
       onChangeRef.current(v);
     };
@@ -219,9 +227,11 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         onChangeRef.current(defaultValueRef.current);
         onResetRef.current?.();
         liveRef.current = defaultValueRef.current;
+        emittedRef.current = defaultValueRef.current;
         setLiveValue(defaultValueRef.current);
       } else {
         liveRef.current = valueRef.current;
+        emittedRef.current = valueRef.current;
         setLiveValue(valueRef.current);
       }
 

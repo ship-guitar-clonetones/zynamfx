@@ -6,6 +6,7 @@ import {
   ArrowRight as LArrowRight,
   ArrowUpDown as LArrowUpDown,
   Bluetooth as LBluetooth,
+  Bookmark as LBookmark,
   Check as LCheck,
   ChevronDown as LChevronDown,
   ChevronLeft as LChevronLeft,
@@ -53,13 +54,11 @@ import { rem } from '../hooks/useUiScale';
  *
  * Import icons from here, never from 'lucide-react' directly.
  */
-const scaled = (Icon: LucideIcon, name: string): React.FC<LucideProps> => {
-  const Scaled: React.FC<LucideProps> = ({ size = 24, style, ...rest }) => (
-    <Icon
-      size={size}
-      {...rest}
-      style={{ width: rem(Number(size)), height: rem(Number(size)), ...style }}
-    />
+type IconProps = Omit<LucideProps, 'size'> & { size?: number };
+
+const scaled = (Icon: LucideIcon, name: string): React.FC<IconProps> => {
+  const Scaled: React.FC<IconProps> = ({ size = 24, style, ...rest }) => (
+    <Icon size={size} {...rest} style={{ width: rem(size), height: rem(size), ...style }} />
   );
   Scaled.displayName = name;
   return Scaled;
@@ -70,6 +69,7 @@ export const ArrowLeftRight = scaled(LArrowLeftRight, 'ArrowLeftRight');
 export const ArrowRight = scaled(LArrowRight, 'ArrowRight');
 export const ArrowUpDown = scaled(LArrowUpDown, 'ArrowUpDown');
 export const Bluetooth = scaled(LBluetooth, 'Bluetooth');
+export const Bookmark = scaled(LBookmark, 'Bookmark');
 export const Check = scaled(LCheck, 'Check');
 export const ChevronDown = scaled(LChevronDown, 'ChevronDown');
 export const ChevronLeft = scaled(LChevronLeft, 'ChevronLeft');

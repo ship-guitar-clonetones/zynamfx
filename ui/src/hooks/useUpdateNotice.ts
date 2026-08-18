@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { UPDATE_CHECK_URL, UPDATE_NOTICE_ENABLED } from '../t3k/config';
+import { UPDATE_NOTICE_ENABLED } from '../t3k/config';
+import type { T3KClient } from '../t3k/tone3000-client';
 import { isNativeFunctionRegistered } from '../backend/JuceBackend';
 import { useAudioBackend } from './useAudioBackend';
 
 /**
- * Startup update check. Pings the version endpoint once on mount and surfaces
- * an "update available" notice when the published version is newer than the
- * running build. Deliberately best-effort:
+ * Startup update check. Pings the version endpoint on mount (and again when
+ * the session appears or disappears) and surfaces an "update available"
+ * notice when the published version is newer than the running build.
+ * Auth is optional: a signed-in Bearer lets the server return a
+ * user-specific payload (beta builds for select accounts); signed-out
+ * users still get the public release. Every check also sends `X-Device-Id`
+ * (JUCE's stable machine hash) so installs can be targeted independently
+ * of the account. Deliberately best-effort:
  *
  * - Disabled entirely unless `VITE_T3K_UPDATE_NOTICE=true` (forks skip it).
  * - Never blocks UI load; fires in an effect with a 5s timeout.
@@ -70,7 +76,7 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-export function useUpdateNotice(): {
+export function useUpdateNotice(client: T3KClient): {
   /** Update to show in the startup modal; null once snoozed/dismissed. */
   notice: UpdateNoticeData | null;
   /** Available update regardless of snooze, for the Settings screen. */
@@ -83,6 +89,9 @@ export function useUpdateNotice(): {
   const [notice, setNotice] = useState<UpdateNoticeData | null>(null);
   const [update, setUpdate] = useState<UpdateNoticeData | null>(null);
   const [localVersion, setLocalVersion] = useState('');
+  // Re-check when the session appears or disappears so a just-signed-in
+  // beta tester gets their payload, and logout drops a beta-only notice.
+  const authenticated = client.isAuthenticated();
 
   useEffect(() => {
     if (!isNativeFunctionRegistered('getPluginVersion')) return;
@@ -95,11 +104,18 @@ export function useUpdateNotice(): {
 
       if (!UPDATE_NOTICE_ENABLED) return;
 
-      const res = await fetch(UPDATE_CHECK_URL, {
+      let deviceId = '';
+      if (isNativeFunctionRegistered('getUniqueDeviceID')) {
+        const id = await backend.getPluginFunction('getUniqueDeviceID')();
+        if (typeof id === 'string') deviceId = id;
+      }
+
+      const res = await client.fetchPluginVersion({
         signal: AbortSignal.timeout(5000),
         // The response is CDN-cached server-side; never let a stale local
         // webview cache hide a new release for days.
         cache: 'no-cache',
+        headers: deviceId ? { 'X-Device-Id': deviceId } : undefined,
       });
       if (!res.ok) return;
 
@@ -110,7 +126,14 @@ export function useUpdateNotice(): {
       if (typeof remote.version !== 'string' || typeof remote.message_html !== 'string') return;
       if (typeof remote.url !== 'string' || !/^https?:\/\//i.test(remote.url)) return;
 
-      if (compareVersions(remote.version, version) <= 0) return;
+      if (compareVersions(remote.version, version) <= 0) {
+        // A previous (likely beta-gated) payload is no longer offered.
+        if (!cancelled) {
+          setUpdate(null);
+          setNotice(null);
+        }
+        return;
+      }
 
       const data: UpdateNoticeData = {
         version: remote.version,
@@ -127,7 +150,7 @@ export function useUpdateNotice(): {
     return () => {
       cancelled = true;
     };
-  }, [backend]);
+  }, [authenticated, backend, client]);
 
   const remindLater = useCallback((days: number) => {
     writeSnoozeUntil(Date.now() + days * 24 * 60 * 60 * 1000);
