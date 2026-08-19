@@ -129,6 +129,19 @@ endpoints are magnitude-flat but differ in phase, so an instant switch would
 step the waveform), and the bypassed filters keep running so re-engaging
 lands on warm state.
 
+## Mono outputs
+
+Spread needs two output channels to mean anything. When the rig can't
+provide them (a mono host bus, or a standalone output device with a single
+channel; the latter still hands the processor a stereo buffer but plays only
+channel 0), the processor keeps the deck idle regardless of the
+`spreadEnabled` parameter: the output is the plain mono chain, never a
+summed or half-heard double. The parameter keeps its value, so a preset
+saved with spread on round-trips intact and comes alive again on a stereo
+rig. The UI greys the whole stereo-image slot out, driven by the
+`stereoOutput` capability flag in `getChainState` (the output-side twin of
+`stereoInput`). Pinned by `ProcessorTest.SpreadStaysIdleWithoutAStereoOutput`.
+
 ## Mono safety
 
 Both panels carry a correlation LED fed by a ~300 ms running normalized L/R

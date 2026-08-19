@@ -7,8 +7,9 @@
 #include <cstring>
 #include <tuple>
 
-// StandalonePluginHolder: used to inspect the audio device's active input
-// channels so we can detect a mono input source (see standaloneMonoInput).
+// StandalonePluginHolder: used to inspect the audio device's active channels
+// so we can detect a mono input or output (see standaloneMonoInput /
+// standaloneMonoOutput).
 #if !HEADLESS && JucePlugin_Build_Standalone && ! JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #endif
@@ -532,11 +533,17 @@ static ImageGains imageMatrixGains(bool panActive, float balance, float panLeft,
 // Stereo input = stereo main bus, minus the standalone case where it isn't
 // really: a mono input device. Pure capability; the input-mode selection
 // doesn't affect it (the UI needs the button to stay visible so the user can
-// cycle back to stereo). Reported through getChainState, so bump the
-// revision on change.
-void TONE3000Processor::updateStereoInputDetection() {
+// cycle back to stereo). Stereo output is the same idea on the way out: a
+// mono host bus or a one-channel output device can't reproduce a stereo
+// image, so Spread stays idle (see the image stage in processBlock) and the
+// UI greys the stereo-image slot. Both reported through getChainState, so
+// bump the revision on change.
+void TONE3000Processor::updateStereoIoDetection() {
   const bool stereoIn = getMainBusNumInputChannels() >= 2 && !standaloneMonoInput.load();
-  if (stereoInputDetected.exchange(stereoIn) != stereoIn)
+  const bool stereoOut = getMainBusNumOutputChannels() >= 2 && !standaloneMonoOutput.load();
+  const bool inChanged = stereoInputDetected.exchange(stereoIn) != stereoIn;
+  const bool outChanged = stereoOutputDetected.exchange(stereoOut) != stereoOut;
+  if (inChanged || outChanged)
     bumpChainRevision();
 }
 
@@ -613,20 +620,25 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
   updateCachedParameters();
 
 
-  // Detect a mono input source in the standalone app. The device restarts (and
-  // re-runs prepareToPlay) whenever the user changes the audio setup, so this
-  // stays in sync with the selected device. Hosts (VST3/AU) never take this
-  // path; channel layouts there come from the bus configuration.
+  // Detect mono input/output devices in the standalone app. The device
+  // restarts (and re-runs prepareToPlay) whenever the user changes the audio
+  // setup, so this stays in sync with the selected device. Hosts (VST3/AU)
+  // never take this path; channel layouts there come from the bus
+  // configuration.
   standaloneMonoInput.store(false);
+  standaloneMonoOutput.store(false);
 #if !HEADLESS && JucePlugin_Build_Standalone && ! JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP
   if (wrapperType == wrapperType_Standalone) {
     if (auto* holder = juce::StandalonePluginHolder::getInstance())
-      if (auto* device = holder->deviceManager.getCurrentAudioDevice())
+      if (auto* device = holder->deviceManager.getCurrentAudioDevice()) {
         standaloneMonoInput.store(device->getActiveInputChannels().countNumberOfSetBits() == 1);
+        standaloneMonoOutput.store(device->getActiveOutputChannels().countNumberOfSetBits() ==
+                                   1);
+      }
   }
 #endif
 
-  updateStereoInputDetection();
+  updateStereoIoDetection();
 
   // Chain-domain resampling boundary.
   // Engaged whenever the host rate differs from the chain base rate, even
@@ -701,7 +713,8 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
   // image or chain balance.
   {
     const bool isStereo = stereoEnabled.load();
-    const bool applyBalance = isStereo || cacheSpreadEnabled;
+    const bool applyBalance =
+        isStereo || (cacheSpreadEnabled && stereoOutputDetected.load());
     const auto g = imageMatrixGains(isStereo, applyBalance ? cacheOutputBalance : 0.5f,
                                     cacheChainPanLeft, cacheChainPanRight,
                                     isStereo && cacheChainSoloLeft,
@@ -1539,6 +1552,14 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   // ##########
   {
     const bool isStereo = stereoEnabled.load() && numChannels >= 2;
+    // Spread only runs when the rig can actually reproduce the double: a
+    // 2-channel buffer AND a detected stereo output (a standalone mono
+    // output device still hands us a stereo buffer but plays only channel
+    // 0). Otherwise the deck stays idle and the output is the plain mono
+    // chain, even when a preset arrives with spread switched on; the
+    // parameter keeps its value and the UI shows the group greyed out.
+    const bool spreadActive = cacheSpreadEnabled && numChannels >= 2 &&
+                              stereoOutputDetected.load(std::memory_order_relaxed);
 
     if (isStereo) {
       spread.forceIdle();
@@ -1565,7 +1586,7 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
           SpreadParams::fromNormalized(cacheSpreadOffset, cacheSpreadWobble,
                                        cacheSpreadCrossover, cacheSpreadWobbleEnabled,
                                        cacheSpreadCrossoverEnabled, cacheSpreadDiffuseEnabled),
-          cacheSpreadEnabled && numChannels >= 2);
+          spreadActive);
       if (spread.isRunning())
         spread.process(buffer);
     }
@@ -1588,7 +1609,7 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     // are smoothed so knob moves AND the balance/solo/invert gating glide
     // instead of stepping (pop).
     if (numChannels >= 2) {
-      const bool applyBalance = isStereo || cacheSpreadEnabled;
+      const bool applyBalance = isStereo || spreadActive;
       const auto g = imageMatrixGains(isStereo, applyBalance ? cacheOutputBalance : 0.5f,
                                       cacheChainPanLeft, cacheChainPanRight,
                                       isStereo && cacheChainSoloLeft,

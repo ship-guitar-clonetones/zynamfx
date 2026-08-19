@@ -51,6 +51,8 @@ export interface Tone {
   a2_models_count?: number;
   custom_models_count?: number;
   favorites_count: number;
+  /** Present on authenticated GET /tones responses (and after expand sync). */
+  is_favorite?: boolean;
   downloads_count: number;
   license: string;
   sizes: string[];

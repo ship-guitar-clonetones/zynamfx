@@ -364,6 +364,21 @@ export class T3KClient {
     return res.json();
   }
 
+  /** PUT /tones/{id}/favorite. Idempotent: 200 whether just created or already there. */
+  async favoriteTone(id: number | string): Promise<void> {
+    const res = await this.fetch(`/api/v1/tones/${id}/favorite`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) throw new Error(`favoriteTone failed: ${res.status}`);
+  }
+
+  /** DELETE /tones/{id}/favorite. Idempotent: 204 whether or not it was favorited. */
+  async unfavoriteTone(id: number | string): Promise<void> {
+    const res = await this.fetch(`/api/v1/tones/${id}/favorite`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`unfavoriteTone failed: ${res.status}`);
+  }
+
   /** Shared pagination for the session-scoped tone streams; each accepts an
       optional single-value `gear` filter (the tone browser's filter pills). */
   private async listTones(

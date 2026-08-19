@@ -4,6 +4,7 @@ import {
   BLACK,
   BORDER,
   BRAND_YELLOW,
+  DISABLED_OPACITY,
   GRAY,
   HIGHLIGHT,
   ICON_BOX_SIZE,
@@ -152,8 +153,8 @@ export const ChromeIconButton: React.FC<ChromeIconButtonProps> = ({
             border: `1rem solid ${WHITE}`,
           }
         : {}),
-      opacity: disabled ? 0.3 : 1,
-      cursor: disabled ? 'default' : 'pointer',
+      opacity: disabled ? DISABLED_OPACITY : 1,
+      cursor: disabled ? 'not-allowed' : 'pointer',
       transform: offsetY !== undefined ? `translateY(${offsetY}rem)` : undefined,
       ...style,
     }}

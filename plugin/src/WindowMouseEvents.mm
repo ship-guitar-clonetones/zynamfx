@@ -19,6 +19,75 @@ WKWebView* findWKWebView(NSView* view) {
   return nil;
 }
 
+// Associated on the WKWebView: when false/absent the stock context menu
+// (Reload, Back, Forward) is emptied in willOpenMenu: so a ctrl-click
+// doesn't look like browser chrome. Inspect Element rides the same menu,
+// so it only appears while the Web Inspector setting is on.
+const char kAllowNativeContextMenuKey = 0;
+const char kOriginalWillOpenMenuKey = 0;
+
+WKWebView* enclosingWKWebView(id self) {
+  if ([self isKindOfClass:[WKWebView class]])
+    return (WKWebView*)self;
+  if (![self isKindOfClass:[NSView class]])
+    return nil;
+  for (NSView* v = (NSView*)self; v != nil; v = [v superview]) {
+    if ([v isKindOfClass:[WKWebView class]])
+      return (WKWebView*)v;
+  }
+  return nil;
+}
+
+void t3kWillOpenMenu(id self, SEL sel, NSMenu* menu, NSEvent* event) {
+  // Prefer a stashed original IMP (this class already implemented the
+  // selector). Otherwise call the superclass implementation we overrode.
+  NSValue* stored = objc_getAssociatedObject((id)object_getClass(self), &kOriginalWillOpenMenuKey);
+  if (IMP original = stored != nil ? (IMP)stored.pointerValue : nullptr)
+    ((void (*)(id, SEL, NSMenu*, NSEvent*))original)(self, sel, menu, event);
+  else if (IMP superImp =
+               class_getMethodImplementation(class_getSuperclass(object_getClass(self)), sel)) {
+    if (superImp != (IMP)t3kWillOpenMenu)
+      ((void (*)(id, SEL, NSMenu*, NSEvent*))superImp)(self, sel, menu, event);
+  }
+
+  WKWebView* webView = enclosingWKWebView(self);
+  if (webView == nil)
+    return;
+  NSNumber* allowed = objc_getAssociatedObject(webView, &kAllowNativeContextMenuKey);
+  if (![allowed boolValue])
+    [menu removeAllItems];
+}
+
+void installContextMenuGuardOnClass(Class cls) {
+  if (cls == nil)
+    return;
+  SEL sel = @selector(willOpenMenu:withEvent:);
+  IMP imp = (IMP)t3kWillOpenMenu;
+  const char* types = "v@:@@";
+  // WKWebView / WKContentView inherit willOpenMenu: from NSView. Adding an
+  // override is the safe path (class_addMethod fails only if this class
+  // already has its own IMP, in which case we swizzle that rather than NSView).
+  if (class_addMethod(cls, sel, imp, types))
+    return;
+  Method m = class_getInstanceMethod(cls, sel);
+  if (m == nullptr)
+    return;
+  IMP previous = method_setImplementation(m, imp);
+  if (previous != nullptr && previous != imp)
+    objc_setAssociatedObject((id)cls, &kOriginalWillOpenMenuKey,
+                             [NSValue valueWithPointer:(const void*)previous],
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+void installContextMenuGuard() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    installContextMenuGuardOnClass([WKWebView class]);
+    // The menu is actually presented by WebKit's internal content view.
+    installContextMenuGuardOnClass(NSClassFromString(@"WKContentView"));
+  });
+}
+
 }  // namespace
 
 // Tracking-area owner that revives hover when the cursor re-enters the
@@ -133,6 +202,32 @@ void applyBlackWebViewBackground(void* nsViewPtr) {
   NSWindow* window = [view window];
   if ([window contentView] == view)
     [window setBackgroundColor:[NSColor blackColor]];
+}
+
+void setWebInspectorEnabled(void* nsViewPtr, bool enabled) {
+  NSView* view = (__bridge NSView*)nsViewPtr;
+  WKWebView* webView = findWKWebView(view);
+  if (webView == nil)
+    return;
+  installContextMenuGuard();
+  objc_setAssociatedObject(webView, &kAllowNativeContextMenuKey, @(enabled),
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  // Both flags via KVC, each guarded: `inspectable` doesn't exist before
+  // macOS 13.3 (where developerExtrasEnabled alone suffices), and
+  // developerExtrasEnabled is a long-standing private WebKit preference a
+  // future WebKit could drop. A failed set degrades to no inspector rather
+  // than throwing.
+  @try {
+    [webView setValue:@(enabled) forKey:@"inspectable"];
+  } @catch (NSException* exception) {
+    (void)exception;
+  }
+  @try {
+    [[[webView configuration] preferences] setValue:@(enabled)
+                                             forKey:@"developerExtrasEnabled"];
+  } @catch (NSException* exception) {
+    (void)exception;
+  }
 }
 
 }  // namespace EditorWebViewSetup

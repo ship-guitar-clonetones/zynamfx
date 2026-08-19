@@ -8,6 +8,8 @@
 //   - at other host rates the boundary resampler's *reported* latency (PDC)
 //     matches its *measured* group delay,
 //   - toggling oversampling never changes reported latency (no PDC churn),
+//   - without a stereo output the spread parameter is inert (plain mono out)
+//     and getChainState reports the capability to the UI,
 //   - parameter state survives a save/restore round trip,
 //   - garbage, legacy-format, and newer-schema state blobs are ignored,
 //   - the tail report covers the DC blocker floor.
@@ -69,6 +71,42 @@ TEST(ProcessorTest, EmptyChainAt48kIsTransparentWithZeroLatency) {
 
   EXPECT_NEAR(settledGainDb(out, in, 997.0, kFs), 0.0, 0.05);
   EXPECT_EQ(bestCorrelationLag(out, in, 16384, 4096, 32), 0) << "48k path must add no delay";
+}
+
+TEST(ProcessorTest, SpreadStaysIdleWithoutAStereoOutput) {
+  // A rig that can't reproduce two distinct channels (mono host track, or a
+  // standalone one-channel output device that still hands us a stereo
+  // buffer but plays only channel 0) must never run the spread double: the
+  // output stays the plain mono chain even when a preset arrives with
+  // spreadEnabled on. The parameter keeps its value; the UI greys the group
+  // out via the stereoOutput capability flag. Emulated with a mono main
+  // output bus, which drives the same detection.
+  TONE3000Processor proc;
+  proc.setPlayConfigDetails(2, 1, kFs, 512);
+  proc.prepareToPlay(kFs, 512);
+  EXPECT_FALSE(static_cast<bool>(proc.getChainState(-1)["stereoOutput"]));
+
+  proc.parameters.getParameter("spreadEnabled")->setValueNotifyingHost(1.0f);
+  proc.parameters.getParameter("spreadOffset")->setValueNotifyingHost(1.0f);  // +24 ms lag
+
+  const int total = 93 * 512;
+  const auto in = makeNoise(total, 4242, 0.25f);
+  juce::AudioBuffer<float> buffer(2, 512);
+  juce::MidiBuffer midi;
+  for (int off = 0; off < total; off += 512) {
+    buffer.copyFrom(0, 0, in.data() + off, 512);
+    buffer.copyFrom(1, 0, in.data() + off, 512);
+    proc.processBlock(buffer, midi);
+    for (int i = 0; i < 512; ++i)
+      ASSERT_EQ(buffer.getReadPointer(0)[i], buffer.getReadPointer(1)[i])
+          << "spread ran on a mono rig at sample " << off + i;
+  }
+
+  // A stereo bus reports the capability back.
+  TONE3000Processor stereoProc;
+  stereoProc.setPlayConfigDetails(2, 2, kFs, 512);
+  stereoProc.prepareToPlay(kFs, 512);
+  EXPECT_TRUE(static_cast<bool>(stereoProc.getChainState(-1)["stereoOutput"]));
 }
 
 TEST(ProcessorTest, BoundaryReportedLatencyMatchesMeasuredDelay) {

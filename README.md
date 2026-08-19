@@ -194,7 +194,9 @@ flowchart LR
 - **Mono mode**: only the Left chain runs and the pan stage is skipped. With
   Spread on, the chain output becomes an ADT-style stereo double; see
   [`plugin/docs/stereo-image.md`](plugin/docs/stereo-image.md) for the design
-  (it also covers the stereo-mode Align feature below).
+  (it also covers the stereo-mode Align feature below, and what happens on a
+  rig that can't reproduce stereo at all: Spread stays idle and the UI greys
+  the slot out).
 - **Stereo mode**: channel 0 feeds the Left chain and channel 1 the Right
   chain independently. The Balance trim scales each chain (12 dB opposing)
   before the pan knobs place them with a constant-power law, so a balance

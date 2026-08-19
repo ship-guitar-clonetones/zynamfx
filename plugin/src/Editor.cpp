@@ -42,6 +42,11 @@ void TONE3000Editor::parentHierarchyChanged() {
     // window creation and the page's first paint; make it draw none so the
     // black window shows through instead.
     EditorWebViewSetup::applyBlackWebViewBackground(peer->getNativeHandle());
+    // Web Inspector + native context menu (Reload) follow the Diagnostics
+    // toggle. Always apply, including the off state, so release builds
+    // strip the stock WKWebView menu.
+    EditorWebViewSetup::setWebInspectorEnabled(
+        peer->getNativeHandle(), TONE3000Processor::readPersistedWebInspectorEnabled());
   }
 #endif
 

@@ -691,6 +691,33 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             logFile.revealToUser();
             return juce::var(logFile.getFullPathName());
           }))
+      // --- Web Inspector (Settings -> Diagnostics) ------------------------
+      // Debugging aid for prod builds: right-click -> Inspect Element on the
+      // plugin UI, off by default. macOS only: JUCE's WebView2 backend hard-
+      // disables dev tools, so the UI hides the toggle when unsupported.
+      .withNativeFunction(
+          "getWebInspectorEnabled", guarded(0, juce::var(), [](const juce::Array<juce::var>&) {
+            juce::DynamicObject::Ptr obj = new juce::DynamicObject();
+#if JUCE_MAC
+            obj->setProperty("supported", true);
+#else
+            obj->setProperty("supported", false);
+#endif
+            obj->setProperty("enabled", TONE3000Processor::readPersistedWebInspectorEnabled());
+            return juce::var(obj.get());
+          }))
+      .withNativeFunction(
+          "setWebInspectorEnabled", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
+            const bool enabled = coerceBool(args[0]);
+            TONE3000Processor::persistWebInspectorEnabled(enabled);
+#if JUCE_MAC
+            if (auto* peer = editor->getPeer())
+              setWebInspectorEnabled(peer->getNativeHandle(), enabled);
+#else
+            (void)editor;
+#endif
+            return juce::var(true);
+          }))
       .withUserScript(R"(
             document.documentElement.style.backgroundColor = '#000000';
             // This script runs at document start, where document.body is still

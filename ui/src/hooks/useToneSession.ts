@@ -153,6 +153,11 @@ export function useToneSession({ onToneSelected, onAuthenticated }: UseToneSessi
   /** Full catalog tone (description / makes / tags / url). Backs the detail
       card's info panel; not persisted, so saved chain state stays slim. */
   const getTone = useCallback((toneId: number) => client.getTone(toneId), [client]);
+  const setToneFavorite = useCallback(
+    (toneId: number, favorite: boolean) =>
+      favorite ? client.favoriteTone(toneId) : client.unfavoriteTone(toneId),
+    [client]
+  );
 
   return {
     client,
@@ -167,6 +172,7 @@ export function useToneSession({ onToneSelected, onAuthenticated }: UseToneSessi
     ensureNativeAuth,
     listToneModels,
     getTone,
+    setToneFavorite,
     logout,
   };
 }

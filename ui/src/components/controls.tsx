@@ -195,7 +195,7 @@ export function SelectField<T extends string>({
           justifyContent: 'space-between',
           gap: '10rem',
           padding: '12rem 16rem',
-          cursor: disabled ? 'default' : 'pointer',
+          cursor: disabled ? 'not-allowed' : 'pointer',
           color: disabled || !selected ? MUTED : '#ffffff',
         }}
       >
@@ -215,6 +215,7 @@ export function SelectField<T extends string>({
 
       {open && (
         <div
+          className="hide-scrollbar"
           style={{
             position: 'absolute',
             top: 'calc(100% + 4rem)',

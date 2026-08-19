@@ -40,43 +40,12 @@ CPMAddPackage(
     SOURCE_DIR ${LIB_DIR}/juce
 )
 
-# Enable the macOS WKWebView Web Inspector (right-click -> Inspect Element, plus
-# console access) in release builds. Stock JUCE only flips developerExtrasEnabled
-# behind JUCE_DEBUG, so we widen that gate to our own T3K_ENABLE_DEVTOOLS macro and
-# also mark the view inspectable on macOS 13.3+. This is applied as an idempotent
-# configure-time patch because JUCE lives in the gitignored libs/ dir (CPM), so a
-# tracked source edit wouldn't survive a clean checkout / re-fetch.
-# Turn OFF for final shipping builds: -DENABLE_WEBVIEW_DEVTOOLS=OFF
-option(ENABLE_WEBVIEW_DEVTOOLS "Enable the WKWebView Web Inspector in release builds" ON)
-
-if (APPLE AND ENABLE_WEBVIEW_DEVTOOLS)
-    set(_juce_webview_mm "${LIB_DIR}/juce/modules/juce_gui_extra/native/juce_WebBrowserComponent_mac.mm")
-    if (EXISTS "${_juce_webview_mm}")
-        file(READ "${_juce_webview_mm}" _juce_webview_src)
-        if (NOT _juce_webview_src MATCHES "T3K_ENABLE_DEVTOOLS")
-            # Widen the developerExtrasEnabled gate from JUCE_DEBUG to also include our macro.
-            string(REGEX REPLACE
-                "#if JUCE_DEBUG\n([ \t]*)\\[preferences setValue: @\\(true\\) forKey: @\"developerExtrasEnabled\"\\];"
-                "#if JUCE_DEBUG || defined (T3K_ENABLE_DEVTOOLS)\n\\1[preferences setValue: @(true) forKey: @\"developerExtrasEnabled\"];"
-                _juce_webview_src "${_juce_webview_src}")
-            # Mark the WKWebView inspectable (required for the inspector on macOS 13.3+).
-            string(REGEX REPLACE
-                "\n([ \t]*)if \\(const auto userAgent = browserOptions\\.getUserAgent\\(\\);"
-                "\n       #if JUCE_DEBUG || defined (T3K_ENABLE_DEVTOOLS)\n        if (@available (macOS 13.3, *))\n            [webView.get() setValue: @(true) forKey: @\"inspectable\"];\n       #endif\n\n\\1if (const auto userAgent = browserOptions.getUserAgent();"
-                _juce_webview_src "${_juce_webview_src}")
-            # Fail loudly if neither anchor matched (e.g. after a JUCE upgrade changed the
-            # source layout) so we never silently ship release builds without the inspector.
-            if (NOT _juce_webview_src MATCHES "T3K_ENABLE_DEVTOOLS")
-                message(FATAL_ERROR
-                    "ENABLE_WEBVIEW_DEVTOOLS: failed to patch ${_juce_webview_mm}. "
-                    "The JUCE source layout likely changed in this version. Update the patch "
-                    "regexes in CMakeLists.txt, or configure with -DENABLE_WEBVIEW_DEVTOOLS=OFF.")
-            endif()
-            file(WRITE "${_juce_webview_mm}" "${_juce_webview_src}")
-            message(STATUS "Patched JUCE WebBrowserComponent: Web Inspector enabled when T3K_ENABLE_DEVTOOLS is defined")
-        endif()
-    endif()
-endif()
+# The macOS WKWebView Web Inspector is no longer force-enabled at build time.
+# Debug builds get it from stock JUCE (gated on JUCE_DEBUG); release builds
+# expose it behind the Web Inspector toggle in Settings -> Diagnostics, applied
+# at runtime (see EditorWebViewSetup::setWebInspectorEnabled). A previously
+# patched JUCE copy in libs/ is harmless: its added gate rides an undefined
+# macro (T3K_ENABLE_DEVTOOLS) and compiles back to stock behavior.
 
 # macOS: WKWebView paints an opaque white background until the first page paint,
 # which shows as a white flash when the editor opens. JUCE (still true in 9.0.1)

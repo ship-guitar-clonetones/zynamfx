@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, FolderClosed } from './icons';
 import { useDismissable } from '../hooks/useDismissable';
 import { LoadingDots } from './LoadingDots';
+import { DISABLED_OPACITY } from './theme';
 
 interface Option {
   id: string;
@@ -72,7 +73,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
       style={{
         position: 'relative',
         width: '100%',
-        opacity: disabled ? 0.45 : 1,
+        opacity: disabled ? DISABLED_OPACITY : 1,
         pointerEvents: disabled ? 'none' : 'auto',
       }}
     >
@@ -98,8 +99,8 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
             background: 'none',
             border: 'none',
             padding: '12rem 0',
-            cursor: currentIndex > 0 ? 'pointer' : 'default',
-            opacity: currentIndex > 0 ? 1 : 0.4,
+            cursor: currentIndex > 0 ? 'pointer' : 'not-allowed',
+            opacity: currentIndex > 0 ? 1 : DISABLED_OPACITY,
             display: 'flex',
             alignItems: 'center',
             color: 'white',
@@ -145,8 +146,8 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
             background: 'none',
             border: 'none',
             padding: '12rem 0',
-            cursor: currentIndex < options.length - 1 ? 'pointer' : 'default',
-            opacity: currentIndex < options.length - 1 ? 1 : 0.4,
+            cursor: currentIndex < options.length - 1 ? 'pointer' : 'not-allowed',
+            opacity: currentIndex < options.length - 1 ? 1 : DISABLED_OPACITY,
             display: 'flex',
             alignItems: 'center',
             color: 'white',
@@ -187,6 +188,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
       {isOpen && (
         <div
           ref={dropdownRef}
+          className="hide-scrollbar"
           style={{
             position: 'absolute',
             bottom: '100%',

@@ -15,6 +15,7 @@
 namespace {
 
 constexpr auto kMultiCoreKey = "multiCoreStereo";
+constexpr auto kWebInspectorKey = "webInspector";
 
 // Magic prefix for the binary ValueTree state format (see getStateInformation).
 constexpr char kStateMagic[] = {'T', '3', 'K', 'B'};
@@ -54,6 +55,28 @@ juce::File TONE3000Processor::getSettingsFile() {
 
 bool TONE3000Processor::readPersistedMultiCoreEnabled() {
   return juce::PropertiesFile(userSettingsOptions()).getBoolValue(kMultiCoreKey, true);
+}
+
+bool TONE3000Processor::readPersistedWebInspectorEnabled() {
+  // Debug builds already get the inspector from stock JUCE; default on so a
+  // fresh debug install still has Inspect Element / Reload. Release stays off
+  // until Settings -> Diagnostics flips it.
+  return juce::PropertiesFile(userSettingsOptions())
+      .getBoolValue(kWebInspectorKey,
+#if JUCE_DEBUG
+                    true
+#else
+                    false
+#endif
+      );
+}
+
+void TONE3000Processor::persistWebInspectorEnabled(bool enabled) {
+  juce::PropertiesFile settings(userSettingsOptions());
+  settings.setValue(kWebInspectorKey, enabled);
+  settings.saveIfNeeded();
+  juce::Logger::writeToLog(juce::String("[Processor] Web Inspector ") +
+                           (enabled ? "enabled" : "disabled"));
 }
 
 void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {

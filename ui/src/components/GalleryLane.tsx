@@ -402,6 +402,9 @@ export const StereoPanRail: React.FC = () => {
         alignSelf: 'center',
         height: `${STEREO_TILE_SIZE * 2 + LANE_GAP}rem`,
         flexShrink: 0,
+        // Room for the left edge-fade's 1rem outer overhang (see EdgeFade)
+        // so it doesn't sit on the link/swap pill.
+        paddingRight: '1rem',
       }}
     >
       <div style={knobRegion}>

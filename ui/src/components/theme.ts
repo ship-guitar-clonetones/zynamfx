@@ -36,6 +36,20 @@ export const TEXT_BOX_HEIGHT = 20;
 export const KNOB_SIZE_PRIMARY = 48;
 export const KNOB_SIZE_SECONDARY = 36;
 
+/** The one dim applied to every disabled/off control in the app: powered-off
+    groups (`.ui-off`), disabled buttons, unavailable cards. */
+export const DISABLED_OPACITY = 0.45;
+
+/**
+ * Powered-off / bypassed treatment for a group of controls (see `.ui-off`
+ * in index.css): dims the group to DISABLED_OPACITY, shows the not-allowed
+ * cursor, and makes every descendant inert (no clicks, drags, or hover
+ * hints). The section's power button must sit OUTSIDE the dimmed wrapper so
+ * the feature can be switched back on. Pair with an inline
+ * `transition: 'opacity 0.2s ease'` so the dim fades both ways.
+ */
+export const uiOffClass = (off: boolean): string | undefined => (off ? 'ui-off' : undefined);
+
 /** Brand accents, the only chromatic UI colors outside gray/white/black. */
 export const BRAND_BLUE = '#0000FF';
 export const BRAND_YELLOW = '#FFFF00';

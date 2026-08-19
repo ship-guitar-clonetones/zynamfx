@@ -163,6 +163,8 @@ export const HELP = {
   spreadAdvert: 'Spread: mono-to-stereo double via a wobbling short lag. Click: enable.',
   spreadPower: 'Spread Power: spread off; collapses its controls. Right-click: advanced.',
   imageCorrelation: 'Mono safety: dim: safe · yellow: caution · red: cancellation on mono sum.',
+  imageMonoOutput:
+    'Stereo image: unavailable, the output is mono (mono track or one-channel output device).',
   alignOffset: knobHelp(
     'Offset',
     'corrective chain alignment, ≤24 ms toward L or R. Center: off. Right-click: advanced.'
@@ -231,6 +233,8 @@ export const HELP = {
   toneInfo: 'Info: tone description, makes, and tags from TONE3000.',
   toneInfoLogin: 'Log In: sign in to TONE3000 to see tone details.',
   viewOnT3k: 'View on TONE3000: open this tone in your browser.',
+  favoriteTone: 'Favorite: save this tone to your TONE3000 favorites.',
+  unfavoriteTone: 'Favorited: click to remove from your TONE3000 favorites.',
   eqSlidersView: 'Sliders: gain-only fader view.',
   eqCurveView: 'Curve: parametric freq/gain/Q editor.',
   eqReset: 'Reset EQ: all bands flat, position post.',

@@ -50,6 +50,20 @@ void installHoverMouseForwarding(void* nsViewPtr);
  * reparent, before or after the WKWebView exists in the hierarchy.
  */
 void applyBlackWebViewBackground(void* nsViewPtr);
+
+/**
+ * Enable/disable the WKWebView Web Inspector (right-click -> Inspect
+ * Element) at runtime: sets `inspectable` (macOS 13.3+) and WebKit's
+ * developerExtrasEnabled preference on the live webview, so release builds
+ * can expose the inspector behind the Settings -> Diagnostics toggle without
+ * a JUCE patch. Also gates the stock WKWebView context menu (Reload, etc.):
+ * those items only appear while the inspector is on. Takes the editor's
+ * NSView* (peer native handle); implemented in WindowMouseEvents.mm. WebKit
+ * reads the flags live, so this takes effect on the next right-click with
+ * no reload. Always call this on editor attach (even with enabled=false)
+ * so the menu guard is installed.
+ */
+void setWebInspectorEnabled(void* nsViewPtr, bool enabled);
 #endif
 
 /**

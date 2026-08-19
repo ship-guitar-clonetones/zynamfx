@@ -268,7 +268,10 @@ const InputChannelPicker: React.FC<{
     >
       {channels.length > 0 && (
         <>
-          <div style={{ maxHeight: '296rem', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          <div
+            className="hide-scrollbar"
+            style={{ maxHeight: '296rem', overflowY: 'auto', overscrollBehavior: 'contain' }}
+          >
             {channels.map((channel) => (
               <ChannelRow
                 key={channel.index}
@@ -491,7 +494,9 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '7rem',
-                cursor: testDisabled || testPlaying ? 'default' : 'pointer',
+                // Playing is busy (not blocked); only a missing output device
+                // reads as not-allowed.
+                cursor: testPlaying ? 'default' : testDisabled ? 'not-allowed' : 'pointer',
                 color: testPlaying ? '#00D13B' : testDisabled ? SUBTLE : '#ffffff',
               }}
             >

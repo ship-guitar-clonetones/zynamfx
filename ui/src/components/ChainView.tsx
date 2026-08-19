@@ -48,8 +48,9 @@ import { isInsertSlot } from '../types/chain';
 /**
  * The block whose detail takeover is open, persisted so it survives this
  * component unmounting while the tone browser (and its OAuth redirect) is up.
+ * Cleared from Plugin on preset load so a remount lands on the gallery.
  */
-const DETAIL_BLOCK_STORAGE_KEY = 't3k.detailBlockId';
+export const DETAIL_BLOCK_STORAGE_KEY = 't3k.detailBlockId';
 
 interface ChainViewProps {
   /** Left lane (the only lane in mono mode). */
@@ -61,6 +62,8 @@ interface ChainViewProps {
   sampleRate: number;
   /** Block info view: drop the meter-band bottom pad so scroll reaches the faceplate. */
   onFillToFaceplate?: (fill: boolean) => void;
+  /** Bumped on preset load so an open detail takeover returns to the gallery. */
+  returnToGallery?: number;
 }
 
 /** Design-px of travel before a drag engages, so tap/click stays a click.
@@ -99,6 +102,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
   branch,
   sampleRate,
   onFillToFaceplate,
+  returnToGallery = 0,
 }) => {
   const actions = useChainActions();
   // Persisted so the detail takeover survives this component unmounting: a
@@ -114,6 +118,11 @@ export const ChainView: React.FC<ChainViewProps> = ({
     if (detailBlockId) sessionStorage.setItem(DETAIL_BLOCK_STORAGE_KEY, detailBlockId);
     else sessionStorage.removeItem(DETAIL_BLOCK_STORAGE_KEY);
   }, [detailBlockId]);
+  // Preset load (Plugin) bumps this while we may be unmounted under the tuner
+  // or tone browser; skip 0 so a restored detail after OAuth still opens.
+  useEffect(() => {
+    if (returnToGallery) setDetailBlockId(null);
+  }, [returnToGallery]);
   /** The item under drag; drives the DragOverlay ghost. */
   const [activeDrag, setActiveDrag] = useState<ChainItem | null>(null);
 

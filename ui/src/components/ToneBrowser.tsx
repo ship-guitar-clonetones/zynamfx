@@ -15,6 +15,7 @@ import { T3kMark } from './T3kMark';
 import {
   BORDER,
   BRAND_RED,
+  DISABLED_OPACITY,
   MUTED,
   SURFACE,
   SURFACE_RAISED,
@@ -297,8 +298,8 @@ const ToneCard: React.FC<{
       width: '100%',
       borderRadius: '12rem',
       backgroundColor: SURFACE,
-      cursor: disabled ? 'default' : 'pointer',
-      opacity: disabled && !loading ? 0.45 : 1,
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled && !loading ? DISABLED_OPACITY : 1,
       boxSizing: 'border-box',
       overflow: 'hidden',
       fontWeight: 400,
@@ -847,7 +848,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
                 display: 'flex',
                 justifyContent: 'flex-end',
                 pointerEvents: loading ? 'none' : 'auto',
-                opacity: loading ? 0.5 : 1,
+                opacity: loading ? DISABLED_OPACITY : 1,
               }}
             >
               <Paginator page={page} totalPages={result!.totalPages!} onPageChange={setPage} />

@@ -57,6 +57,7 @@ import {
   WHITE,
   segmentedCellStyle,
   segmentedGroupStyle,
+  uiOffClass,
 } from './theme';
 
 /** Tone image; matches the Figma detail mock (fits body with model select). */
@@ -75,6 +76,46 @@ const CountStat: React.FC<{ icon: React.ReactNode; value: number }> = ({ icon, v
     <span style={{ fontSize: '14rem', fontWeight: 400, color: MUTED }}>{formatCount(value)}</span>
   </div>
 );
+
+/** Bookmark tally. Signed-in: a toggle (outline idle, white fill when favorited). */
+const BookmarkStat: React.FC<{
+  value: number;
+  favorited: boolean;
+  onToggle?: () => void;
+}> = ({ value, favorited, onToggle }) => {
+  const icon = (
+    <Bookmark size={16} fill={favorited ? WHITE : 'none'} color={favorited ? WHITE : GRAY} />
+  );
+  const body = (
+    <>
+      <span style={{ display: 'grid', placeItems: 'center' }}>{icon}</span>
+      <span style={{ fontSize: '14rem', fontWeight: 400, color: MUTED }}>{formatCount(value)}</span>
+    </>
+  );
+  const row: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8rem',
+  };
+  if (!onToggle) return <div style={row}>{body}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      {...helpProps(favorited ? HELP.unfavoriteTone : HELP.favoriteTone)}
+      style={{
+        ...row,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        color: 'inherit',
+      }}
+    >
+      {body}
+    </button>
+  );
+};
 
 /** EQ view glyphs: 16×16, stroke inherits selected/muted color. */
 const EqSlidersIcon: React.FC = () => (
@@ -151,6 +192,13 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   const [infoTone, setInfoTone] = useState<Tone | null>(null);
   const [infoLoading, setInfoLoading] = useState(false);
   const [infoError, setInfoError] = useState<string | null>(null);
+  // Optimistic favorite while the PUT/DELETE is in flight; native's
+  // is_favorite / favorites_count catch up via refreshToneMetadata.
+  const [favoriteOverride, setFavoriteOverride] = useState<{
+    on: boolean;
+    count: number;
+  } | null>(null);
+  const favoriteBusyRef = useRef(false);
   const [eqView, setEqView] = useState<EqViewMode>('sliders');
   // Optimistic EQ power/position state (native converges via polling, like
   // `enabled`).
@@ -247,6 +295,8 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
       try {
         const full = await actions.getTone(toneId);
         if (seq !== infoFetchSeq.current) return;
+        // A favorite toggle in flight owns the next metadata write.
+        if (favoriteBusyRef.current) return;
         setInfoTone(full);
         // Best-effort: native no-ops when nothing changed server-side.
         actions.refreshToneMetadata(JSON.stringify(full));
@@ -269,6 +319,31 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
     [actions]
   );
 
+  const favorited =
+    favoriteOverride?.on ?? infoTone?.is_favorite ?? tone.is_favorite === true;
+  const favoritesCount =
+    favoriteOverride?.count ?? infoTone?.favorites_count ?? tone.favorites_count ?? 0;
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!actions.authenticated || favoriteBusyRef.current) return;
+    const next = !favorited;
+    const nextCount = Math.max(0, favoritesCount + (next ? 1 : -1));
+    setFavoriteOverride({ on: next, count: nextCount });
+    favoriteBusyRef.current = true;
+    try {
+      await actions.setToneFavorite(tone.id, next);
+      const base = infoTone?.id === tone.id ? infoTone : await actions.getTone(tone.id);
+      const patched = { ...base, is_favorite: next, favorites_count: nextCount };
+      setInfoTone(patched);
+      actions.refreshToneMetadata(JSON.stringify(patched));
+    } catch (err) {
+      console.error('Failed to update favorite', err);
+      setFavoriteOverride(null);
+    } finally {
+      favoriteBusyRef.current = false;
+    }
+  }, [actions, favorited, favoritesCount, infoTone, tone.id]);
+
   const handleToggleInfo = useCallback(() => {
     if (showInfo) {
       setShowInfo(false);
@@ -290,6 +365,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
     setInfoTone(null);
     setInfoError(null);
     setInfoLoading(false);
+    setFavoriteOverride(null);
     if (!isLocal && actions.authenticated) void fetchInfo(tone.id, !showInfo);
     // Only the tone identity; opening/closing the panel is handleToggleInfo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -531,9 +607,16 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                     >
                       <Power />
                     </ChromeIconButton>
-                    <ChromeTextButton armed={eqPre} help={HELP.eqPre} onClick={handleToggleEqPre}>
-                      PRE
-                    </ChromeTextButton>
+                    {/* PRE routes a live EQ; dims and goes inert with the
+                        rest of the editor while the EQ is powered off. */}
+                    <span
+                      className={uiOffClass(!eqOn)}
+                      style={{ display: 'inline-flex', transition: 'opacity 0.2s ease' }}
+                    >
+                      <ChromeTextButton armed={eqPre} help={HELP.eqPre} onClick={handleToggleEqPre}>
+                        PRE
+                      </ChromeTextButton>
+                    </span>
                     <div
                       style={{
                         ...segmentedGroupStyle(),
@@ -601,8 +684,11 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
 
           {/* Body: tone view uses BODY_PADDING; EQ spectrum/grid bleeds
             edge-to-edge (interactive chrome insets itself). Info view drops
-            knobs/model select and lets the right column grow. */}
+            knobs/model select and lets the right column grow. While the
+            block is bypassed the whole body dims and goes inert (uiOffClass);
+            the header (power, EQ, info, share, swap, trash) stays live. */}
           <div
+            className={uiOffClass(!enabled)}
             style={{
               height: showInfo ? undefined : `${BODY_HEIGHT}rem`,
               flexShrink: 0,
@@ -617,7 +703,6 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                   : `${BODY_PADDING}rem`,
               boxSizing: 'border-box',
               position: 'relative',
-              opacity: enabled ? 1 : 0.45,
               transition: 'opacity 0.2s ease',
               // Keep the body on its own pixel-snapped compositor layer so the
               // opacity fade (power toggle) can't promote/demote a temporary layer
@@ -808,9 +893,12 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                               icon={<Download size={16} />}
                               value={tone.downloads_count ?? 0}
                             />
-                            <CountStat
-                              icon={<Bookmark size={16} />}
-                              value={tone.favorites_count ?? 0}
+                            <BookmarkStat
+                              value={favoritesCount}
+                              favorited={favorited}
+                              onToggle={
+                                actions.authenticated ? () => void handleToggleFavorite() : undefined
+                              }
                             />
                             <CountStat
                               icon={<FolderClosed size={16} />}
@@ -961,6 +1049,9 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                           style={{
                             display: 'inline-flex',
                             transform: `translateY(${NORMALIZE_BUTTON_OFFSET}rem)`,
+                            // The button below is pointer-events: none while
+                            // overridden, so the cursor reads from here.
+                            cursor: normalizeOverridden ? 'not-allowed' : undefined,
                           }}
                         >
                           <ChromeIconButton

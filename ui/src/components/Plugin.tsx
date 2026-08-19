@@ -12,7 +12,7 @@ import { useToneLoadFlow } from '../hooks/useToneLoadFlow';
 import { useUpdateNotice } from '../hooks/useUpdateNotice';
 import { useUiScale, DESIGN_WIDTH, DESIGN_HEIGHT } from '../hooks/useUiScale';
 import { shouldRestoreToneBrowser } from '../hooks/useT3kSelect';
-import { ChainView } from './ChainView';
+import { ChainView, DETAIL_BLOCK_STORAGE_KEY } from './ChainView';
 import { Faceplate, PLATE_HEIGHT } from './Faceplate';
 import { HintBar, HINT_HEIGHT } from './HintBar';
 import { ToastProvider } from './Toast';
@@ -45,6 +45,9 @@ export const Plugin: React.FC = () => {
   // Block info view fills the center column to the header and faceplate so
   // scroll content isn't stopped by the 24px meter-band pads.
   const [fillToFaceplate, setFillToFaceplate] = useState(false);
+  // Bumped on preset load so ChainView drops an open detail takeover (and a
+  // remount after closing the tuner/browser doesn't restore it).
+  const [returnToGallery, setReturnToGallery] = useState(0);
 
   // Chain state: revision-gated polling + mutation actions, owned by one hook.
   const {
@@ -56,6 +59,7 @@ export const Plugin: React.FC = () => {
     activePreset,
     stereoEnabled,
     stereoInput,
+    stereoOutput,
     inputMode,
     namFullSize,
     multiCore,
@@ -73,10 +77,13 @@ export const Plugin: React.FC = () => {
   // preset replaces the chain; saving/renaming changes the active preset).
   const presetStore = usePresets(refresh);
 
-  // Mono-mode spread: while it's on the output stage is effectively stereo,
-  // so the output meter + balance knob switch to their stereo forms.
+  // The output carries a real stereo image only when a stereo-image feature
+  // is on (stereo mode, or mono-mode spread) AND the rig can reproduce it
+  // (stereoOutput: stereo host bus / 2+ channel output device). On a mono
+  // rig the meter and balance knob stay in their mono forms, and the plate
+  // greys the stereo-image slot out (native keeps Spread idle to match).
   const [spreadEnabled] = useParameter('spreadEnabled', 'toggle');
-  const stereoOutput = stereoEnabled || spreadEnabled;
+  const stereoImage = (stereoEnabled || spreadEnabled) && stereoOutput;
 
   const setTunerEnabled = useNativeFunction<boolean>('setTunerEnabled');
   const copyToClipboard = useNativeFunction<boolean>('copyToClipboard');
@@ -137,18 +144,6 @@ export const Plugin: React.FC = () => {
   );
   const handleUndo = useMemo(() => closeTunerThen(actions.undo), [closeTunerThen, actions]);
   const handleRedo = useMemo(() => closeTunerThen(actions.redo), [closeTunerThen, actions]);
-  // Rename/delete/move only touch the preset list, so they stay unwrapped.
-  const headerPresetStore = useMemo(
-    () => ({
-      ...presetStore,
-      actions: {
-        ...presetStore.actions,
-        save: closeTunerThen(presetStore.actions.save),
-        load: closeTunerThen(presetStore.actions.load),
-      },
-    }),
-    [presetStore, closeTunerThen]
-  );
 
   // Share: copy the tone's public TONE3000 page URL, the API's canonical
   // `url` (title slug + id). The plain id path is a fallback for summaries
@@ -187,6 +182,30 @@ export const Plugin: React.FC = () => {
     requireConnection,
     setShowToneBrowser,
   });
+
+  // Loading a preset replaces the chain. Leave any takeover (tuner, tone
+  // browser, block detail) first so the new chain is visible on the gallery,
+  // matching closeTunerThen. Rename/delete/move only touch the preset list.
+  const headerPresetStore = useMemo(
+    () => ({
+      ...presetStore,
+      actions: {
+        ...presetStore.actions,
+        save: closeTunerThen(presetStore.actions.save),
+        load: (id: string) => {
+          if (showTuner) void handleToggleTuner(false);
+          if (showToneBrowser) {
+            loadFlow.clearPendingTargets();
+            setShowToneBrowser(false);
+          }
+          sessionStorage.removeItem(DETAIL_BLOCK_STORAGE_KEY);
+          setReturnToGallery((n) => n + 1);
+          return presetStore.actions.load(id);
+        },
+      },
+    }),
+    [presetStore, closeTunerThen, showTuner, handleToggleTuner, showToneBrowser, loadFlow]
+  );
 
   const openToneBrowser = useCallback(() => setShowToneBrowser(true), []);
 
@@ -299,6 +318,7 @@ export const Plugin: React.FC = () => {
       retryLoad: handleRetryLoad,
       listToneModels: session.listToneModels,
       getTone: session.getTone,
+      setToneFavorite: session.setToneFavorite,
       refreshToneMetadata: actions.refreshToneMetadata,
       setBlockParam: actions.setBlockParam,
       setBlockEqBand: actions.setBlockEqBand,
@@ -319,6 +339,7 @@ export const Plugin: React.FC = () => {
       loadFlow.handleDropFile,
       loadFlow.handleSwapBlock,
       session.getTone,
+      session.setToneFavorite,
       session.listToneModels,
     ]
   );
@@ -463,6 +484,7 @@ export const Plugin: React.FC = () => {
                     branch={stereoEnabled ? branch : null}
                     sampleRate={sampleRate}
                     onFillToFaceplate={setFillToFaceplate}
+                    returnToGallery={returnToGallery}
                   />
                 </ChainActionsProvider>
               )}
@@ -478,7 +500,7 @@ export const Plugin: React.FC = () => {
                 backgroundColor: '#000000',
               }}
             >
-              <DbMeter type="output" stereo={stereoOutput} height={358} labelsPosition="right" />
+              <DbMeter type="output" stereo={stereoImage} height={358} labelsPosition="right" />
             </div>
           </div>
         )}
@@ -486,6 +508,7 @@ export const Plugin: React.FC = () => {
         {/* Pinned faceplate at the bottom (gains, gate, tone stack), with the
           hint strip under it (hidden entirely when hints are off). */}
         <Faceplate
+          stereoImage={stereoImage}
           stereoOutput={stereoOutput}
           stereoChains={stereoEnabled}
           stereoInput={stereoInput}

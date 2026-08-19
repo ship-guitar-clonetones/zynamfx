@@ -62,6 +62,8 @@ export interface ChainActions {
    * Backs the detail card's info panel; not written into saved state.
    */
   getTone: (toneId: number) => Promise<Tone>;
+  /** Favorite / unfavorite a tone for the signed-in user (idempotent). */
+  setToneFavorite: (toneId: number, favorite: boolean) => Promise<void>;
   /** Push a fresh /tones/{id} payload into native, which merges it into
       every block holding that tone (stored models preserved). Best-effort
       background sync: metadata only, not undoable, no-op when unchanged. */

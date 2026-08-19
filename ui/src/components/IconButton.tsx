@@ -1,7 +1,7 @@
 import React from 'react';
 import { helpProps } from './helpText';
 import { chromeIcon } from './ChromeIconButton';
-import { HIGHLIGHT, ICON_BOX_SIZE, ICON_SIZE, iconButtonStyle } from './theme';
+import { DISABLED_OPACITY, HIGHLIGHT, ICON_BOX_SIZE, ICON_SIZE, iconButtonStyle } from './theme';
 
 interface IconButtonProps {
   onClick: () => void;
@@ -43,8 +43,8 @@ export const IconButton: React.FC<IconButtonProps> = ({
     style={{
       ...iconButtonStyle(size),
       color: '#ffffff',
-      opacity: disabled ? 0.3 : 1,
-      cursor: disabled ? 'default' : 'pointer',
+      opacity: disabled ? DISABLED_OPACITY : 1,
+      cursor: disabled ? 'not-allowed' : 'pointer',
       background: active && fillWhenActive ? HIGHLIGHT : 'transparent',
     }}
   >

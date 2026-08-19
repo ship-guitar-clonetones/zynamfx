@@ -23,6 +23,7 @@ import {
   SUBTLE,
   WHITE,
   faceplateChromeLift,
+  uiOffClass,
 } from './theme';
 
 /**
@@ -41,6 +42,11 @@ import {
  * appears when the output actually runs stereo (stereo mode, or mono +
  * spread); DSP forces center when inactive so a leftover setting can't skew
  * a mono bus. All values are host parameters, so presets/undo get them for free.
+ *
+ * Mono rigs (mono host track, or a one-channel standalone output device):
+ * the stereo-image slot dims and goes inert as a whole, since no setting in
+ * it can be heard. Native keeps Spread idle to match, so the output is the
+ * plain mono chain even when a preset carries spread switched on.
  */
 
 export const PLATE_HEIGHT = 108;
@@ -307,8 +313,15 @@ const OutputGainKnob: React.FC<{
 };
 
 interface FaceplateProps {
-  /** Output stage runs stereo (stereo mode or mono-mode spread); shows the
-      output balance knob. */
+  /** Output stage actually runs stereo (stereo mode or mono-mode spread, on
+      a rig that can reproduce it); shows the output balance knob. */
+  stereoImage: boolean;
+  /** The rig can drive two distinct output channels at all (stereo host
+      bus / 2+ channel output device). False dims the whole stereo-image
+      slot and makes it inert, power button included: the feature is
+      unavailable, not merely off. Native keeps Spread idle to match, so a
+      preset saved with spread on plays as plain mono until the plugin
+      lands on a stereo rig again. */
   stereoOutput: boolean;
   /** Two independent chains are running (stereo mode); shows the auto
       balance button and swaps the Spread group for the Align group.
@@ -327,6 +340,7 @@ interface FaceplateProps {
 // Memoized: Plugin re-renders on every chain poll tick, but the plate only
 // depends on these few flags (its knobs subscribe to their own parameters).
 export const Faceplate = React.memo(function Faceplate({
+  stereoImage,
   stereoOutput,
   stereoChains,
   stereoInput,
@@ -376,26 +390,30 @@ export const Faceplate = React.memo(function Faceplate({
         )}
       </div>
 
+      {/* Powered-off sections: knobs + labels dim and go inert (uiOffClass);
+          the power button stays outside the dimmed wrapper, bright and
+          clickable, carrying the off state itself. */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'flex-end',
           gap: '10rem',
-          opacity: gateEnabled ? 1 : 0.55,
         }}
       >
-        <KnobControl
-          label="Gate"
-          value={noiseGate}
-          onChange={setNoiseGate}
-          size={KNOB_SIZE_SECONDARY}
-          thumb="secondary"
-          scale={gateDbScale}
-          defaultValue={gateDbScale.fromDisplay(-80)}
-          help={HELP.gate}
-          onDragStateChange={onGateDrag}
-        />
+        <div className={uiOffClass(!gateEnabled)} style={{ transition: 'opacity 0.2s ease' }}>
+          <KnobControl
+            label="Gate"
+            value={noiseGate}
+            onChange={setNoiseGate}
+            size={KNOB_SIZE_SECONDARY}
+            thumb="secondary"
+            scale={gateDbScale}
+            defaultValue={gateDbScale.fromDisplay(-80)}
+            help={HELP.gate}
+            onDragStateChange={onGateDrag}
+          />
+        </div>
         <PowerButton
           on={gateEnabled}
           help={HELP.gatePower}
@@ -409,10 +427,17 @@ export const Faceplate = React.memo(function Faceplate({
           flexDirection: 'row',
           alignItems: 'flex-end',
           gap: '10rem',
-          opacity: toneEqEnabled ? 1 : 0.55,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24rem' }}>
+        <div
+          className={uiOffClass(!toneEqEnabled)}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: '24rem',
+            transition: 'opacity 0.2s ease',
+          }}
+        >
           <KnobControl
             label="Bass"
             value={toneBass}
@@ -452,10 +477,19 @@ export const Faceplate = React.memo(function Faceplate({
       </div>
 
       {/* Stereo-image slot: Spread in mono, Align in stereo. Fixed footprint
-          (IMAGE_GROUP_WIDTH) so mode switches never shift the plate. */}
-      {stereoChains ? <AlignGroup /> : <SpreadGroup />}
+          (IMAGE_GROUP_WIDTH) so mode switches never shift the plate. On a
+          mono rig the slot dims and goes inert as a whole (the hover hint
+          says why); auto balance collapses with it since the balance matrix
+          can't run either. */}
+      <div
+        className={uiOffClass(!stereoOutput)}
+        style={{ transition: 'opacity 0.2s ease' }}
+        {...(!stereoOutput ? helpProps(HELP.imageMonoOutput) : {})}
+      >
+        {stereoChains ? <AlignGroup /> : <SpreadGroup />}
+      </div>
 
-      <OutputGainKnob stereo={stereoOutput} autoBalance={stereoChains} />
+      <OutputGainKnob stereo={stereoImage} autoBalance={stereoChains && stereoOutput} />
     </div>
   );
 });

@@ -18,6 +18,7 @@ import {
   KNOB_SIZE_SECONDARY,
   KNOB_LABEL_GAP,
   SUBTLE,
+  uiOffClass,
 } from './theme';
 
 /**
@@ -116,7 +117,9 @@ const CorrelationLed: React.FC = () => {
 /** A deck section: a standard labeled knob centered in the column, its power
     button floated beside it. Centering the knob (not the knob + power
     cluster) keeps the label centered too, so a long one like "Crossover"
-    overflows symmetrically instead of spilling into one neighbor's gap. */
+    overflows symmetrically instead of spilling into one neighbor's gap.
+    While the section is powered off, the knob + label dim and go inert
+    (uiOffClass); the power button sits outside the dimmed wrapper. */
 const SectionKnob: React.FC<{
   label: string;
   value: number;
@@ -137,17 +140,19 @@ const SectionKnob: React.FC<{
       justifyContent: 'center',
     }}
   >
-    <KnobControl
-      label={label}
-      value={value}
-      onChange={onChange}
-      size={KNOB_SIZE_SECONDARY}
-      thumb="secondary"
-      scale={scale}
-      defaultValue={defaultValue}
-      help={help}
-      onDragStateChange={onDragStateChange}
-    />
+    <div className={uiOffClass(!on)} style={{ transition: 'opacity 0.2s ease' }}>
+      <KnobControl
+        label={label}
+        value={value}
+        onChange={onChange}
+        size={KNOB_SIZE_SECONDARY}
+        thumb="secondary"
+        scale={scale}
+        defaultValue={defaultValue}
+        help={help}
+        onDragStateChange={onDragStateChange}
+      />
+    </div>
     <ChromeIconButton
       tone="power"
       on={on}

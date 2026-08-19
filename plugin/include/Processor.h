@@ -347,6 +347,14 @@ public:
   // log instead of guessed at.
   static juce::File getSettingsFile();
 
+  // Web Inspector preference (macOS): right-click -> Inspect Element on the
+  // plugin UI, off by default in release builds and flipped from Settings ->
+  // Diagnostics. Machine-wide (it's a debugging aid, not tone state), so it
+  // lives in the shared settings file. Applied to the live WKWebView by the
+  // editor (see EditorWebViewSetup::setWebInspectorEnabled).
+  static bool readPersistedWebInspectorEnabled();
+  static void persistWebInspectorEnabled(bool enabled);
+
 private:
   // One chain of blocks. Two of these make up `lanes` (declared below).
   using Lane = std::vector<std::unique_ptr<ChainBlock>>;
@@ -625,6 +633,12 @@ private:
   // speakers. Without this, a mono interface/mic only ever feeds the left
   // channel and an empty (or IR-only) chain plays back one-sided.
   std::atomic<bool> standaloneMonoInput{false};
+
+  // Output-side twin: the standalone app with a one-channel output device.
+  // The buffer can still be stereo then (the device only plays channel 0),
+  // so this feeds stereoOutputDetected below; without it Spread would run
+  // and the listener would hear half the double.
+  std::atomic<bool> standaloneMonoOutput{false};
 
   // The two chains: lanes[0] = Left/primary (the only lane in mono mode),
   // lanes[1] = Right (stereo mode). Kept as one array so per-lane logic
@@ -911,14 +925,22 @@ private:
   // host, or a stereo input device in the standalone app). A capability flag:
   // the input-mode selection doesn't affect it. Drives the UI's input-mode
   // button and dual input meters. Reported via getChainState; see
-  // updateStereoInputDetection().
+  // updateStereoIoDetection().
   std::atomic<bool> stereoInputDetected{false};
+
+  // True when the plugin can drive two distinct output channels (stereo bus
+  // in a host, 2+ output channels in the standalone app). When false, Spread
+  // stays idle no matter what its parameter says (see the image stage in
+  // processBlock) and the UI greys the stereo-image slot out. Starts true so
+  // an editor opening before the first prepareToPlay doesn't flash the slot
+  // grey. Reported via getChainState; see updateStereoIoDetection().
+  std::atomic<bool> stereoOutputDetected{true};
 
   // Input channel mode (see InputMode). Atomic: written by the message
   // thread (faceplate button / state restore), read by the audio thread.
   std::atomic<int> inputMode{static_cast<int>(InputMode::Stereo)};
   bool isStandalone() const { return wrapperType == wrapperType_Standalone; }
-  void updateStereoInputDetection();
+  void updateStereoIoDetection();
 
   // Tuner pitch detection (fed from processBlock when enabled)
   TunerDetector tuner;

@@ -126,6 +126,10 @@ export interface ToneSummary {
   /** Public tallies for the tone-info stats row (downloads, then bookmarks). */
   downloads_count: number;
   favorites_count: number;
+  /** Whether the signed-in user has favorited this tone. Set by the
+      expand-time /tones/{id} sync; omitted when unknown (signed out, or
+      a payload from before the field existed). */
+  is_favorite?: boolean;
   /** Canonical public page URL (title slug + id) for the share action.
       Absent on tones stored before native shipped it. */
   url?: string;
@@ -214,6 +218,11 @@ export interface ChainState {
       stereo standalone input device). Drives the faceplate input-mode button
       and the dual input meters. */
   stereoInput: boolean;
+  /** True when the plugin can drive two distinct output channels (stereo
+      host bus, 2+ channel standalone output device). False greys the
+      stereo-image slot and collapses the balance knob; native keeps Spread
+      idle to match, so the output is the plain mono chain. */
+  stereoOutput: boolean;
   /** True in the standalone app; gates standalone-only settings. */
   standalone: boolean;
   /** Which channels of a stereo source feed the plugin (faceplate button):

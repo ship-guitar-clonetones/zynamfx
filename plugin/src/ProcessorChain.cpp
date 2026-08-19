@@ -171,6 +171,11 @@ juce::var TONE3000Processor::makeToneSummary(const juce::var& toneVar) {
   // TONE3000 tone card).
   out->setProperty("downloads_count", tone->getProperty("downloads_count"));
   out->setProperty("favorites_count", tone->getProperty("favorites_count"));
+  // Signed-in /tones/{id} sync: whether this user has favorited the tone.
+  // Omitted when the stored payload predates the field (signed-out loads,
+  // older chains) so the UI treats it as unknown rather than false.
+  if (tone->hasProperty("is_favorite"))
+    out->setProperty("is_favorite", tone->getProperty("is_favorite"));
 
   // Canonical public page URL (title slug + id); the UI's share action
   // copies it. Skipped when absent (very old stored tone JSON) so the UI
@@ -1070,6 +1075,10 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   // stereo standalone input device); drives the faceplate input-mode button
   // and the dual input meters.
   state->setProperty("stereoInput", stereoInputDetected.load());
+  // Output-side twin: false on a mono rig (mono host bus, or a one-channel
+  // standalone output device). The UI greys the stereo-image slot and
+  // collapses the balance knob; the DSP keeps Spread idle to match.
+  state->setProperty("stereoOutput", stereoOutputDetected.load());
   // True in the standalone app; gates standalone-only settings.
   state->setProperty("standalone", isStandalone());
   state->setProperty("inputMode", inputModeToString(getInputMode()));

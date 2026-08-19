@@ -276,8 +276,17 @@ export const PresetBar: React.FC<PresetBarProps> = ({
     if (saved) toast.show('Preset Saved');
   }, [saveName, onSave, toast]);
 
-  // Prev/next step through the list in order, wrapping at the ends. With no
-  // active preset, › starts at the first and ‹ at the last.
+  // Close the browser whenever a preset is chosen (list click or ‹ ›), then
+  // load. Prev/next wrap at the ends; with no active preset, › starts at the
+  // first and ‹ at the last.
+  const loadAndClose = useCallback(
+    (id: string) => {
+      setOpen('none');
+      onLoad(id);
+    },
+    [onLoad]
+  );
+
   const step = useCallback(
     (direction: 1 | -1) => {
       if (presets.length === 0) return;
@@ -288,9 +297,9 @@ export const PresetBar: React.FC<PresetBarProps> = ({
             ? 0
             : presets.length - 1
           : (index + direction + presets.length) % presets.length;
-      onLoad(presets[next].id);
+      loadAndClose(presets[next].id);
     },
-    [presets, active, onLoad]
+    [presets, active, loadAndClose]
   );
 
   const commitRename = useCallback(() => {
@@ -313,7 +322,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: presets.length > 0 ? 'pointer' : 'default',
+    cursor: presets.length > 0 ? 'pointer' : 'not-allowed',
     padding: '0 4rem',
     alignSelf: 'stretch',
   };
@@ -366,7 +375,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
         onRenameChange={setRenameValue}
         onCommitRename={commitRename}
         onCancelRename={() => setRenamingId(null)}
-        onLoad={() => onLoad(preset.id)}
+        onLoad={() => loadAndClose(preset.id)}
         onStartRename={() => {
           setRenamingId(preset.id);
           setRenameValue(preset.name);
@@ -460,7 +469,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
               background: 'transparent',
               color: saveName.trim() ? '#ffffff' : MUTED,
               fontSize: '13rem',
-              cursor: saveName.trim() ? 'pointer' : 'default',
+              cursor: saveName.trim() ? 'pointer' : 'not-allowed',
             }}
           >
             Save

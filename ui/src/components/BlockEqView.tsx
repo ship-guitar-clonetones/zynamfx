@@ -25,6 +25,7 @@ import { EqSliders } from './EqSliders';
 import { SpectrumBackdrop } from './SpectrumBackdrop';
 import { HELP, bandTypeHelp, helpProps, pinHelp, unpinHelp } from './helpText';
 import {
+  DISABLED_OPACITY,
   ICON_BOX_RADIUS,
   ICON_SIZE,
   MUTED,
@@ -33,6 +34,7 @@ import {
   TEXT_BOX_HEIGHT,
   segmentedCellStyle,
   segmentedGroupStyle,
+  uiOffClass,
 } from './theme';
 
 /**
@@ -189,7 +191,8 @@ const parseFreqInput = (raw: string): number | null => {
 interface BlockEqViewProps {
   blockId: string;
   bands: EqBand[];
-  /** EQ power state; a bypassed EQ renders its curve/dots dimmed. */
+  /** EQ power state; a bypassed EQ renders its curve/dots/controls dimmed
+      and inert (the header power button is the way back in). */
   eqEnabled: boolean;
   sampleRate: number;
   /** Which editor to show; owned by ChainBlock (the header EQ menu). */
@@ -312,14 +315,15 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
 
   // --- wheel = Q of the selected band (non-passive so the page can't scroll)
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const wheelStateRef = useRef({ bands, selected, view });
-  wheelStateRef.current = { bands, selected, view };
+  const wheelStateRef = useRef({ bands, selected, view, eqEnabled });
+  wheelStateRef.current = { bands, selected, view, eqEnabled };
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      const { bands: current, selected: index, view: mode } = wheelStateRef.current;
+      const { bands: current, selected: index, view: mode, eqEnabled: on } = wheelStateRef.current;
       if (mode !== 'graph') return; // Q isn't editable in the sliders view
+      if (!on) return; // bypassed EQ is inert (matching the dimmed dots)
       e.preventDefault();
       const band = current[index];
       if (!band) return;
@@ -432,7 +436,11 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
           >
             <SpectrumBackdrop blockId={blockId} />
           </svg>
-          <div style={{ position: 'absolute', inset: 0, opacity: eqEnabled ? 1 : 0.4 }}>
+          {/* Bypassed EQ: faders dim and go inert (uiOffClass). */}
+          <div
+            className={uiOffClass(!eqEnabled)}
+            style={{ position: 'absolute', inset: 0, transition: 'opacity 0.2s ease' }}
+          >
             <EqSliders
               bands={bands}
               onGainChange={handleSliderGain}
@@ -498,8 +506,12 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
 
           <SpectrumBackdrop blockId={blockId} />
 
-          {/* EQ curve + dots (dimmed while the EQ is bypassed) */}
-          <g opacity={eqEnabled ? 1 : 0.35}>
+          {/* EQ curve + dots: dimmed AND inert while the EQ is bypassed
+              (pointer-events off so the dots can't be grabbed). */}
+          <g
+            opacity={eqEnabled ? 1 : DISABLED_OPACITY}
+            style={{ pointerEvents: eqEnabled ? undefined : 'none' }}
+          >
             <path d={curve.area} fill={CURVE_COLOR} opacity={0.1} />
             <path d={curve.line} fill="none" stroke={CURVE_COLOR} strokeWidth={1.25} />
 
@@ -554,6 +566,9 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
             color: MUTED,
             pointerEvents: 'none',
             textShadow: '0 1rem 2rem rgba(0, 0, 0, 0.9)',
+            // Follows the curve/dots dim while the EQ is bypassed.
+            opacity: eqEnabled ? 1 : DISABLED_OPACITY,
+            transition: 'opacity 0.2s ease',
           }}
         >
           <span style={{ color: '#FFFFFF' }}>Band {selected + 1}</span>
@@ -567,6 +582,7 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
           clear the Hz axis labels. */}
       {view === 'graph' && (
         <div
+          className={uiOffClass(!eqEnabled)}
           style={{
             position: 'absolute',
             bottom: `${BODY_PADDING + 12}rem`,
@@ -574,6 +590,7 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '8rem',
+            transition: 'opacity 0.2s ease',
           }}
         >
           {/* Curve type: outer bands choose shelf vs pass; bells show their
@@ -638,7 +655,12 @@ export const BlockEqView: React.FC<BlockEqViewProps> = ({
             onCommit={commitGain}
             disabled={!hasGain(selectedBand?.type ?? 'bell')}
             help={HELP.eqGainChip}
-            style={{ ...chipStyle, opacity: hasGain(selectedBand?.type ?? 'bell') ? 1 : 0.4 }}
+            style={{
+              ...chipStyle,
+              // Cut bands have no gain: standard dim, plain cursor (there is
+              // no value to unlock, so not-allowed would over-promise).
+              opacity: hasGain(selectedBand?.type ?? 'bell') ? 1 : DISABLED_OPACITY,
+            }}
           />
           <EditableChip
             label="Q"

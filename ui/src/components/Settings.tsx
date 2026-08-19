@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { X as XIcon, Laptop, Info, Gauge } from './icons';
 import { useParameter } from '../hooks/useParameter';
 import { useNativeFunction } from '../hooks/useFunction';
@@ -197,6 +197,28 @@ export const Settings: React.FC<SettingsProps> = ({
     setLogStatus(path ? 'Revealed log file' : 'No log file found yet');
     setTimeout(() => setLogStatus(null), 3000);
   }, [revealLogs]);
+
+  // Web Inspector (macOS only; supported=false hides the toggle). The
+  // preference is machine-wide and native applies it to the live webview,
+  // so a plain optimistic local mirror is enough here.
+  const getWebInspectorEnabled = useNativeFunction<{ supported: boolean; enabled: boolean }>(
+    'getWebInspectorEnabled'
+  );
+  const setWebInspectorEnabled = useNativeFunction<boolean>('setWebInspectorEnabled');
+  const [webInspector, setWebInspector] = useState<{
+    supported: boolean;
+    enabled: boolean;
+  } | null>(null);
+  useEffect(() => {
+    getWebInspectorEnabled().then(setWebInspector);
+  }, [getWebInspectorEnabled]);
+  const handleWebInspectorChange = useCallback(
+    (enabled: boolean) => {
+      setWebInspector({ supported: true, enabled });
+      void setWebInspectorEnabled(enabled);
+    },
+    [setWebInspectorEnabled]
+  );
 
   const header = (
     <div
@@ -415,6 +437,35 @@ export const Settings: React.FC<SettingsProps> = ({
         <MidiMapSettings chain={chain} chainRight={chainRight} />
       </div>
 
+      {/* Version. When the startup check found a newer build (even if its
+          modal was dismissed), offer the update here too. Sits above
+          Diagnostics so debugging stays last. */}
+      {(version || update) && (
+        <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
+          {update && (
+            <a
+              href={update.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                ...ctaButtonStyle,
+                display: 'block',
+                boxSizing: 'border-box',
+                textDecoration: 'none',
+                marginBottom: '12rem',
+              }}
+            >
+              Update to v{update.version}
+            </a>
+          )}
+          {version && (
+            <p style={{ ...descriptionStyle, fontSize: '12rem', color: SUBTLE, margin: 0 }}>
+              TONE3000 v{version}
+            </p>
+          )}
+        </div>
+      )}
+
       <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
         <span style={sectionLabelStyle}>Diagnostics</span>
         <p style={{ ...descriptionStyle, marginBottom: '16rem' }}>
@@ -439,40 +490,24 @@ export const Settings: React.FC<SettingsProps> = ({
         {logStatus && (
           <p style={{ ...descriptionStyle, fontSize: '12rem', marginTop: '8rem' }}>{logStatus}</p>
         )}
+        {webInspector?.supported && (
+          <div style={{ marginTop: '24rem' }}>
+            <ToggleRow
+              flush
+              label="Web Inspector"
+              description="Debugging aid: right-click the plugin UI and choose Inspect Element. Also restores the webview Reload menu. Leave off unless support asks for it."
+              value={webInspector.enabled}
+              onChange={handleWebInspectorChange}
+            />
+          </div>
+        )}
       </div>
-
-      {/* Version footer. When the startup check found a newer build (even if
-          its modal was dismissed), offer the update here too. */}
-      {(version || update) && (
-        <div style={{ marginTop: '8rem' }}>
-          {update && (
-            <a
-              href={update.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                ...ctaButtonStyle,
-                display: 'block',
-                boxSizing: 'border-box',
-                textDecoration: 'none',
-                marginBottom: '12rem',
-              }}
-            >
-              Update to v{update.version}
-            </a>
-          )}
-          {version && (
-            <p style={{ ...descriptionStyle, fontSize: '12rem', color: SUBTLE, margin: 0 }}>
-              TONE3000 v{version}
-            </p>
-          )}
-        </div>
-      )}
     </>
   );
 
   return (
     <div
+      className="hide-scrollbar"
       style={{
         position: 'absolute',
         top: 0,

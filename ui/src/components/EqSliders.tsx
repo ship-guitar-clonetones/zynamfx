@@ -6,6 +6,7 @@ import { clamp, hasGain, TYPE_GLYPHS } from './eqShared';
 import { BODY_PADDING } from './chainLayout';
 import { HELP, helpProps, pinHelp, unpinHelp } from './helpText';
 import { getUiScale } from '../hooks/useUiScale';
+import { DISABLED_OPACITY } from './theme';
 
 /**
  * Mesa-style graphic-EQ view: six gain faders mirroring the same bands as
@@ -217,7 +218,7 @@ export const EqSliders: React.FC<EqSlidersProps> = ({
                   position: 'relative',
                   minWidth: 0,
                   cursor: editable ? 'ns-resize' : 'default',
-                  opacity: editable ? 1 : 0.4,
+                  opacity: editable ? 1 : DISABLED_OPACITY,
                   touchAction: 'none',
                 }}
               >
