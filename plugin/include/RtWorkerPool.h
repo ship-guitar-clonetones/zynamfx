@@ -47,8 +47,10 @@
 //
 // Scheduling: workers run at realtime priority
 // (juce::Thread::startRealtimeThread: time-constraint on macOS, MMCSS "Pro
-// Audio" on Windows) and, when the host provides one, join the device's
-// audio workgroup (os_workgroup on macOS; without it, Apple Silicon parks
+// Audio" on Windows; on Linux hosts without rtprio privileges the realtime
+// start is refused and workers fall back to normal highest-priority
+// threads) and, when the host provides one, join the device's audio
+// workgroup (os_workgroup on macOS; without it, Apple Silicon parks
 // them on efficiency cores and joins miss deadlines). The workgroup arrives
 // via AudioProcessor::audioWorkgroupContextChanged and is re-joined from
 // each worker's own loop whenever it changes (tokens are thread-affine).
@@ -97,10 +99,17 @@ public:
     workers.reserve(static_cast<size_t>(numWorkers));
     for (int i = 0; i < numWorkers; ++i) {
       auto worker = std::make_unique<Worker>(*this, i);
-      worker->startRealtimeThread(
+      const bool startedRealtime = worker->startRealtimeThread(
           juce::Thread::RealtimeOptions{}
               .withPriority(10)
               .withApproximateAudioProcessingTime(juce::jmax(1, samplesPerBlock), sampleRate));
+      // Linux without rtprio privileges refuses SCHED_RR at pthread_create,
+      // so the realtime start fails outright there (macOS and Windows always
+      // succeed). A normal-priority worker still parallelizes, and the
+      // join-steal path absorbs any scheduling misses, so fall back rather
+      // than running with no workers at all.
+      if (!startedRealtime)
+        worker->startThread(juce::Thread::Priority::highest);
       workers.push_back(std::move(worker));
     }
   }

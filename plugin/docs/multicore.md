@@ -69,7 +69,10 @@ bit-identical regardless.
 
 The threads run at realtime priority (time-constraint on macOS, MMCSS
 "Pro Audio" on Windows); the pool sizes itself to one worker per spare
-hardware core. On macOS workers also join the audio device's workgroup
+hardware core. Linux refuses realtime scheduling to processes without
+rtprio privileges, so there the workers fall back to normal
+highest-priority threads: still parallel, and the join steal absorbs any
+scheduling misses. On macOS workers also join the audio device's workgroup
 (`os_workgroup`) when the host provides one; without that, Apple Silicon
 parks them on efficiency cores and joins miss deadlines. Workgroup tokens
 are thread-affine, so each worker re-joins from its own loop whenever the
