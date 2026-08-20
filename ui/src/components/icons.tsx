@@ -26,6 +26,7 @@ import {
   Link as LLink,
   LogIn as LLogIn,
   LogOut as LLogOut,
+  MidiPort as LMidiPort,
   Pencil as LPencil,
   PlusCircle as LPlusCircle,
   Power as LPower,
@@ -89,6 +90,7 @@ export const Laptop = scaled(LLaptop, 'Laptop');
 export const Link = scaled(LLink, 'Link');
 export const LogIn = scaled(LLogIn, 'LogIn');
 export const LogOut = scaled(LLogOut, 'LogOut');
+export const MidiPort = scaled(LMidiPort, 'MidiPort');
 export const Pencil = scaled(LPencil, 'Pencil');
 export const PlusCircle = scaled(LPlusCircle, 'PlusCircle');
 export const Power = scaled(LPower, 'Power');

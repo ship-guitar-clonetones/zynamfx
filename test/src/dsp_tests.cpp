@@ -22,6 +22,7 @@
 //               ctest --test-dir build -R Dsp --output-on-failure
 #include "ChainOversampler.h"
 #include "NamEngine.h"
+#include "RtWorkerPool.h"
 #include "test_helpers.h"
 
 #include <gtest/gtest.h>
@@ -372,6 +373,42 @@ TEST_P(NamEngineTest, PhaseInterleaveMatchesManualPhaseReference) {
 
   for (int i = 0; i < total; ++i)
     ASSERT_EQ(buffer.getSample(0, i), reference[static_cast<size_t>(i)]) << "at " << i;
+}
+
+TEST_P(NamEngineTest, PhaseForkMatchesSerialBitExact) {
+  // Pool-forked phases (see NamEngine::process) against the serial phase
+  // loop, deliberately on the ugliest geometry: chunk sizes that aren't
+  // divisible by the factor (the phaseOffset carry) and an engine prepared
+  // smaller than its buffers (internal defensive slicing). Any scheduling
+  // dependence (a shared buffer, a phase touching a sibling's stream) shows
+  // up as a bit mismatch.
+  RtWorkerPool pool;
+  pool.start(kFs, 512);
+
+  for (const int factor : {2, 4, 8}) {
+    SCOPED_TRACE("factor " + juce::String(factor));
+    // 313 is odd and coprime to every factor, so the phase offset lands
+    // differently on every chunk; 256 < 313 forces the internal slice loop.
+    const int chunk = 313, chunks = 24, total = chunk * chunks;
+    const auto in = makeNoise(total, 55501 + factor, 0.5f);
+
+    auto run = [&](RtWorkerPool* forkPool) {
+      auto engine = makeNamEngine(testFile(GetParam().file), factor, factor);
+      engine->prepare(256);
+      std::vector<float> out(in.begin(), in.end());
+      for (int off = 0; off < total; off += chunk) {
+        float* ptr = out.data() + off;
+        juce::AudioBuffer<float> view(&ptr, 1, chunk);
+        engine->process(view, forkPool);
+      }
+      return out;
+    };
+
+    const auto serial = run(nullptr);
+    const auto forked = run(&pool);
+    for (int i = 0; i < total; ++i)
+      ASSERT_EQ(serial[static_cast<size_t>(i)], forked[static_cast<size_t>(i)]) << "at " << i;
+  }
 }
 
 TEST(NamEngineAliasingTest, OversamplingReducesRealAmpAliasing) {

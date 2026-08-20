@@ -46,3 +46,10 @@ function boolPref(key: string) {
 const blockNormalizeControl = boolPref('t3k.showBlockNormalizeControl');
 export const setBlockNormalizeControlEnabled = blockNormalizeControl.set;
 export const useBlockNormalizeControlEnabled = blockNormalizeControl.useValue;
+
+// Whether the preset browser shows each row's MIDI program-change number.
+// Off by default: most players don't program PCs, and the numbers are noise
+// until they do.
+const presetPcNumbers = boolPref('t3k.showPresetPcNumbers');
+export const setPresetPcNumbersEnabled = presetPcNumbers.set;
+export const usePresetPcNumbersEnabled = presetPcNumbers.useValue;

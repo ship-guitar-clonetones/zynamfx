@@ -116,6 +116,40 @@ TEST(PresetManagerTest, SystemFactoryPresetsListedAndLocalOverrideWins) {
   EXPECT_FALSE(mgr.remove("factory:lead"));
 }
 
+TEST(PresetManagerTest, UserSectionListsBeforeFactory) {
+  // The list order is the MIDI program-change order, and user presets own
+  // the low numbers. The factory preset is named to sort first so only the
+  // section rule can put it last.
+  TempPresetDir tmp;
+  PresetManager mgr(tmp.dir);
+  tmp.dir.getChildFile("Factory").createDirectory();
+  {
+    juce::ValueTree preset(PresetManager::kPresetTag);
+    preset.setProperty("name", "AAA Factory", nullptr);
+    juce::FileOutputStream out(tmp.dir.getChildFile("Factory").getChildFile(
+        juce::String("aaa") + PresetManager::kFileExtension));
+    ASSERT_TRUE(out.openedOk());
+    out.write("T3KB", 4);
+    preset.writeToStream(out);
+  }
+  const auto alpha = mgr.save("Alpha", makePreset("a"));
+  const auto zulu = mgr.save("Zulu", makePreset("z"));
+
+  auto presets = mgr.list();
+  ASSERT_EQ(presets.size(), 3u);
+  EXPECT_FALSE(presets[0].factory);
+  EXPECT_FALSE(presets[1].factory);
+  EXPECT_TRUE(presets[2].factory);
+
+  // A custom order (order.json) keeps the sections separated too.
+  ASSERT_TRUE(mgr.move(zulu.id, -1));
+  presets = mgr.list();
+  ASSERT_EQ(presets.size(), 3u);
+  EXPECT_EQ(presets[0].id, zulu.id);
+  EXPECT_EQ(presets[1].id, alpha.id);
+  EXPECT_TRUE(presets[2].factory);
+}
+
 TEST(PresetManagerTest, ListSkipsCorruptAndForeignFiles) {
   TempPresetDir tmp;
   PresetManager mgr(tmp.dir);

@@ -8,13 +8,13 @@
 
 // Machine-wide user settings.
 // Shared PropertiesFile for preferences that belong to the machine, not the
-// session/preset (currently just multi-core stereo). Same app-data root
+// session/preset (currently just multi-core processing). Same app-data root
 // as PresetManager: ~/Library/Application Support/TONE3000 on macOS,
 // %APPDATA%/TONE3000 on Windows, $XDG_CONFIG_HOME/TONE3000 (default
 // ~/.config/TONE3000) on Linux.
 namespace {
 
-constexpr auto kMultiCoreKey = "multiCoreStereo";
+constexpr auto kMultiCoreKey = "multiCore";
 constexpr auto kWebInspectorKey = "webInspector";
 
 // Magic prefix for the binary ValueTree state format (see getStateInformation).
@@ -92,7 +92,7 @@ void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {
     settings.saveIfNeeded();
   }
 
-  juce::Logger::writeToLog(juce::String("[Processor] Multi-core stereo ") +
+  juce::Logger::writeToLog(juce::String("[Processor] Multi-core processing ") +
                            (enabled ? "enabled" : "disabled"));
   bumpChainRevision();
 }

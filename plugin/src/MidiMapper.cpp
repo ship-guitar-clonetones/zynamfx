@@ -183,6 +183,27 @@ bool MidiMapper::removeMapping(const juce::String& targetId) {
   return removed;
 }
 
+bool MidiMapper::setCcMapping(const juce::String& targetId, int ccNumber) {
+  if (!isValidTarget(targetId) || ccNumber < 0 || ccNumber > 127)
+    return false;
+  auto mapping = makeMapping(targetId, Source::cc, ccNumber);
+  {
+    const juce::SpinLock::ScopedLockType lock(mapLock);
+    std::erase_if(mappings, [&](const Mapping& m) { return m.targetId == targetId; });
+    mappings.push_back(std::move(mapping));
+  }
+  // Typing supersedes a listen on the same target, including a capture
+  // already waiting for its async commit; a learn armed for another target
+  // keeps listening.
+  if (learnTargetId == targetId) {
+    learnArmed.store(false);
+    capturedNumber.store(-1);
+    learnTargetId.clear();
+  }
+  notifyChanged();
+  return true;
+}
+
 MidiMapper::Mapping MidiMapper::makeMapping(const juce::String& targetId, Source source,
                                             int number) const {
   const auto block = blockPowerTargetFor(targetId);

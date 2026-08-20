@@ -26,12 +26,13 @@
  * The list is rescanned on every call; it's a handful of stat()s, and it
  * keeps multiple plugin instances sharing the folder coherent for free.
  *
- * Ordering: factory presets always come before user presets (the browser's
- * two sections). Within each section a custom order can be set via move()
- * and persists in order.json beside the preset files; presets not in the
- * order file (new saves, first run) fall back to name order after the
- * ordered ones. List order is user-facing truth: the browser, prev/next
- * stepping and MIDI program-change numbers all follow it.
+ * Ordering: user presets always come before factory presets (the browser's
+ * two sections; a player's own presets own the low MIDI program-change
+ * numbers). Within each section a custom order can be set via move() and
+ * persists in order.json beside the preset files; presets not in the order
+ * file (new saves, first run) fall back to name order after the ordered
+ * ones. List order is user-facing truth: the browser, prev/next stepping
+ * and MIDI program-change numbers all follow it.
  */
 class PresetManager {
 public:
@@ -52,7 +53,7 @@ public:
       machine. */
   explicit PresetManager(const juce::File& baseDir, const juce::File& systemFactory = {});
 
-  /** All presets, factory first, each section sorted by name. */
+  /** All presets, user first then factory, each section sorted by name. */
   std::vector<Info> list() const;
 
   /** Full preset tree for an id, or an invalid tree when missing/corrupt. */

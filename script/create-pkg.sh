@@ -250,9 +250,10 @@ RES="$INSTALLER_DIR/Resources"
     echo '  <background-darkAqua file="background-dark.tiff" mime-type="image/tiff" alignment="bottomleft" scaling="none" />'
 
   # readme (not license): shows the MIT text without forcing an Agree dialog.
-  [[ -f "$RES/welcome.html"    ]] && echo '  <welcome file="welcome.html" mime-type="text/html" />'
-  [[ -f "$RES/readme.html"     ]] && echo '  <readme file="readme.html" mime-type="text/html" />'
-  [[ -f "$RES/conclusion.html" ]] && echo '  <conclusion file="conclusion.html" mime-type="text/html" />'
+  # No <conclusion>: omitting it gives the native Summary pane with the
+  # green checkmark ("The installation was successful.").
+  [[ -f "$RES/welcome.html" ]] && echo '  <welcome file="welcome.html" mime-type="text/html" />'
+  [[ -f "$RES/readme.html"  ]] && echo '  <readme file="readme.html" mime-type="text/html" />'
 
   echo '  <choices-outline>'
   echo '    <line choice="standalone" />'

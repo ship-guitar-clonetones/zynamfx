@@ -757,10 +757,10 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
   chainScratchChannel.setSize(1, samplesPerBlock, false, false, true);
   chainScratchChannel.clear();
 
-  // (Re)start the lane worker with the new callback geometry. It idles until
-  // a stereo callback actually forks (see rtParallelLanes); starting it here
+  // (Re)start the worker pool with the new callback geometry. It idles until
+  // a callback actually forks (lanes or NAM phases); starting it here
   // unconditionally keeps the multi-core toggle a pure dispatch gate.
-  laneWorker.start(sampleRate, samplesPerBlock);
+  rtWorkerPool.start(sampleRate, samplesPerBlock);
 
   // Apply the actual tone knob gains to the tone stack filters.
   updateEqCoefficients();
@@ -772,10 +772,10 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
 void TONE3000Processor::releaseResources() {
   juce::Logger::writeToLog("[Processor] releaseResources() called");
 
-  // The lane worker only lives while the host is running audio callbacks
+  // The worker pool only lives while the host is running audio callbacks
   // (prepareToPlay restarts it). Stopping here also guarantees no worker
   // outlives the buffers/lanes a stale job could reference.
-  laneWorker.stop();
+  rtWorkerPool.stop();
 
   // DO NOT clear chain blocks here! They should persist across bypass/unbypassed states.
   // Chain blocks are managed by the plugin's state system and should only be cleared
@@ -1036,8 +1036,12 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
           }
         }
 
-        // Process with the NAM engine (handles mono conversion internally)
-        block->namEngine->process(buffer);
+        // Process with the NAM engine (handles mono conversion internally).
+        // With multi-core on, the engine forks its oversampling phase
+        // instances across the worker pool (rtPhasePool, resolved per
+        // callback); nested inside a lane fork this is the pool's supported
+        // one-deep nesting. Null = phases run serially on this thread.
+        block->namEngine->process(buffer, rtPhasePool);
 
         // Post-model gain: calibrated hand-off OR loudness normalization,
         // never both; they have contradictory goals (reproduce the capture
@@ -1224,9 +1228,11 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
   }
 }
 
-// Fork/join for the stereo lanes (see LaneWorker.h). The job context lives on
-// this stack frame and stays valid until join() returns; the lambda decays to
-// a plain function pointer, so dispatching allocates nothing on the RT path.
+// Fork/join for the stereo lanes (see RtWorkerPool.h). The job contexts live
+// on this stack frame and stay valid until forkJoin returns; the lambda
+// decays to a plain function pointer, so forking allocates nothing on the RT
+// path. Job 0 (the `local*` section) always runs on this thread; job 1 goes
+// to a pool worker, or is stolen back inline when none picks it up.
 void TONE3000Processor::processLanePair(Lane& workerBlocks,
                                         juce::AudioBuffer<float>& workerBuffer,
                                         juce::AudioBuffer<float>& workerScratch,
@@ -1241,23 +1247,16 @@ void TONE3000Processor::processLanePair(Lane& workerBlocks,
       juce::AudioBuffer<float>* buffer;
       juce::AudioBuffer<float>* scratch;
       int beginIdx;
-    } job{this, &workerBlocks, &workerBuffer, &workerScratch, workerBeginIdx};
+    } jobs[2] = {{this, &localBlocks, &localBuffer, &localScratch, localBeginIdx},
+                 {this, &workerBlocks, &workerBuffer, &workerScratch, workerBeginIdx}};
+    void* ctxs[2] = {&jobs[0], &jobs[1]};
 
-    const bool dispatched = laneWorker.dispatch(
+    rtWorkerPool.forkJoin(
         [](void* ctx) {
           auto& j = *static_cast<LaneJob*>(ctx);
           j.proc->processChainOnBuffer(*j.blocks, *j.buffer, *j.scratch, j.beginIdx);
         },
-        &job);
-
-    processChainOnBuffer(localBlocks, localBuffer, localScratch, localBeginIdx);
-
-    if (dispatched) {
-      laneWorker.join();
-      return;
-    }
-    // The worker wasn't running after all; finish its section inline.
-    processChainOnBuffer(workerBlocks, workerBuffer, workerScratch, workerBeginIdx);
+        ctxs, 2);
     return;
   }
 
@@ -1472,13 +1471,17 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     rtStereoChains = stereoEnabled.load() && numChannels >= 2;
     rtChainChannels = juce::jmin(numChannels, 2);
 
-    // Fork the lanes across cores only when both sides of the parallel
-    // section carry work; otherwise the handoff costs more than the empty
-    // loop it would hide. For branched routing the parallel section is
+    // One multi-core resolution per callback (under chainMutex): the phase
+    // fork only needs the setting and live workers, while the lane fork
+    // additionally needs stereo chains where both sides of the parallel
+    // section carry work (otherwise the handoff costs more than the empty
+    // loop it would hide). For branched routing the parallel section is
     // trunk-suffix ∥ branch, so the trunk only counts blocks after the tap.
+    const bool multiCore =
+        multiCoreEnabled.load(std::memory_order_relaxed) && rtWorkerPool.isRunning();
+    rtPhasePool = multiCore ? &rtWorkerPool : nullptr;
     rtParallelLanes = false;
-    if (rtStereoChains && multiCoreEnabled.load(std::memory_order_relaxed) &&
-        laneWorker.isRunning()) {
+    if (rtStereoChains && multiCore) {
       if (rtBranchTapIndex >= 0) {
         const ChainSide branchSide =
             branchSourceSide == ChainSide::Right ? ChainSide::Left : ChainSide::Right;

@@ -1,5 +1,7 @@
 #include "NamEngine.h"
 #include "NAM/slimmable.h"
+#include "RtWorkerPool.h"
+#include <atomic>
 #include <stdexcept>
 
 NamEngine::NamEngine(std::vector<std::unique_ptr<nam::DSP>> phaseInstances, int factor)
@@ -59,7 +61,7 @@ void NamEngine::setSlimmableSize(double val) {
   }
 }
 
-void NamEngine::process(juce::AudioBuffer<float>& buffer) {
+void NamEngine::process(juce::AudioBuffer<float>& buffer, RtWorkerPool* pool) {
   if (!isPrepared || maxBlockSize < 1) {
     throw std::runtime_error("NamEngine must be prepared before processing");
   }
@@ -89,13 +91,56 @@ void NamEngine::process(juce::AudioBuffer<float>& buffer) {
         phase = 0;
     }
 
-    for (int p = 0; p < count; ++p) {
-      const int frames = phaseFrames[static_cast<size_t>(p)];
-      if (frames <= 0)
-        continue;
-      NAM_SAMPLE* inputPtrs[] = {phaseInputs[static_cast<size_t>(p)].data()};
-      NAM_SAMPLE* outputPtrs[] = {phaseOutputs[static_cast<size_t>(p)].data()};
-      instances[static_cast<size_t>(p)]->process(inputPtrs, outputPtrs, frames);
+    if (pool != nullptr && count > 1) {
+      // Fork the phases across the pool (see the header comment): each job
+      // touches only its own instance and buffers, so any schedule produces
+      // the same bits as the serial loop below. Exceptions can't cross
+      // threads, so a job traps its own and the joiner rethrows once all
+      // phases are done; the caller's RT failure handling (disable the
+      // block, log off-thread) works exactly as for a serial throw.
+      struct PhaseJob {
+        nam::DSP* model;
+        NAM_SAMPLE* input;
+        NAM_SAMPLE* output;
+        int frames;
+        std::atomic<bool>* failed;
+      };
+      std::atomic<bool> phaseFailed{false};
+      jassert(count <= RtWorkerPool::kMaxJobs);  // count == oversample factor <= 8
+      PhaseJob jobs[RtWorkerPool::kMaxJobs];
+      void* ctxs[RtWorkerPool::kMaxJobs];
+      for (int p = 0; p < count; ++p) {
+        jobs[p] = {instances[static_cast<size_t>(p)].get(),
+                   phaseInputs[static_cast<size_t>(p)].data(),
+                   phaseOutputs[static_cast<size_t>(p)].data(),
+                   phaseFrames[static_cast<size_t>(p)], &phaseFailed};
+        ctxs[p] = &jobs[p];
+      }
+      pool->forkJoin(
+          [](void* ctx) {
+            auto& j = *static_cast<PhaseJob*>(ctx);
+            if (j.frames <= 0)
+              return;
+            try {
+              NAM_SAMPLE* inputPtrs[] = {j.input};
+              NAM_SAMPLE* outputPtrs[] = {j.output};
+              j.model->process(inputPtrs, outputPtrs, j.frames);
+            } catch (...) {
+              j.failed->store(true, std::memory_order_release);
+            }
+          },
+          ctxs, count);
+      if (phaseFailed.load(std::memory_order_acquire))
+        throw std::runtime_error("NAM phase processing failed");
+    } else {
+      for (int p = 0; p < count; ++p) {
+        const int frames = phaseFrames[static_cast<size_t>(p)];
+        if (frames <= 0)
+          continue;
+        NAM_SAMPLE* inputPtrs[] = {phaseInputs[static_cast<size_t>(p)].data()};
+        NAM_SAMPLE* outputPtrs[] = {phaseOutputs[static_cast<size_t>(p)].data()};
+        instances[static_cast<size_t>(p)]->process(inputPtrs, outputPtrs, frames);
+      }
     }
 
     // Reinterleave (and convert back to float). Reuse phaseFrames as read

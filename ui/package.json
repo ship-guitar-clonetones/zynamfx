@@ -14,9 +14,9 @@
   "dependencies": {
     "@dnd-kit/helpers": "^0.5.0",
     "@dnd-kit/react": "^0.5.0",
-    "dompurify": "^3.4.12",
     "@juce-framework/webview": "file:../libs/juce/modules/juce_gui_extra/native/typescript/webview-interop",
-    "lucide-react": "^0.539.0",
+    "dompurify": "^3.4.12",
+    "lucide-react": "^1.33.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-knob-headless": "^0.4.0"

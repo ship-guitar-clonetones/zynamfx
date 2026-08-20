@@ -118,24 +118,27 @@ std::vector<PresetManager::Info> PresetManager::list() const {
     return out;
   };
 
-  // System Factory first, then user Factory overlaid on top (a local file
-  // with the same stem replaces the shipped one), re-sorted by name so the
-  // merged section reads like a single folder.
-  std::vector<Info> presets = scan(systemFactoryDir, kFactoryPrefix, true);
+  // Factory section: system Factory with the user Factory overlaid on top (a
+  // local file with the same stem replaces the shipped one), re-sorted by
+  // name so the merged section reads like a single folder.
+  std::vector<Info> factory = scan(systemFactoryDir, kFactoryPrefix, true);
   for (const auto& info : scan(factoryDir, kFactoryPrefix, true)) {
-    const auto it = std::find_if(presets.begin(), presets.end(),
+    const auto it = std::find_if(factory.begin(), factory.end(),
                                  [&info](const Info& existing) { return existing.id == info.id; });
-    if (it != presets.end())
+    if (it != factory.end())
       *it = info;
     else
-      presets.push_back(info);
+      factory.push_back(info);
   }
-  std::sort(presets.begin(), presets.end(), [](const Info& a, const Info& b) {
+  std::sort(factory.begin(), factory.end(), [](const Info& a, const Info& b) {
     return a.name.compareIgnoreCase(b.name) < 0;
   });
-  std::vector<Info> user = scan(userDir, kUserPrefix, false);
-  presets.insert(presets.end(), std::make_move_iterator(user.begin()),
-                 std::make_move_iterator(user.end()));
+
+  // User presets lead so they own the low MIDI program-change numbers; the
+  // factory section follows.
+  std::vector<Info> presets = scan(userDir, kUserPrefix, false);
+  presets.insert(presets.end(), std::make_move_iterator(factory.begin()),
+                 std::make_move_iterator(factory.end()));
 
   // Apply the custom order: within each section, ordered ids first (in file
   // order), then everything else. The sort is stable over the name-sorted
@@ -150,7 +153,7 @@ std::vector<PresetManager::Info> PresetManager::list() const {
     };
     std::stable_sort(presets.begin(), presets.end(), [&](const Info& a, const Info& b) {
       if (a.factory != b.factory)
-        return a.factory;  // factory section always first
+        return !a.factory;  // user section always first
       return rank(a) < rank(b);
     });
   }

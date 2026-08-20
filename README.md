@@ -220,13 +220,14 @@ flowchart LR
   at the 48 kHz base rate inside a per-block decimate/interpolate island,
   and IR CPU and sound are identical at every factor. Design notes in
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
-- **Multi-core stereo**: a Plugin Settings option (on by default, machine-wide)
-  processes the two stereo chains concurrently. The Right chain (or, when
-  branched, the branch lane) runs on a realtime worker thread while the
-  audio thread processes the other, and the audio thread can always steal
-  the job back and run serially, so the toggle is pure scheduling and the
-  output is bit-identical either way (pinned by
-  `test/src/multicore_tests.cpp`). Design notes in
+- **Multi-core processing**: a Plugin Settings option (on by default,
+  machine-wide) spreads independent chain work across a realtime worker
+  pool. The two stereo chains process concurrently (the Right chain, or the
+  branch lane when branched, on a worker while the audio thread processes
+  the other), and an oversampled NAM model's phase instances fork across
+  cores too. The forking thread can always steal jobs back and run them
+  inline, so the toggle is pure scheduling and the output is bit-identical
+  either way (pinned by `test/src/multicore_tests.cpp`). Design notes in
   [`plugin/docs/multicore.md`](plugin/docs/multicore.md).
 
 Inside every tone block:
@@ -308,7 +309,7 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   around the 48 kHz chain boundary, with `ResamplingContainer` from
   [iPlug2](https://github.com/iPlug2/iPlug2).
 - [NAM-Oversampler](https://github.com/DLC86/NAM-Oversampler) by DLC86:
-  pioneered oversampled NAM processing; the chain oversampler's half-band
+  oversampled NAM processing; the chain oversampler's half-band
   allpass coefficients are adapted from its AudioDSPTools fork (MIT). See
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
 - [JUCE](https://juce.com): plugin framework, DSP building blocks, and the

@@ -21,7 +21,7 @@
 #include "ChainHistory.h"
 #include "AutoOffset.h"
 #include "ChainOversampler.h"
-#include "LaneWorker.h"
+#include "RtWorkerPool.h"
 #include "MidiMapper.h"
 #include "NoiseGate.h"
 #include "Spread.h"
@@ -179,13 +179,15 @@ public:
       waiter runs on) block until the rig is actually audible again. */
   bool isChainEditFadeHeld() const { return chainEditFadePending.load(); }
 
-  // Multi-core stereo (machine-wide user setting).
-  // When on, stereo mode processes the two chain lanes concurrently: the
-  // Right lane (or the branch lane when branched) runs on the LaneWorker
-  // realtime thread while the audio thread processes the other. Off = the
-  // lanes run sequentially as before. Output is bit-identical either way;
-  // the toggle trades one core's worth of headroom for a second busy core,
-  // so it persists per machine, never with presets/sessions.
+  // Multi-core processing (machine-wide user setting).
+  // When on, the chain stage spreads its independent work across the
+  // RtWorkerPool realtime threads: in stereo mode the two lanes run
+  // concurrently (the Right/branch lane on a worker, the other on the audio
+  // thread), and with oversampling active each NAM block's phase instances
+  // run concurrently too (see NamEngine). Off = everything runs sequentially
+  // on the audio thread as before. Output is bit-identical either way; the
+  // toggle trades single-core headroom for several busy cores, so it
+  // persists per machine, never with presets/sessions.
   bool getMultiCoreEnabled() const { return multiCoreEnabled.load(); }
   // `persist` = false skips the settings-file write (tests toggling the
   // scheduling path must not touch the user's machine-wide preference).
@@ -506,7 +508,7 @@ private:
                             juce::AudioBuffer<float>& dryScratch, int beginIdx = 0,
                             int endIdx = -1);
 
-  // Run two independent chain sections, the `worker*` one on the LaneWorker
+  // Run two independent chain sections, the `worker*` one on an RtWorkerPool
   // thread and the `local*` one on the calling (audio) thread, when this
   // callback forked (rtParallelLanes); strictly sequentially otherwise. The
   // sections are lane-disjoint by construction (different Lane, buffer and
@@ -597,8 +599,8 @@ private:
 
   // MIDI performance handlers (wired to midiMapper in the constructor,
   // both invoked on the message thread).
-  // Program change n loads the nth preset in list order (factory first, then
-  // user, both alphabetical; the same order the preset browser shows).
+  // Program change n loads the nth preset in list order (user first, then
+  // factory; the same order the preset browser shows and numbers).
   // Out-of-range programs are ignored.
   bool loadPresetAtIndex(int index);
   // Step the active preset through the list order, wrapping at the ends:
@@ -744,22 +746,30 @@ private:
   int rtChainChannels = 2;
   bool rtStereoChains = false;
   // True when this callback's chain stage should fork the two lanes across
-  // cores (see LaneWorker.h): multi-core enabled, worker healthy, stereo
+  // cores (see RtWorkerPool.h): multi-core enabled, workers healthy, stereo
   // chains active, and both sides of the parallel section actually carry
   // work. Resolved once per processBlock under chainMutex.
   bool rtParallelLanes = false;
+  // Per-callback pool handle for NAM phase forks (see NamEngine::process):
+  // &rtWorkerPool when multi-core is enabled and workers are up, nullptr
+  // otherwise (phases run serially). Unlike the lane fork this doesn't need
+  // stereo mode; a mono chain's oversampled NAM blocks fork too. Resolved
+  // once per processBlock under chainMutex.
+  RtWorkerPool* rtPhasePool = nullptr;
 
-  // Multi-core stereo (see the public getMultiCoreEnabled).
-  // The worker thread lives from prepareToPlay to releaseResources
-  // regardless of the setting (a parked thread is ~free); the setting only
-  // gates dispatch, so toggling it is glitch-free and instant.
-  LaneWorker laneWorker;
+  // Multi-core processing (see the public getMultiCoreEnabled).
+  // One pool serves both parallel sections: the stereo lane fork and the
+  // NAM phase forks nested inside a lane. The threads live from
+  // prepareToPlay to releaseResources regardless of the setting (parked
+  // threads are ~free); the setting only gates dispatch, so toggling it is
+  // glitch-free and instant.
+  RtWorkerPool rtWorkerPool;
   static bool readPersistedMultiCoreEnabled();
   std::atomic<bool> multiCoreEnabled{readPersistedMultiCoreEnabled()};
   // Hosts hand the device's os_workgroup here (AU/Standalone on macOS);
-  // forward it so the worker gets scheduled with the audio deadline.
+  // forward it so the workers get scheduled with the audio deadline.
   void audioWorkgroupContextChanged(const juce::AudioWorkgroup& workgroup) override {
-    laneWorker.setAudioWorkgroup(workgroup);
+    rtWorkerPool.setAudioWorkgroup(workgroup);
   }
   // Does the lane do any audible processing from `beginIdx` on? Gates the
   // fork: dispatching an idle lane costs more than running its (empty) loop

@@ -197,6 +197,8 @@ export const HELP = {
   presetDelete: 'Delete: remove this preset.',
   presetReorder: 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',
   presetDrag: 'Drag: move this preset within its section.',
+  presetPcToggle: 'MIDI PC: show each preset\u2019s program change number. Prev/Next and PC follow the list order.',
+  presetPc: 'PC: the MIDI program change number that loads this preset.',
 
   // Chain gallery
   addTile:

@@ -7,8 +7,8 @@
 #include <vector>
 
 /**
- * MIDI CC / note → target mapping engine with Learn, plus program-change
- * preset switching.
+ * MIDI CC / note → target mapping engine with Learn (and direct CC
+ * assignment for typed-in numbers), plus program-change preset switching.
  *
  * Lives in the processor, not the device layer, so the same map, learn flow
  * and settings UI work identically in the standalone app (enabled MIDI inputs
@@ -75,6 +75,11 @@ public:
   void startLearn(const juce::String& targetId);
   void cancelLearn();
   bool removeMapping(const juce::String& targetId);
+  /** Assign a CC number to a target directly, the typed alternative to
+      learn. Replaces any existing mapping for the target and supersedes a
+      learn armed for it. Rejects unknown targets and numbers outside
+      0-127. */
+  bool setCcMapping(const juce::String& targetId, int ccNumber);
 
   // Plugin state.
   juce::ValueTree toValueTree() const;

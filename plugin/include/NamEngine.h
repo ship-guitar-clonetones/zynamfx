@@ -32,8 +32,22 @@
  * Recurrent architectures (LSTM) update state on consecutive samples and
  * can't be phase-split; the loader gives them a single instance that runs
  * time-scaled at the full chain rate (matching NAM-Oversampler's behavior
- * for such models).
+ * for such models). In practice every loadable model is phase-safe (the
+ * catalog and the local-file gate only admit A2 WaveNets), so this is a
+ * defensive path.
+ *
+ * Multi-core phases:
+ * The phase instances are fully independent (separate models, disjoint
+ * per-phase buffers), so process() can fork them across the processor's
+ * RtWorkerPool (the same pool that forks the stereo lanes; a lane job
+ * forking its phases is the pool's supported one-deep nesting). Scheduling
+ * is the only thing that changes: deinterleave/reinterleave stay on the
+ * calling thread and every phase writes only its own buffers, so parallel
+ * output is bit-identical to serial. Passing no pool runs the classic
+ * sequential loop.
  */
+class RtWorkerPool;
+
 class NamEngine {
 public:
   /** Takes ownership of the phase instances, all built from the same model
@@ -55,8 +69,12 @@ public:
   void prepare(int maxBlockSize);
 
   /** Process a chain-domain buffer in place: channel 0 through the model,
-      fanned out to channel 1 if present. Must be prepared first. */
-  void process(juce::AudioBuffer<float>& buffer);
+      fanned out to channel 1 if present. Must be prepared first.
+      With a pool and more than one phase instance, the phases fork across
+      the pool's workers (bit-identical to the serial loop; see the header
+      comment); a phase failure rethrows as std::runtime_error on this
+      thread once every phase has completed. `pool` may be null (serial). */
+  void process(juce::AudioBuffer<float>& buffer, RtWorkerPool* pool = nullptr);
 
   /** The rate the model reports it was trained at. Purely informational;
       the chain always feeds it the chain rate (A2 models are all 48 kHz). */

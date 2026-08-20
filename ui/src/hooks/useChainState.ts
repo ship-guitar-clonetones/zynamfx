@@ -187,7 +187,7 @@ export function useChainState() {
           every loaded NAM block natively; saves with the DAW session. */
       setNamFullSize: (full: boolean) =>
         run('setNamFullSize', () => native.setNamFullSize(full)),
-      /** Multi-core stereo (machine-wide). Pure scheduling: applies
+      /** Multi-core processing (machine-wide). Pure scheduling: applies
           instantly and persists on disk. */
       setMultiCore: (enabled: boolean) =>
         run('setMultiCore', () => native.setMultiCore(enabled)),

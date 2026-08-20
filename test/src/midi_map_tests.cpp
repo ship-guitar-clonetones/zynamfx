@@ -5,13 +5,16 @@
 // hardware depends on:
 //
 //   - learn captures a CC and the mapping round-trips through getState,
+//   - setCcMapping assigns a typed CC without learn, validates its input,
+//     and supersedes an armed learn on the same target,
 //   - CC press detection: momentary switches (127 then 0) fire once per
 //     stomp, and switches that only ever send low values still fire on
 //     every press (the regression behind "CC works for notes but not CC"),
 //   - note-ons always toggle,
 //   - CC on a continuous parameter tracks absolutely,
 //   - block-power targets deliver their position and lane (left / right),
-//   - preset prev/next virtual targets deliver coalesced step deltas.
+//   - preset prev/next virtual targets deliver coalesced step deltas,
+//   - program changes deliver their program number unmapped.
 //
 // The mapper defers non-parameter work to the message thread via
 // AsyncUpdater, so these tests pump the dispatch loop (the test target
@@ -65,6 +68,43 @@ TEST(MidiMapperTest, LearnCapturesCcAndRoundTripsThroughState) {
   EXPECT_EQ((*mappings)[0]["source"].toString(), "cc");
   EXPECT_EQ(static_cast<int>((*mappings)[0]["number"]), 24);
   EXPECT_TRUE(state["learnTargetId"].toString().isEmpty()) << "learn must disarm after capture";
+}
+
+TEST(MidiMapperTest, SetCcMappingAssignsWithoutLearn) {
+  TONE3000Processor proc;
+  ASSERT_TRUE(proc.midiMapper.setCcMapping("inputLevel", 11));
+
+  const juce::var state = proc.midiMapper.getState();
+  const auto* mappings = state["mappings"].getArray();
+  ASSERT_NE(mappings, nullptr);
+  ASSERT_EQ(mappings->size(), 1);
+  EXPECT_EQ((*mappings)[0]["targetId"].toString(), "inputLevel");
+  EXPECT_EQ((*mappings)[0]["source"].toString(), "cc");
+  EXPECT_EQ(static_cast<int>((*mappings)[0]["number"]), 11);
+
+  proc.midiMapper.processMidi(ccEvent(11, 127));
+  EXPECT_NEAR(paramValue(proc, "inputLevel"),
+              proc.parameters.getParameter("inputLevel")->convertFrom0to1(1.0f), 1e-4f);
+}
+
+TEST(MidiMapperTest, SetCcMappingValidatesAndSupersedesLearn) {
+  TONE3000Processor proc;
+  EXPECT_FALSE(proc.midiMapper.setCcMapping("inputLevel", 128));
+  EXPECT_FALSE(proc.midiMapper.setCcMapping("inputLevel", -1));
+  EXPECT_FALSE(proc.midiMapper.setCcMapping("noSuchTarget", 1));
+
+  // Typing while the same target is listening replaces the learn: the map
+  // holds the typed CC and the armed state clears.
+  proc.midiMapper.startLearn("gateEnabled");
+  pumpMessages();
+  ASSERT_TRUE(proc.midiMapper.setCcMapping("gateEnabled", 24));
+  pumpMessages();
+
+  const juce::var state = proc.midiMapper.getState();
+  EXPECT_TRUE(state["learnTargetId"].toString().isEmpty()) << "typed CC must disarm the learn";
+  const float initial = paramValue(proc, "gateEnabled");
+  proc.midiMapper.processMidi(ccEvent(24, 127));
+  EXPECT_NE(paramValue(proc, "gateEnabled"), initial);
 }
 
 TEST(MidiMapperTest, LowValueOnlyCcFiresEveryPress) {
@@ -175,6 +215,23 @@ TEST(MidiMapperTest, PresetStepTargetsDeliverCoalescedDeltas) {
   pumpMessages();
   ASSERT_EQ(deltas.size(), 1u);
   EXPECT_EQ(deltas[0], 2);
+}
+
+TEST(MidiMapperTest, ProgramChangeDeliversProgramNumber) {
+  // Program changes need no mapping. Observe the delivery instead of loading
+  // real presets (the processor's hook indexes the on-disk list; the
+  // PresetManager tests pin that user presets lead that list).
+  TONE3000Processor proc;
+  std::vector<int> programs;
+  proc.midiMapper.onProgramChange = [&programs](int program) { programs.push_back(program); };
+
+  juce::MidiBuffer midi;
+  midi.addEvent(juce::MidiMessage::programChange(1, 5), 0);
+  proc.midiMapper.processMidi(midi);
+  pumpMessages();
+
+  ASSERT_EQ(programs.size(), 1u);
+  EXPECT_EQ(programs[0], 5);
 }
 
 }  // namespace

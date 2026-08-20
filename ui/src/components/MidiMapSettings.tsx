@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RotateCcw, X } from './icons';
 import { useMidiMap } from '../hooks/useMidiMap';
 import type { MidiMapping } from '../types/midiMap';
@@ -16,7 +16,9 @@ import { BORDER, MUTED, SUBTLE, BRAND_YELLOW } from './theme';
  * Learn flow: pick a target (or hit re-learn on a row), then move a hardware
  * control; the first CC / note-on wins. The engine owns the armed state
  * (this component just renders it), so learn survives tab switches and
- * completes from the hardware side via the midiMapChanged event.
+ * completes from the hardware side via the midiMapChanged event. The
+ * listening row also takes a typed CC number (Enter commits) for controllers
+ * that are easier to read than to wiggle; notes stay learn-only.
  *
  * Rows are two lines (target on the left, where block powers show the tone
  * currently in that chain slot; source + behavior on the right) so nothing
@@ -143,12 +145,33 @@ const MappingRow: React.FC<{
   </div>
 );
 
+const ccInputStyle: React.CSSProperties = {
+  width: '54rem',
+  boxSizing: 'border-box',
+  flexShrink: 0,
+  background: '#1C1C1E',
+  border: FIELD_BORDER,
+  borderRadius: '6rem',
+  color: '#ffffff',
+  fontSize: '12rem',
+  fontWeight: 400,
+  fontFamily: 'monospace',
+  textAlign: 'center',
+  padding: '4rem 6rem',
+  outline: 'none',
+};
+
 const LearningRow: React.FC<{
   targetId: string;
   context: string;
   first: boolean;
+  /** Digits-only draft of a typed CC number; owned by the parent so typing
+      can pause the learn give-up timer. */
+  ccDraft: string;
+  onCcDraftChange: (draft: string) => void;
+  onCcCommit: () => void;
   onCancel: () => void;
-}> = ({ targetId, context, first, onCancel }) => (
+}> = ({ targetId, context, first, ccDraft, onCcDraftChange, onCcCommit, onCancel }) => (
   <div style={{ ...rowStyle(first), background: '#000' }}>
     <TargetCell targetId={targetId} context={context} />
     <span
@@ -176,6 +199,17 @@ const LearningRow: React.FC<{
       />
       Listening…
     </span>
+    <input
+      value={ccDraft}
+      onChange={(e) => onCcDraftChange(e.target.value.replace(/\D/g, '').slice(0, 3))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCcCommit();
+      }}
+      placeholder="CC #"
+      aria-label="CC number"
+      title="Type a CC number (0-127), Enter to assign"
+      style={ccInputStyle}
+    />
     <button
       onClick={onCancel}
       style={{
@@ -205,13 +239,27 @@ export const MidiMapSettings: React.FC<{
 
   const learnTargetId = state?.learnTargetId ?? '';
 
+  // Draft of a typed CC number for the listening row; one learn is armed at
+  // a time, so one draft suffices. Cleared when the armed target changes.
+  const [ccDraft, setCcDraft] = useState('');
+  useEffect(() => setCcDraft(''), [learnTargetId]);
+
   // Learn is armed until hardware answers; give up after a while so an
-  // unplugged controller doesn't leave the row listening forever.
+  // unplugged controller doesn't leave the row listening forever. Typing a
+  // CC number means the user is present, so the draft pauses the timer.
   useEffect(() => {
-    if (!learnTargetId) return;
+    if (!learnTargetId || ccDraft !== '') return;
     const timeout = setTimeout(() => actions.cancelLearn(), LEARN_TIMEOUT_MS);
     return () => clearTimeout(timeout);
-  }, [learnTargetId, actions]);
+  }, [learnTargetId, ccDraft, actions]);
+
+  // Commit a typed CC for the armed target: the engine replaces the mapping
+  // and disarms the learn. Out-of-range numbers are ignored (the input is
+  // digits-only, so 128-999 is the only invalid shape).
+  const commitCcDraft = useCallback(() => {
+    const number = Number(ccDraft);
+    if (ccDraft !== '' && number <= 127) actions.setCcMapping(learnTargetId, number);
+  }, [ccDraft, learnTargetId, actions]);
 
   // Block powers address a lane's Nth *tone* block (insert slots skipped),
   // matching the native toggle's positional walk.
@@ -282,6 +330,9 @@ export const MidiMapSettings: React.FC<{
                 targetId={mapping.targetId}
                 context={targetContext(mapping.targetId)}
                 first={index === 0}
+                ccDraft={ccDraft}
+                onCcDraftChange={setCcDraft}
+                onCcCommit={commitCcDraft}
                 onCancel={() => actions.cancelLearn()}
               />
             ) : (
@@ -300,6 +351,9 @@ export const MidiMapSettings: React.FC<{
               targetId={pendingLearn}
               context={targetContext(pendingLearn)}
               first={state.mappings.length === 0}
+              ccDraft={ccDraft}
+              onCcDraftChange={setCcDraft}
+              onCcCommit={commitCcDraft}
               onCancel={() => actions.cancelLearn()}
             />
           )}
@@ -315,7 +369,8 @@ export const MidiMapSettings: React.FC<{
                 color: SUBTLE,
               }}
             >
-              No mappings yet. Choose a control, then move it on your MIDI device.
+              No mappings yet. Choose a control, then move it on your MIDI device or type its CC
+              number.
             </p>
           )}
         </div>
@@ -333,8 +388,8 @@ export const MidiMapSettings: React.FC<{
         )}
         <p style={{ ...captionStyle, marginTop: '10rem' }}>
           Map Previous / Next Preset to step through presets from CC or note buttons. Program
-          change messages also switch presets directly, in the order shown in the preset
-          browser.
+          change messages also switch presets directly; each preset shows its PC number in the
+          preset browser.
         </p>
       </div>
 

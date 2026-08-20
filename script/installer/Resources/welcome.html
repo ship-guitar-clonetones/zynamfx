@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Installer.app renders these panes (welcome/readme/conclusion) with its
+<!-- Installer.app renders these panes (welcome/readme) with its
      legacy HTML text importer, not a webview: the charset meta is required
      (it falls back to Latin-1 without it), CSS backgrounds and borders are
      ignored, and the pane follows the system appearance, so never hard-code
@@ -16,35 +16,9 @@
       padding: 4px 2px;
     "
   >
-    <p style="margin: 0 0 10px;">
-      This installs the TONE3000 standalone app and audio plug-ins on this
-      Mac. Pick the formats you want on the Installation Type step.
+    <p style="margin: 0;">
+      You will be guided through the steps necessary to install the TONE3000
+      plugin.
     </p>
-    <table style="border-collapse: collapse; font-size: 0.92em;">
-      <tr>
-        <td style="padding: 2px 14px 2px 0; white-space: nowrap;"><strong>Standalone</strong></td>
-        <td style="padding: 2px 0; font-family: ui-monospace, monospace;">/Applications</td>
-      </tr>
-      <tr>
-        <td style="padding: 2px 14px 2px 0; white-space: nowrap;"><strong>VST3</strong></td>
-        <td style="padding: 2px 0; font-family: ui-monospace, monospace;">/Library/Audio/Plug-Ins/VST3</td>
-      </tr>
-      <tr>
-        <td style="padding: 2px 14px 2px 0; white-space: nowrap;"><strong>Audio&nbsp;Unit</strong></td>
-        <td style="padding: 2px 0; font-family: ui-monospace, monospace;">/Library/Audio/Plug-Ins/Components</td>
-      </tr>
-      <tr>
-        <td style="padding: 2px 14px 2px 0; white-space: nowrap;"><strong>CLAP</strong></td>
-        <td style="padding: 2px 0; font-family: ui-monospace, monospace;">/Library/Audio/Plug-Ins/CLAP</td>
-      </tr>
-      <tr>
-        <td style="padding: 2px 14px 2px 0; white-space: nowrap;"><strong>AAX&nbsp;(Pro&nbsp;Tools)</strong></td>
-        <td style="padding: 2px 0; font-family: ui-monospace, monospace;">/Library/Application Support/Avid/Audio/Plug-Ins</td>
-      </tr>
-      <tr>
-        <td style="padding: 2px 14px 2px 0; white-space: nowrap;"><strong>Factory&nbsp;presets</strong></td>
-        <td style="padding: 2px 0; font-family: ui-monospace, monospace;">/Library/Application Support/TONE3000/Presets/Factory</td>
-      </tr>
-    </table>
   </body>
 </html>

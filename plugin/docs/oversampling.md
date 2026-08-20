@@ -49,8 +49,17 @@ them. The receptive field stays constant in seconds, so the model sounds the
 same; only the alias behavior improves. `ChainOversamplerTest.PhaseInterleavedDilatedConvIsExact`
 pins the identity sample-exactly.
 
+The phase instances are fully independent (separate models, disjoint
+per-phase buffers), which is also what makes them parallelizable: with
+multi-core processing on, `NamEngine::process` forks the phase loop across
+the realtime worker pool instead of running it sequentially (see
+`multicore.md`). Scheduling only; `NamEngineTest.PhaseForkMatchesSerialBitExact`
+pins forked output bit-identical to serial.
+
 LSTM models update state on consecutive samples and can't be phase-split;
-they get a single instance run time-scaled at the full chain rate.
+they get a single instance run time-scaled at the full chain rate. (A
+defensive path in practice: the catalog and the local-file gate only admit
+A2 WaveNets, which are always phase-safe.)
 
 ## IR islands
 

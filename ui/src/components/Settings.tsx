@@ -58,8 +58,8 @@ interface SettingsProps {
   /** Global NAM A2 size (false = lite, true = full). */
   namFullSize: boolean;
   onNamFullSizeChange: (full: boolean) => void;
-  /** Multi-core stereo (processes the two stereo chains on separate CPU
-      cores). */
+  /** Multi-core processing (spreads stereo chains and oversampled NAM
+      models across CPU cores). */
   multiCore: boolean;
   onMultiCoreChange: (enabled: boolean) => void;
   /** Chain lanes; MIDI Mapping names block-power targets after the tone
@@ -420,8 +420,8 @@ export const Settings: React.FC<SettingsProps> = ({
       </ToggleRow>
 
       <ToggleRow
-        label="Multi-Core Stereo"
-        description="In stereo mode, processes the two chains on separate CPU cores for more headroom. Doesn't change the sound."
+        label="Multi-Core Processing"
+        description="Spreads the work across CPU cores for more headroom: stereo chains process in parallel, and oversampled NAM models split across cores. Doesn't change the sound."
         value={multiCore}
         onChange={onMultiCoreChange}
       />

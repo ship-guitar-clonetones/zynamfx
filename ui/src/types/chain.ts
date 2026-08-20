@@ -232,8 +232,10 @@ export interface ChainState {
       true = full). Applies to every NAM block in this instance; set via
       `setNamFullSize`. */
   namFullSize: boolean;
-  /** Multi-core stereo (machine-wide user setting). When true, stereo mode
-      processes the two chains on separate CPU cores; set via `setMultiCore`. */
+  /** Multi-core processing (machine-wide user setting). When true, stereo
+      mode processes the two chains on separate CPU cores and oversampled NAM
+      models split their phase instances across cores; set via
+      `setMultiCore`. */
   multiCore: boolean;
   /** The chain-domain processing rate (fixed 48000: the whole chain runs at
       48 kHz behind one resampling boundary). The EQ curve math needs it to

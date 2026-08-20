@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   GripVertical,
+  MidiPort,
   Pencil,
   Save,
   Search,
@@ -19,6 +20,7 @@ import { useDismissable } from '../hooks/useDismissable';
 import { useToast } from './Toast';
 import { HELP, helpProps } from './helpText';
 import { BORDER, GRAY } from './theme';
+import { setPresetPcNumbersEnabled, usePresetPcNumbersEnabled } from './uiPreferences';
 
 /**
  * Top-bar preset controls: ‹ name › pill + save button, with two anchored
@@ -28,8 +30,9 @@ import { BORDER, GRAY } from './theme';
  *
  * Pure view: the list and all mutations come from usePresets, the active
  * preset rides the chain state poll. Prev/next walk the list in its shown
- * order, which is also what MIDI program-change numbers follow, so a custom
- * order set here changes what PC 1, PC 2… load.
+ * order (user section first, then factory, same as the native list), which
+ * is also what MIDI program-change numbers follow. A MIDI-port toggle reveals
+ * each row's PC number (persisted in localStorage); off by default.
  */
 
 const MUTED = GRAY;
@@ -87,6 +90,8 @@ interface PresetRowProps {
   index: number;
   group: PresetGroup;
   sortable: boolean;
+  /** MIDI program change that loads this preset; undefined past PC 127. */
+  pcNumber: number | undefined;
   isActive: boolean;
   isRenaming: boolean;
   renameValue: string;
@@ -103,6 +108,7 @@ const PresetRow: React.FC<PresetRowProps> = ({
   index,
   group,
   sortable,
+  pcNumber,
   isActive,
   isRenaming,
   renameValue,
@@ -167,6 +173,20 @@ const PresetRow: React.FC<PresetRowProps> = ({
         >
           {preset.name}
         </button>
+      )}
+      {pcNumber !== undefined && (
+        <span
+          {...helpProps(HELP.presetPc)}
+          style={{
+            flexShrink: 0,
+            color: MUTED,
+            fontSize: '11rem',
+            fontWeight: 400,
+            fontFamily: 'monospace',
+          }}
+        >
+          PC {pcNumber}
+        </span>
       )}
       {sortable ? (
         <button
@@ -240,6 +260,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
   // Reorder mode: rows swap rename/delete for a grip handle. Drag only
   // makes sense on the full list, so grips hide while a search filter is on.
   const [reordering, setReordering] = useState(false);
+  const showPcNumbers = usePresetPcNumbersEnabled();
   const toast = useToast();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const closePanels = useCallback(() => setOpen('none'), []);
@@ -315,6 +336,17 @@ export const PresetBar: React.FC<PresetBarProps> = ({
   const factoryPresets = filtered.filter((p) => p.factory);
   const userPresets = filtered.filter((p) => !p.factory);
 
+  // PC n loads the nth preset of the full list (display order matches the
+  // native list), so the label is the index; built from the optimistic order
+  // so numbers track live while dragging. The wire only carries 0-127.
+  const pcById = useMemo(() => {
+    const map = new Map<string, number>();
+    (ordered ?? presets).forEach((preset, i) => {
+      if (i <= 127) map.set(preset.id, i);
+    });
+    return map;
+  }, [ordered, presets]);
+
   const chevronStyle: React.CSSProperties = {
     background: 'transparent',
     border: 'none',
@@ -352,7 +384,8 @@ export const PresetBar: React.FC<PresetBarProps> = ({
         const section = list.filter((p) => p.factory === item.factory);
         const others = list.filter((p) => p.factory !== item.factory);
         const moved = arrayMove(section, from, to);
-        // Browser order is user section first, then factory.
+        // User section first, then factory: must match the native list order
+        // since the PC labels index straight into this array.
         return item.factory ? [...others, ...moved] : [...moved, ...others];
       });
       onMove(id, to - from);
@@ -369,6 +402,7 @@ export const PresetBar: React.FC<PresetBarProps> = ({
         index={sectionIndex}
         group={group}
         sortable={canDrag}
+        pcNumber={showPcNumbers ? pcById.get(preset.id) : undefined}
         isActive={active?.id === preset.id}
         isRenaming={isRenaming}
         renameValue={renameValue}
@@ -508,6 +542,22 @@ export const PresetBar: React.FC<PresetBarProps> = ({
                 style={{ ...inputStyle, padding: '8rem 12rem 8rem 32rem', borderRadius: '10rem' }}
               />
             </div>
+            {presets.length > 0 && (
+              <button
+                onClick={() => setPresetPcNumbersEnabled(!showPcNumbers)}
+                aria-pressed={showPcNumbers}
+                {...helpProps(HELP.presetPcToggle)}
+                style={{
+                  ...iconButtonStyle,
+                  padding: '7rem',
+                  flexShrink: 0,
+                  color: showPcNumbers ? '#ffffff' : MUTED,
+                  background: showPcNumbers ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                }}
+              >
+                <MidiPort size={15} />
+              </button>
+            )}
             {presets.length > 1 && (
               <button
                 onClick={() => setReordering((prev) => !prev)}

@@ -293,10 +293,11 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             return juce::var(true);
           }))
       .withNativeFunction(
-          // Machine-wide multi-core stereo (true = process the two stereo
-          // chains on separate cores). Applies instantly (pure scheduling,
-          // output is bit-identical) and persists in the shared settings
-          // file; the current value rides getChainState as `multiCore`.
+          // Machine-wide multi-core processing (true = stereo chains fork
+          // across cores, and oversampled NAM models fork their phase
+          // instances too). Applies instantly (pure scheduling, output is
+          // bit-identical) and persists in the shared settings file; the
+          // current value rides getChainState as `multiCore`.
           "setMultiCore", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
             editor->processor.setMultiCoreEnabled(coerceBool(args[0]));
             return juce::var(true);
@@ -515,6 +516,13 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
       .withNativeFunction(
           "removeMidiMapping", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
             return juce::var(editor->processor.midiMapper.removeMapping(args[0].toString()));
+          }))
+      .withNativeFunction(
+          // (targetId, ccNumber): assign a CC directly, the typed alternative
+          // to learn.
+          "setMidiCcMapping", guarded(2, false, [editor](const juce::Array<juce::var>& args) {
+            return juce::var(editor->processor.midiMapper.setCcMapping(
+                args[0].toString(), static_cast<int>(coerceDouble(args[1]))));
           }))
       .withNativeFunction(
           // Channel-picker meters: enabled only while the picker is on screen.

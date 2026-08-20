@@ -19,6 +19,8 @@ export interface MidiMapActions {
   startLearn: (targetId: string) => Promise<void>;
   cancelLearn: () => Promise<void>;
   removeMapping: (targetId: string) => Promise<void>;
+  /** Assign a CC number directly, the typed alternative to learn. */
+  setCcMapping: (targetId: string, number: number) => Promise<void>;
 }
 
 export interface MidiMap {
@@ -37,6 +39,7 @@ export function useMidiMap(enabled: boolean): MidiMap {
       startMidiLearn: backend.getPluginFunction('startMidiLearn'),
       cancelMidiLearn: backend.getPluginFunction('cancelMidiLearn'),
       removeMidiMapping: backend.getPluginFunction('removeMidiMapping'),
+      setMidiCcMapping: backend.getPluginFunction('setMidiCcMapping'),
     }),
     [backend]
   );
@@ -74,6 +77,7 @@ export function useMidiMap(enabled: boolean): MidiMap {
       startLearn: (targetId) => run(() => native.startMidiLearn(targetId)),
       cancelLearn: () => run(() => native.cancelMidiLearn()),
       removeMapping: (targetId) => run(() => native.removeMidiMapping(targetId)),
+      setCcMapping: (targetId, number) => run(() => native.setMidiCcMapping(targetId, number)),
     };
   }, [native, refresh]);
 

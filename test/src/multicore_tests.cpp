@@ -1,20 +1,24 @@
-// Multi-core stereo tests
+// Multi-core processing tests
 //
-// Stereo mode processes the two chain lanes concurrently (see LaneWorker.h):
-// the Right/branch lane runs on a realtime worker thread while the audio
-// thread processes the other. Parallelism is pure scheduling (no arithmetic
-// or ordering changes inside a lane), so its one testable contract is strong:
+// Multi-core mode spreads the chain stage across the RtWorkerPool realtime
+// workers (see RtWorkerPool.h) in two places: stereo mode forks the two
+// lanes (the Right/branch lane on a worker, the other on the audio thread),
+// and an oversampled NAM engine forks its phase instances, nested inside a
+// lane fork when both apply. Parallelism is pure scheduling (no arithmetic
+// or ordering changes anywhere), so its one testable contract is strong:
 //
 //   - the parallel schedule's output is BIT-IDENTICAL to the serial one,
-//     across topologies (independent lanes, branched), host rates and
-//     oversampling factors,
-//   - the worker survives the host lifecycle (re-prepare, release, restart)
+//     across topologies (independent lanes, branched, mono), host rates and
+//     oversampling factors, and across mid-stream toggles of the setting,
+//   - the pool survives the host lifecycle (re-prepare, release, restart)
 //     with audio flowing throughout.
 //
-// The rigs deliberately give the lanes different chains and sub-unity mix
-// values: a cross-lane scratch race (the historical hazard: the dry-mix
+// The stereo rigs deliberately give the lanes different chains and sub-unity
+// mix values: a cross-lane scratch race (the historical hazard: the dry-mix
 // buffer used to be shared) corrupts exactly the dry portion of the blend,
-// which identical lanes or mix = 1.0 would hide.
+// which identical lanes or mix = 1.0 would hide. The mono rigs isolate the
+// phase fork: no lanes fork in mono, so any serial/parallel divergence there
+// is the NAM phase path alone.
 //
 // Chains are seeded through setStateInformation with model bytes embedded
 // (ModelCache), so loads are cache-first and never touch the network.
@@ -129,6 +133,87 @@ TEST(MultiCoreTest, BranchedParallelMatchesSerialBitExact) {
   }
 }
 
+// Mono + oversampling isolates the NAM phase fork (mono mode never forks
+// lanes): the engine's phase instances run on pool workers when multi-core
+// is on and sequentially when it's off, and the two schedules must null
+// exactly at every factor.
+TEST(MultiCoreTest, MonoPhaseParallelMatchesSerialBitExact) {
+  auto runMonoRig = [](bool multiCore, float osFactorNormalized, const std::vector<float>& in) {
+    ChainTestProcessor proc;
+    proc.setMultiCoreEnabled(multiCore, /*persist=*/false);
+    proc.setPlayConfigDetails(2, 2, kFs, kBlock);
+    proc.parameters.getParameter("osEnabled")->setValueNotifyingHost(1.0f);
+    proc.parameters.getParameter("osFactor")->setValueNotifyingHost(osFactorNormalized);
+    proc.prepareToPlay(kFs, kBlock);
+
+    juce::ValueTree state("ChainSnapshot");
+    juce::ValueTree lane("ChainBlocks");
+    lane.appendChild(makeNamBlockTree("blk-amp", 1, 100), nullptr);
+    auto cab = makeIrBlockTree("blk-cab", 2, 200);
+    cab.setProperty("mix", 0.7f, nullptr);
+    lane.appendChild(cab, nullptr);
+    state.appendChild(lane, nullptr);
+    proc.restoreFromTree(state);
+    EXPECT_TRUE(waitForChainLoaded(proc)) << "blocks never finished loading from cache";
+
+    return processStereo(proc, in);
+  };
+
+  struct Factor {
+    float normalized;
+    const char* label;
+  };
+  const auto in = makeNoise(240 * kBlock, 27182, 0.1f);
+
+  for (const Factor f : {Factor{0.0f, "2x"}, Factor{0.5f, "4x"}, Factor{1.0f, "8x"}}) {
+    SCOPED_TRACE(juce::String("oversampling ") + f.label);
+
+    const auto [sl, sr] = runMonoRig(false, f.normalized, in);
+    const auto [pl, pr] = runMonoRig(true, f.normalized, in);
+
+    EXPECT_EQ(settledDiff(sl, pl), 0.0f) << "phase fork diverged from the serial phase loop";
+    EXPECT_EQ(settledDiff(sr, pr), 0.0f) << "fan-out channel diverged";
+  }
+}
+
+// The toggle is pure scheduling and applies per callback, so flipping it
+// repeatedly mid-stream (as a user would from Settings) must leave the
+// output bit-identical to a run that never toggled: the hardest version of
+// the contract, on the full stereo rig at 8x (lane forks with nested phase
+// forks appearing and disappearing between blocks).
+TEST(MultiCoreTest, MidStreamTogglesStayBitExact) {
+  const auto in = makeNoise(240 * kBlock, 16180, 0.1f);
+
+  const auto [sl, sr] = runRig({false, false, 48000.0, true}, in);
+
+  ChainTestProcessor proc;
+  proc.setMultiCoreEnabled(true, /*persist=*/false);
+  proc.setPlayConfigDetails(2, 2, 48000.0, kBlock);
+  proc.parameters.getParameter("osEnabled")->setValueNotifyingHost(1.0f);
+  proc.parameters.getParameter("osFactor")->setValueNotifyingHost(1.0f);  // 8x
+  proc.prepareToPlay(48000.0, kBlock);
+  proc.restoreFromTree(makeStereoRigState());
+  ASSERT_TRUE(waitForChainLoaded(proc)) << "blocks never finished loading from cache";
+
+  // Feed the same signal in 30-block chunks, flipping the setting between
+  // chunks (processor state carries across processStereo calls).
+  std::vector<float> tl, tr;
+  bool multiCore = true;
+  constexpr size_t kChunk = 30 * kBlock;
+  for (size_t off = 0; off < in.size(); off += kChunk) {
+    const std::vector<float> chunk(in.begin() + static_cast<long>(off),
+                                   in.begin() + static_cast<long>(off + kChunk));
+    const auto [cl, cr] = processStereo(proc, chunk);
+    tl.insert(tl.end(), cl.begin(), cl.end());
+    tr.insert(tr.end(), cr.begin(), cr.end());
+    multiCore = !multiCore;
+    proc.setMultiCoreEnabled(multiCore, /*persist=*/false);
+  }
+
+  EXPECT_EQ(settledDiff(sl, tl), 0.0f) << "left output diverged across mid-stream toggles";
+  EXPECT_EQ(settledDiff(sr, tr), 0.0f) << "right output diverged across mid-stream toggles";
+}
+
 // Informational speedup measurement (no assertion; timings are machine- and
 // load-dependent): one heavy NAM lane per side, chain-stage wall time under
 // the serial vs. parallel schedule. Expect the parallel run to approach the
@@ -166,14 +251,53 @@ TEST(MultiCoreTest, ReportsParallelSpeedup) {
               60.0 * kBlock / kFs, serial * 1000.0, parallel * 1000.0, serial / parallel);
 }
 
-// Host lifecycle: the worker is restarted by every prepareToPlay and stopped
+// Informational, the headline case for the phase fork: a mono NAM at 8x
+// runs 8 phase instances per block, the worst single-thread load in the
+// plugin when serial and near-ideal parallelism when forked (8 independent
+// equal-size jobs). Expect the largest speedup of the suite here.
+TEST(MultiCoreTest, ReportsOversampledSpeedup) {
+  auto measure = [](bool multiCore) {
+    ChainTestProcessor proc;
+    proc.setMultiCoreEnabled(multiCore, /*persist=*/false);
+    proc.setPlayConfigDetails(2, 2, kFs, kBlock);
+    proc.parameters.getParameter("osEnabled")->setValueNotifyingHost(1.0f);
+    proc.parameters.getParameter("osFactor")->setValueNotifyingHost(1.0f);  // 8x
+    proc.prepareToPlay(kFs, kBlock);
+
+    juce::ValueTree state("ChainSnapshot");
+    juce::ValueTree lane("ChainBlocks");
+    lane.appendChild(makeNamBlockTree("blk-amp", 1, 100), nullptr);
+    state.appendChild(lane, nullptr);
+    proc.restoreFromTree(state);
+    EXPECT_TRUE(waitForChainLoaded(proc)) << "blocks never finished loading from cache";
+
+    const auto in = makeNoise(60 * kBlock, 1618, 0.1f);
+    processStereo(proc, in);  // warm-up: fades settle, caches warm
+
+    const auto t0 = juce::Time::getHighResolutionTicks();
+    processStereo(proc, in);
+    const auto t1 = juce::Time::getHighResolutionTicks();
+    return juce::Time::highResolutionTicksToSeconds(t1 - t0);
+  };
+
+  const double serial = measure(false);
+  const double parallel = measure(true);
+  std::printf("  mono NAM at 8x, %.2f s audio: serial %.1f ms, parallel %.1f ms (%.2fx)\n",
+              60.0 * kBlock / kFs, serial * 1000.0, parallel * 1000.0, serial / parallel);
+}
+
+// Host lifecycle: the pool is restarted by every prepareToPlay and stopped
 // by releaseResources. Audio must flow correctly through stop/start cycles,
-// including a processBlock after releaseResources (the dispatch gate falls
-// back to serial when the worker is down, it must not deadlock or crash).
+// including a processBlock after releaseResources (the fork gates fall
+// back to serial when the pool is down, they must not deadlock or crash).
+// Oversampling stays on so both fork sites (lanes and nested NAM phases)
+// ride through every cycle.
 TEST(MultiCoreTest, WorkerSurvivesHostLifecycle) {
   ChainTestProcessor proc;
   proc.setMultiCoreEnabled(true, /*persist=*/false);
   proc.setPlayConfigDetails(2, 2, kFs, kBlock);
+  proc.parameters.getParameter("osEnabled")->setValueNotifyingHost(1.0f);
+  proc.parameters.getParameter("osFactor")->setValueNotifyingHost(1.0f);  // 8x
   proc.prepareToPlay(kFs, kBlock);
 
   proc.restoreFromTree(makeStereoRigState());
