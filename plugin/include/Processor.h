@@ -576,6 +576,14 @@ private:
   // engines, so add/remove is trivially cheap. Caller holds chainMutex.
   void normalizeLaneInserts(Lane& l);
 
+  // Post-structural-change bookkeeping bundle: re-baseline both lanes
+  // (normalizeLaneInserts), re-resolve the branch tap, then keep the lanes'
+  // visible ends even while a branch is active by trimming the branch lane's
+  // surplus *trailing* insert placeholders (trim-only; see the definition
+  // for the geometry). Structural mutators call this instead of bare
+  // normalizeLaneInserts + refreshBranchTapIndex. Caller holds chainMutex.
+  void alignBranchLaneLengths();
+
   // Find a block by id across both chains (ids are globally unique). Returns nullptr if absent.
   ChainBlock* findBlockById(const std::string& blockId);
 

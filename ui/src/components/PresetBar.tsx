@@ -123,6 +123,10 @@ const PresetRow: React.FC<PresetRowProps> = ({
     id: preset.id,
     index,
     group,
+    // Rows only accept drops from their own section, so a user preset can
+    // never be dragged into the factory list or vice versa.
+    type: group,
+    accept: group,
     disabled: !sortable,
   });
 

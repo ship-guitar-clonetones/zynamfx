@@ -612,6 +612,16 @@ static int measureChainBoundaryLatency(double hostRate, int blockSize) {
   return peak;
 }
 
+// Tone-stack corners are fixed by design, but hosts can run rates low enough
+// to put them above Nyquist (clap-validator probes 1234.5678 Hz, where even
+// the 1 kHz mid peak is out of range) and JUCE's bilinear designs return
+// unstable coefficients there (the guarding jassert compiles out in release,
+// and the filter output runs away to ±inf). Pin the corner just under
+// Nyquist instead: magnitude response degrades gracefully, stability holds.
+static float clampBelowNyquist(double sampleRate, float frequency) {
+  return juce::jmin(frequency, static_cast<float>(sampleRate * 0.49));
+}
+
 // #############################
 // PREPARATIONS BEFORE RT THREAD
 // #############################
@@ -745,12 +755,12 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
   }
 
   // Temporary unity filters for boot
-  *bassFilter.state =
-      *juce::dsp::IIR::Coefficients<float>::makeLowShelf(sampleRate, 100.0f, 1.0f, 1.0f);
-  *midFilter.state =
-      *juce::dsp::IIR::Coefficients<float>::makePeakFilter(sampleRate, 1000.0f, 1.0f, 1.0f);
-  *trebleFilter.state =
-      *juce::dsp::IIR::Coefficients<float>::makeHighShelf(sampleRate, 4000.0f, 1.0f, 1.0f);
+  *bassFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(
+      sampleRate, clampBelowNyquist(sampleRate, 100.0f), 1.0f, 1.0f);
+  *midFilter.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(
+      sampleRate, clampBelowNyquist(sampleRate, 1000.0f), 1.0f, 1.0f);
+  *trebleFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(
+      sampleRate, clampBelowNyquist(sampleRate, 4000.0f), 1.0f, 1.0f);
   // First-order high-pass at 5 Hz: removes DC offset from nonlinear NAM models
   // while staying audibly and phase-wise transparent down to the lowest bass
   // fundamentals (matches the reference NeuralAmpModelerPlugin behavior).
@@ -822,14 +832,15 @@ bool TONE3000Processor::isBusesLayoutSupported(const BusesLayout& layouts) const
 // ######################
 void TONE3000Processor::updateEqCoefficients() {
   // Recalculate EQ filter coefficients based on current tone gains
-  auto bassCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowShelf(getSampleRate(), 250.0f, 1.0f,
-                                                                      cacheBassTone / 5.0f);
+  const double rate = getSampleRate();
+  auto bassCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowShelf(
+      rate, clampBelowNyquist(rate, 250.0f), 1.0f, cacheBassTone / 5.0f);
 
-  auto midCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(getSampleRate(), 1000.0f,
-                                                                       1.0f, cacheMidTone / 5.0f);
+  auto midCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
+      rate, clampBelowNyquist(rate, 1000.0f), 1.0f, cacheMidTone / 5.0f);
 
-  auto trebleCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighShelf(getSampleRate(), 4000.0f,
-                                                                         1.0f, cacheTrebleTone / 5.0f);
+  auto trebleCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighShelf(
+      rate, clampBelowNyquist(rate, 4000.0f), 1.0f, cacheTrebleTone / 5.0f);
 
   *bassFilter.state = *bassCoeffs;
   *midFilter.state = *midCoeffs;

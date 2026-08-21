@@ -211,7 +211,9 @@ const GhostRail: React.FC<{ slots: number; tileSize: number }> = ({ slots, tileS
 /** One lane of tiles over its ghost rail (no scroll of its own; both lanes
     share the outer scroll area). Native keeps every lane at its minimum slot
     layout (5 tiles, always ≥1 insert), so each item here is a real block,
-    insert slots included, and every tile is reorderable. */
+    insert slots included, and every tile is reorderable. While branched,
+    native also trims the branch lane's surplus trailing inserts so its
+    indented rail ends level with the trunk (see alignBranchLaneLengths). */
 export const GalleryLane: React.FC<{
   items: ChainItem[];
   tileSize: number;
@@ -460,7 +462,7 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
           display: 'flex',
           alignItems: 'center',
           gap: '4rem',
-          border: monoSum ? `1rem solid ${BRAND_YELLOW}` : BORDER,
+          border: BORDER,
           borderRadius: '9999rem',
           padding: '3rem 5rem',
         }}
@@ -472,7 +474,7 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
               height: `${ICON_BOX_SIZE}rem`,
               display: 'grid',
               placeItems: 'center',
-              color: BRAND_YELLOW,
+              color: MUTED,
               fontSize: '11rem',
               fontFamily: 'monospace',
               lineHeight: 1,

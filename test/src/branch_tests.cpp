@@ -13,7 +13,10 @@
 //     brings it back,
 //   - it survives a full plugin state save/restore round trip,
 //   - setting a branch forces the input mode off "stereo" (a branched chain
-//     has a single mono source).
+//     has a single mono source),
+//   - the branch lane's surplus trailing insert placeholders trim so its
+//     indented rail ends level with the trunk where possible (trim-only,
+//     see alignBranchLaneLengths), and clearing restores the baseline.
 //
 // Chains are seeded through setStateInformation with the IR bytes embedded
 // (ModelCache), so loads are cache-first and never touch the network.
@@ -30,6 +33,12 @@
 namespace {
 
 constexpr int kBlock = 512;
+
+// Slot count (tones + inserts) of a lane in the UI-facing chain state.
+int laneSize(const juce::var& state, const char* key) {
+  const auto* arr = state[key].getArray();
+  return arr == nullptr ? -1 : arr->size();
+}
 
 TEST(ChainBranchTest, RequiresStereoAndValidToneBlock) {
   ChainTestProcessor proc;
@@ -341,6 +350,80 @@ TEST(ChainBranchTest, ClearsWhenTappedBlockRemovedWhileDormant) {
   EXPECT_FALSE(proc.getChainState(-1)["branch"].isObject());
 }
 
+// The branch lane renders indented one slot past the tapped trunk block, so
+// with both lanes at the per-lane baseline its rail overshoots the trunk's
+// end. Branch moves trim (or grow) the branch lane's trailing inserts so
+// both lanes end on the same slot column; clearing restores the baseline.
+TEST(ChainBranchTest, AlignsBranchLaneEndWithTrunk) {
+  ChainTestProcessor proc;
+  seedStereoChains(proc, {"blk-a", "blk-b"}, {});
+
+  // Baseline: trunk = 2 tones + 3 inserts, branch lane = 5 inserts.
+  {
+    const juce::var state = proc.getChainState(-1);
+    EXPECT_EQ(laneSize(state, "chain"), 5);
+    EXPECT_EQ(laneSize(state, "chainRight"), 5);
+  }
+
+  // Tap after blk-a: the branch lane starts 1 column in, so it trims to 4.
+  ASSERT_TRUE(proc.setChainBranch("left", "blk-a"));
+  {
+    const juce::var state = proc.getChainState(-1);
+    EXPECT_EQ(laneSize(state, "chain"), 5);
+    EXPECT_EQ(laneSize(state, "chainRight"), 4);
+  }
+
+  // Re-pointing deeper re-aligns from the baseline: 2 columns in, 3 slots.
+  ASSERT_TRUE(proc.setChainBranch("left", "blk-b"));
+  EXPECT_EQ(laneSize(proc.getChainState(-1), "chainRight"), 3);
+
+  // Structural trunk edits keep the ends even: removing the un-tapped tone
+  // shortens the trunk's prefix (blk-b slides to index 0), so the branch
+  // lane grows back to 4.
+  ASSERT_TRUE(proc.removeChainBlock("blk-a"));
+  {
+    const juce::var state = proc.getChainState(-1);
+    ASSERT_TRUE(state["branch"].isObject());
+    EXPECT_EQ(laneSize(state, "chain"), 5);
+    EXPECT_EQ(laneSize(state, "chainRight"), 4);
+  }
+
+  // Clearing the branch restores the plain per-lane minimum.
+  ASSERT_TRUE(proc.clearChainBranch());
+  EXPECT_EQ(laneSize(proc.getChainState(-1), "chainRight"), 5);
+}
+
+// Alignment is trim-only: it removes surplus trailing placeholders, never
+// manufactures extras. A trunk running past the branch lane's baseline end
+// just stays longer…
+TEST(ChainBranchTest, NeverGrowsBranchLanePastItsBaseline) {
+  ChainTestProcessor proc;
+  seedStereoChains(proc, {"blk-a", "blk-b", "blk-c", "blk-d", "blk-e", "blk-f"}, {});
+
+  // Trunk: 6 tones + 1 insert = 7 slots. Tapping 1 column in leaves the
+  // branch lane at its 5-slot baseline (ending on column 6, one short of
+  // the trunk) instead of padding it with an extra empty slot.
+  ASSERT_TRUE(proc.setChainBranch("left", "blk-a"));
+  const juce::var state = proc.getChainState(-1);
+  EXPECT_EQ(laneSize(state, "chain"), 7);
+  EXPECT_EQ(laneSize(state, "chainRight"), 5);
+}
+
+// …and tone blocks never move and every lane keeps one insert, so a branch
+// lane whose content runs past the trunk's end stays uneven too.
+TEST(ChainBranchTest, KeepsLanesUnevenWhenTonesRequireIt) {
+  ChainTestProcessor proc;
+  seedStereoChains(proc, {"blk-a"}, {"blk-b", "blk-c", "blk-d", "blk-e"});
+
+  // Branch lane = 4 tones + 1 insert; the alignment target (trunk 5 slots,
+  // 1 column of indent = 4) would need a trim, but only the untrimmable
+  // last insert remains: the lane keeps all 5 slots.
+  ASSERT_TRUE(proc.setChainBranch("left", "blk-a"));
+  const juce::var state = proc.getChainState(-1);
+  EXPECT_EQ(laneSize(state, "chain"), 5);
+  EXPECT_EQ(laneSize(state, "chainRight"), 5);
+}
+
 TEST(ChainBranchTest, SurvivesStateSaveRestore) {
   juce::MemoryBlock state;
   {
@@ -359,6 +442,10 @@ TEST(ChainBranchTest, SurvivesStateSaveRestore) {
   EXPECT_EQ(restored["branch"]["afterBlockId"].toString(), "blk-a");
   // The forced mono-source input mode rides the session state too.
   EXPECT_EQ(restored["inputMode"].toString(), "left");
+  // Restores re-align the branch lane's end (reconciliation re-pads lanes
+  // to the baseline; the restore path trims them back).
+  EXPECT_EQ(laneSize(restored, "chain"), 5);
+  EXPECT_EQ(laneSize(restored, "chainRight"), 4);
 }
 
 }  // namespace

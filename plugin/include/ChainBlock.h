@@ -47,7 +47,10 @@ constexpr double kWetFadeSeconds = 0.025;
 // so an empty lane shows kMinLaneSlots empty slots, and once the user has
 // filled them all there is still one trailing empty slot to add into. The
 // invariant (insertCount == max(kMinLaneSlots - toneCount, 1)) is enforced by
-// TONE3000Processor::normalizeLaneInserts after every structural change.
+// TONE3000Processor::normalizeLaneInserts after every structural change, with
+// one relaxation: while a stereo branch is active, the branch lane's surplus
+// trailing inserts are trimmed below this baseline so its indented rail ends
+// level with the trunk lane (see alignBranchLaneLengths).
 constexpr int kMinLaneSlots = 5;
 
 // Chain block data structure

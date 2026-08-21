@@ -207,16 +207,19 @@ TONE3000Processor::Lane TONE3000Processor::restoreChainSnapshot(const juce::Valu
   if (!snapStereo)
     pendingAddSide = ChainSide::Left;
 
-  // Branch routing rides the snapshot. refreshBranchTapIndex validates it
-  // against the freshly reconciled trunk lane; a stale id (snapshot from a
-  // chain that no longer holds the block) degrades to independent chains.
-  // Older snapshots without the properties restore as unbranched for free.
+  // Branch routing rides the snapshot. Alignment validates it against the
+  // freshly reconciled trunk lane; a stale id (snapshot from a chain that no
+  // longer holds the block) degrades to independent chains. Older snapshots
+  // without the properties restore as unbranched for free. Reconciliation
+  // pads every lane back to the per-lane baseline, so a restored *active*
+  // branch re-trims its lane's trailing inserts here to keep the lane ends
+  // even, exactly as they looked when the snapshot was taken.
   branchSourceSide = snapshot.getProperty("branchSide").toString() == "right"
                          ? ChainSide::Right
                          : ChainSide::Left;
   branchAfterBlockId =
       snapshot.getProperty("branchAfterBlockId").toString().toStdString();
-  refreshBranchTapIndex();
+  alignBranchLaneLengths();
 
   // A restored *active* branch + a stereo input fold would silently drop a
   // channel, so enforce the same invariant setChainBranch does (presets don't

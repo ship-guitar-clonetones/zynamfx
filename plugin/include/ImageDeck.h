@@ -67,7 +67,11 @@ struct DeckDiffuser {
     for (int i = 0; i < kNumStages; ++i) {
       const double fc =
           kLowHz * std::pow(kHighHz / kLowHz, static_cast<double>(i) / (kNumStages - 1));
-      const double t = std::tan(juce::MathConstants<double>::pi * fc / sampleRate);
+      // Corners above Nyquist (hosts below ~12 kHz) put tan() past π/2 and
+      // the allpass coefficient outside |a| < 1: unstable. Pin just under
+      // Nyquist; the top stages collapse toward a=0 (transparent) there.
+      const double fcSafe = juce::jmin(fc, sampleRate * 0.49);
+      const double t = std::tan(juce::MathConstants<double>::pi * fcSafe / sampleRate);
       stages[static_cast<size_t>(i)].a = static_cast<float>((t - 1.0) / (t + 1.0));
     }
   }

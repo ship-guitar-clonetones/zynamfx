@@ -305,15 +305,14 @@ std::string TONE3000Processor::loadTone(const juce::String& toneJsonString,
   }
 
   // The tone takes the slot's position; the consumed insert dies here (it has
-  // no engines, so destroying it under the lock is fine). normalizeLaneInserts
-  // then re-pads the lane, which appends a fresh trailing insert once every
-  // minimum slot holds a tone.
+  // no engines, so destroying it under the lock is fine). Alignment then
+  // re-pads the lane, which appends a fresh trailing insert once every
+  // minimum slot holds a tone, and keeps a branched layout's lane ends even.
   if (slot != targetLane->end())
     *slot = std::move(block);
   else
     targetLane->push_back(std::move(block));
-  normalizeLaneInserts(*targetLane);
-  refreshBranchTapIndex();  // insert-slot churn can shift the tap index
+  alignBranchLaneLengths();
 
   bumpChainRevision();
   queueToneLoad(blockId, parsed.firstModelId, parsed.modelUrl, parsed.modelName, parsed.type);
@@ -330,8 +329,7 @@ std::string TONE3000Processor::landToneBlock(std::unique_ptr<ChainBlock> block,
     target[static_cast<size_t>(index)] = std::move(block);  // paste fills the empty tile
   else
     target.insert(target.begin() + index, std::move(block));
-  normalizeLaneInserts(target);
-  refreshBranchTapIndex();  // insert-slot churn can shift the tap index
+  alignBranchLaneLengths();
 
   bumpChainRevision();
   queueActiveModelLoad(*findBlockById(newId));
@@ -614,10 +612,11 @@ bool TONE3000Processor::removeChainBlock(const std::string& blockId) {
         pushChainHistory();
         removed = std::move(*it);
         chain.erase(it);
-        // Dropping below the minimum grows the lane back to it (at the end).
-        normalizeLaneInserts(chain);
+        // Dropping below the minimum grows the lane back to it (at the end);
+        // removing the tapped block clears the branch, and a shortened trunk
+        // re-aligns the branch lane's end.
+        alignBranchLaneLengths();
         refreshIrTailLength();  // a long-tailed IR may just have left the chain
-        refreshBranchTapIndex();  // removing the tapped block clears the branch
         bumpChainRevision();
         break;
       }
@@ -684,7 +683,9 @@ bool TONE3000Processor::reorderChainBlocks(const std::vector<std::string>& newOr
   }
 
   chain = std::move(reorderedBlocks);
-  refreshBranchTapIndex();  // the tap follows its block to the new position
+  // The tap follows its block to the new position (a moved tap changes the
+  // branch lane's indent, so its trailing inserts re-align).
+  alignBranchLaneLengths();
   bumpChainRevision();
   DBG("Successfully reordered chain blocks (including insert block)");
   return true;
@@ -725,10 +726,9 @@ bool TONE3000Processor::moveBlockToChain(const std::string& blockId, const juce:
   target.insert(target.begin() + index, std::move(block));
 
   // The tone count changed on both sides: the source may need a slot back,
-  // the target may shed a (trailing) surplus one.
-  normalizeLaneInserts(source);
-  normalizeLaneInserts(target);
-  refreshBranchTapIndex();  // the tapped block leaving the trunk clears the branch
+  // the target may shed a (trailing) surplus one. The tapped block leaving
+  // the trunk clears the branch; otherwise the lane ends re-align.
+  alignBranchLaneLengths();
 
   bumpChainRevision();
   DBG("Moved block " << blockId << " to " << side << " chain at index " << index);
@@ -1229,13 +1229,7 @@ void TONE3000Processor::setStereoMode(bool enabled) {
 
   pushChainHistory();
 
-  // Seed the right chain's minimum slot layout the first time stereo is
-  // enabled (no-op when it already satisfies the invariant; e.g. legacy
-  // states that only carried one insert get padded here too).
   auto& right = lane(ChainSide::Right);
-  if (enabled)
-    normalizeLaneInserts(right);
-
   stereoEnabled.store(enabled);
 
   if (!enabled)
@@ -1243,7 +1237,11 @@ void TONE3000Processor::setStereoMode(bool enabled) {
 
   // Branching only runs between two chains: dormant while mono (the fields
   // persist so toggling back re-engages the branch), live again in stereo.
-  refreshBranchTapIndex();
+  // Alignment also seeds the right chain's minimum slot layout the first
+  // time stereo is enabled (legacy states that only carried one insert get
+  // padded here too), and a re-engaging branch re-evens the lane ends
+  // (mono edits may have changed the trunk's length underneath it).
+  alignBranchLaneLengths();
 
   // A re-engaged branch means a single mono source again, so re-enforce the
   // input-mode invariant (the fold may have gone back to stereo while the
@@ -1295,6 +1293,44 @@ void TONE3000Processor::refreshBranchTapIndex() {
     rtBranchTapIndex = tapIdx;
 }
 
+// Keep the lanes' visible ends even while a branch is active. The branch
+// lane renders indented past the trunk's tap gap (its input is that trunk
+// prefix's output), so with both lanes at the per-lane baseline its rail
+// overshoots the trunk's end by the whole indent, all trailing empty
+// placeholders. Those are free real estate, so trim them (never below the
+// one insert every lane keeps) until both lanes end on the same slot
+// column. Trim-only, best-effort: no lane ever grows extra placeholders
+// past the per-lane baseline, tone blocks never move, so lanes that
+// genuinely need to be uneven (a long trunk, or branch tones running past
+// the trunk's end) simply stay uneven. Without an active branch this
+// restores the plain per-lane baseline. Pure bookkeeping like
+// normalizeLaneInserts: callers own history/revision/fade.
+void TONE3000Processor::alignBranchLaneLengths() {
+  // Baseline first (also undoes earlier alignment, so branch moves never
+  // compound), then re-resolve the tap: insert churn can shift its index.
+  normalizeLaneInserts(lane(ChainSide::Left));
+  normalizeLaneInserts(lane(ChainSide::Right));
+  refreshBranchTapIndex();
+  if (rtBranchTapIndex < 0)
+    return;
+
+  const Lane& trunk = lane(branchSourceSide);
+  Lane& branchLane =
+      lane(branchSourceSide == ChainSide::Left ? ChainSide::Right : ChainSide::Left);
+
+  // The branch lane's first tile sits `indent` slot columns into the trunk.
+  const int indent = rtBranchTapIndex + 1;
+  const int targetSlots = static_cast<int>(trunk.size()) - indent;
+
+  int inserts =
+      static_cast<int>(std::count_if(branchLane.begin(), branchLane.end(), isInsertBlock));
+  while (static_cast<int>(branchLane.size()) > targetSlots && inserts > 1 &&
+         isInsertBlock(branchLane.back())) {
+    branchLane.pop_back();
+    --inserts;
+  }
+}
+
 bool TONE3000Processor::setChainBranch(const juce::String& side,
                                        const std::string& afterBlockId) {
   // Rerouting one whole lane's input is structural (no single block to
@@ -1328,7 +1364,9 @@ bool TONE3000Processor::setChainBranch(const juce::String& side,
 
   branchSourceSide = trunkSide;
   branchAfterBlockId = afterBlockId;
-  refreshBranchTapIndex();
+  // The branch lane just gained an indent past the tap gap; its surplus
+  // trailing insert placeholders trim away to end level with the trunk.
+  alignBranchLaneLengths();
 
   // A branched chain has a single (mono) source: the trunk's channel. A
   // stereo input fold would silently drop the other channel, so force a
@@ -1355,7 +1393,9 @@ bool TONE3000Processor::clearChainBranch() {
 
   pushChainHistory();
   branchAfterBlockId.clear();
-  refreshBranchTapIndex();
+  // Independent lanes go back to the plain per-lane baseline (any trailing
+  // inserts trimmed for the branch grow back).
+  alignBranchLaneLengths();
   bumpChainRevision();
   DBG("Chain branch cleared; chains independent again");
   return true;
@@ -1384,10 +1424,11 @@ bool TONE3000Processor::swapChains() {
   // wholesale with its blocks.
   std::swap(lane(ChainSide::Left), lane(ChainSide::Right));
 
-  // The trunk lane moved sides; the branch moves with it.
+  // The trunk lane moved sides; the branch (and the lane-end alignment its
+  // geometry drives) moves with it.
   branchSourceSide =
       branchSourceSide == ChainSide::Left ? ChainSide::Right : ChainSide::Left;
-  refreshBranchTapIndex();
+  alignBranchLaneLengths();
 
   // Polarity flips describe the captures, so they travel with their lanes
   // (pans stay put: they're image placement, not chain state).

@@ -73,6 +73,51 @@ if (APPLE)
     endif()
 endif()
 
+# macOS: when Thread::startRealtimeThread's time-constraint upgrade is
+# rejected by the kernel (thread_policy_set fails, e.g. for very long
+# per-buffer budgets), the new pthread exits BEFORE juce_threadEntryPoint,
+# so closeThreadHandle() never runs and the dead thread's handle stays set.
+# From then on isThreadRunning() reports true forever: a fallback
+# startThread() on the same object silently no-ops, and every stopThread()
+# burns its whole timeout before pthread_cancelling a dangling (detached,
+# already exited) pthread id. Clear the handle on the failure path so the
+# object can be restarted or destroyed cleanly. Idempotent configure-time
+# patch, same rationale as the patches above; applied on every platform
+# (the file only compiles on macOS, patching it elsewhere is harmless and
+# keeps the libs/juce tree identical everywhere).
+set(_juce_threads_mac "${LIB_DIR}/juce/modules/juce_core/native/juce_Threads_mac.mm")
+if (EXISTS "${_juce_threads_mac}")
+    file(READ "${_juce_threads_mac}" _juce_threads_mac_src)
+    if (NOT _juce_threads_mac_src MATCHES "T3K_RT_START_STALE_HANDLE")
+        string(REPLACE
+[=[    return threadId != nullptr
+        && threadData.started.get_future().get();]=]
+[=[    // T3K_RT_START_STALE_HANDLE: a failed realtime upgrade exits the
+    // pthread before juce_threadEntryPoint, so closeThreadHandle() never
+    // runs; clear the stale handle so this Thread can be restarted or
+    // destroyed without stopThread() stalling on a dead thread.
+    const auto started = threadId != nullptr
+        && threadData.started.get_future().get();
+
+    if (! started)
+    {
+        threadHandle = nullptr;
+        threadId = {};
+    }
+
+    return started;]=]
+            _juce_threads_mac_src "${_juce_threads_mac_src}")
+        if (NOT _juce_threads_mac_src MATCHES "T3K_RT_START_STALE_HANDLE")
+            message(FATAL_ERROR
+                "T3K_RT_START_STALE_HANDLE: failed to patch ${_juce_threads_mac}. "
+                "The JUCE source layout likely changed in this version. Update the patch "
+                "anchor in CMakeLists.txt.")
+        endif()
+        file(WRITE "${_juce_threads_mac}" "${_juce_threads_mac_src}")
+        message(STATUS "Patched JUCE Thread (macOS): stale handle cleared when realtime start fails")
+    endif()
+endif()
+
 # Linux: JUCE dlopens WebKitGTK/GTK by their UNVERSIONED .so names
 # (libwebkit2gtk-4.1.so etc.), but distros only ship those symlinks in the
 # -dev packages; end-user systems have only the versioned SONAMEs

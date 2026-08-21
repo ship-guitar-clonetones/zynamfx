@@ -97,12 +97,26 @@ public:
       numWorkers = juce::SystemStats::getNumCpus() - 1;
     numWorkers = juce::jlimit(0, kMaxJobs - 1, numWorkers);
     workers.reserve(static_cast<size_t>(numWorkers));
+    // One buffer is the natural per-callback budget, but Mach rejects
+    // time-constraint computations much over 50 ms and hosts can run rates
+    // that put a buffer far past that (clap-validator probes 1234.5678 Hz:
+    // a 512-sample buffer is 415 ms). A rejected policy is worse than an
+    // imprecise one: JUCE 9's macOS realtime start then exits the pthread
+    // before threadEntryPoint, leaving a stale thread handle that makes the
+    // fallback startThread() a silent no-op and every later stopThread()
+    // burn its full timeout (see the matching T3K_RT_START_STALE_HANDLE
+    // JUCE patch in the root CMakeLists). The budget is a scheduling hint,
+    // not a correctness contract, so clamp it to a range the kernel always
+    // accepts.
+    const double frameMs =
+        1000.0 * juce::jmax(1, samplesPerBlock) / juce::jmax(1.0, sampleRate);
+    const double budgetMs = juce::jlimit(0.1, 40.0, frameMs);
     for (int i = 0; i < numWorkers; ++i) {
       auto worker = std::make_unique<Worker>(*this, i);
       const bool startedRealtime = worker->startRealtimeThread(
           juce::Thread::RealtimeOptions{}
               .withPriority(10)
-              .withApproximateAudioProcessingTime(juce::jmax(1, samplesPerBlock), sampleRate));
+              .withMaximumProcessingTimeMs(budgetMs));
       // Linux without rtprio privileges refuses SCHED_RR at pthread_create,
       // so the realtime start fails outright there (macOS and Windows always
       // succeed). A normal-priority worker still parallelizes, and the

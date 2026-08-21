@@ -311,5 +311,11 @@ void TONE3000Processor::setStateInformation(const void* data, int sizeInBytes) {
 
   editFade.releaseWhenChainLoadsSettle();
 
+  // Tell the host the whole parameter set may have moved. CLAP requires an
+  // explicit CLAP_PARAM_RESCAN_VALUES after a state load (clap-juce-extensions
+  // maps programChanged to exactly that); VST3/AU hosts drive their own state
+  // restores and treat this as a harmless values refresh.
+  updateHostDisplay(ChangeDetails{}.withProgramChanged(true));
+
   DBG("Plugin state restored successfully");
 }

@@ -280,6 +280,19 @@ IR assets in `test/files`:
 `test/src/os_bench.cpp` is a standalone CPU benchmark for the oversampled NAM
 path (build instructions in its header).
 
+### Plugin validation
+
+`./script/validate-plugin.sh` runs each format's official validator against
+the built artefacts: [pluginval](https://github.com/Tracktion/pluginval) at
+strictness 10 for VST3 and AU (including Apple's `auval`),
+[clap-validator](https://github.com/free-audio/clap-validator) for CLAP, and
+`lv2lint` for LV2 where available (Linux). AAX (needs Avid's DSH harness and
+PACE signing) and Standalone (not a hosted plugin) are skipped. Install
+validators with `brew install --cask pluginval` and by dropping a
+clap-validator release binary on PATH or in `build/tools/`. Pass a format
+and/or build type to narrow the run, e.g. `./script/validate-plugin.sh AU
+Debug`.
+
 ## Repository layout
 
 | Path            | Contents                                              |
