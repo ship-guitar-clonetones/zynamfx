@@ -62,6 +62,8 @@ export function useChainState() {
       reorderChainBlocks: backend.getPluginFunction('reorderChainBlocks'),
       moveBlockToChain: backend.getPluginFunction('moveBlockToChain'),
       duplicateChainBlock: backend.getPluginFunction('duplicateChainBlock'),
+      copyChainBlock: backend.getPluginFunction('copyChainBlock'),
+      pasteChainBlock: backend.getPluginFunction('pasteChainBlock'),
       setBlockParam: backend.getPluginFunction('setBlockParam'),
       setBlockEqBand: backend.getPluginFunction('setBlockEqBand'),
       setBlockEqEnabled: backend.getPluginFunction('setBlockEqEnabled'),
@@ -172,13 +174,23 @@ export function useChainState() {
       /** Move a block into the other lane at the given index (stereo drag). */
       moveBlockToChain: (blockId: string, side: ChainSide, index: number) =>
         run<boolean>('moveBlockToChain', () => native.moveBlockToChain(blockId, side, index)),
-      /** Clone a tone block (all settings + model) into `side` at `index`.
-          Landing on an insert slot fills it (paste); anywhere else splices
-          in (alt-drag). Resolves to the new blockId ('' on failure). */
+      /** Clone a live tone block (all settings + model) into `side` at
+          `index` (alt-drag duplicate). Landing on an insert slot fills it;
+          anywhere else splices in. Resolves to the new blockId ('' on
+          failure). */
       duplicateBlock: (sourceBlockId: string, side: ChainSide, index: number) =>
         run<string>('duplicateChainBlock', () =>
           native.duplicateChainBlock(sourceBlockId, side, index)
         ),
+      /** Snapshot a block (tone + settings + model bytes) into the native
+          block clipboard. Self-contained: paste keeps working after preset
+          switches or deleting the source. `canPaste` flips via the resync. */
+      copyBlock: (blockId: string) =>
+        run<boolean>('copyChainBlock', () => native.copyChainBlock(blockId)),
+      /** Rebuild the copied block into `side` at `index` (an insert slot
+          there is filled). Resolves to the new blockId ('' on failure). */
+      pasteBlock: (side: ChainSide, index: number) =>
+        run<string>('pasteChainBlock', () => native.pasteChainBlock(side, index)),
       setStereoMode: (enabled: boolean) =>
         run('setStereoMode', () => native.setStereoMode(enabled)),
       /** Which channels of a stereo source feed the plugin (faceplate button). */
@@ -243,6 +255,7 @@ export function useChainState() {
     branch: state.branch ?? null,
     canUndo: state.canUndo ?? false,
     canRedo: state.canRedo ?? false,
+    canPaste: state.canPasteBlock ?? false,
     activePreset: state.preset ?? null,
     stereoEnabled: state.stereoEnabled,
     stereoInput: state.stereoInput ?? false,

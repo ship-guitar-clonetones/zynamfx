@@ -195,8 +195,8 @@ flowchart LR
   Spread on, the chain output becomes an ADT-style stereo double; see
   [`plugin/docs/stereo-image.md`](plugin/docs/stereo-image.md) for the design
   (it also covers the stereo-mode Align feature below, and what happens on a
-  rig that can't reproduce stereo at all: Spread stays idle and the UI greys
-  the slot out).
+  rig that can't reproduce stereo at all: Spread stays idle and greyed out,
+  while stereo chains keep running and are summed to mono).
 - **Stereo mode**: channel 0 feeds the Left chain and channel 1 the Right
   chain independently. The Balance trim scales each chain (12 dB opposing)
   before the pan knobs place them with a constant-power law, so a balance
@@ -210,7 +210,11 @@ flowchart LR
   NAM models or IRs carry different baked-in latency; the auto-align button
   mutes the output for under half a second, drives both chains with an
   identical internal sweep, and measures the lag and relative polarity from
-  the cross-correlation (`plugin/include/AutoOffset.h`).
+  the cross-correlation (`plugin/include/AutoOffset.h`). On a rig that can't
+  reproduce stereo (mono track, one-channel output device) both chains still
+  run and are summed to mono at the output (½(L+R), the host's own mono-fold
+  law), with balance/solo/Ø live inside the sum, pans inert, and a MONO chip
+  on the pan rail (see the stereo-image doc above).
 - **Tone stack**: one global Bass/Middle/Treble EQ after the DC blocker.
 - **Oversampling**: a Plugin Settings option runs the whole chain at 2x/4x/8x the
   48 kHz base rate: minimum-phase half-band filters (zero added latency),

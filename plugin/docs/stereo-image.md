@@ -131,16 +131,32 @@ lands on warm state.
 
 ## Mono outputs
 
-Spread needs two output channels to mean anything. When the rig can't
-provide them (a mono host bus, or a standalone output device with a single
-channel; the latter still hands the processor a stereo buffer but plays only
-channel 0), the processor keeps the deck idle regardless of the
-`spreadEnabled` parameter: the output is the plain mono chain, never a
-summed or half-heard double. The parameter keeps its value, so a preset
-saved with spread on round-trips intact and comes alive again on a stereo
-rig. The UI greys the whole stereo-image slot out, driven by the
-`stereoOutput` capability flag in `getChainState` (the output-side twin of
-`stereoInput`). Pinned by `ProcessorTest.SpreadStaysIdleWithoutAStereoOutput`.
+A rig that can't reproduce stereo (a mono host bus, or a standalone output
+device with a single channel; the latter still hands the processor a stereo
+buffer but plays only channel 0) is reported to the UI as the `stereoOutput`
+capability flag in `getChainState` (the output-side twin of `stereoInput`).
+The two features respond differently, because only one of them survives a
+mono fold:
+
+**Spread** needs two output channels to mean anything, so the processor
+keeps the deck idle regardless of the `spreadEnabled` parameter: the output
+is the plain mono chain, never a summed or half-heard double. The parameter
+keeps its value, so a preset saved with spread on round-trips intact and
+comes alive again on a stereo rig. The UI greys the group out. Pinned by
+`ProcessorTest.SpreadStaysIdleWithoutAStereoOutput`.
+
+**Stereo chains** stay fully alive: both lanes process (on a mono host
+buffer the Right lane runs on the scratch channel), and the image matrix
+folds them to mono at the very end, `½(balL·L + balR·R)`: the same fold a
+host applies when it sums a stereo bus down to mono at the default hard
+pans. The ½ keeps levels consistent: a rig moved between a stereo and a
+mono track doesn't jump, and one chain duplicated into both lanes sums back
+to exactly its mono-mode level. Balance, solo and polarity keep working
+inside the sum (a blend control, in effect); the pans are inert and the UI
+dims them, showing a MONO chip on the pan rail. Align keeps running too
+(time-aligning two chains matters most right before they are summed), so
+auto-align and the correlation LED stay meaningful. Pinned by
+`ProcessorTest.StereoChainsFoldToMonoWithoutAStereoOutput`.
 
 ## Mono safety
 

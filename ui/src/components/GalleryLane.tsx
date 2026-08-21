@@ -20,6 +20,7 @@ import {
   WHITE,
   segmentedCellStyle,
   segmentedGroupStyle,
+  uiOffClass,
 } from './theme';
 import { useParameter } from '../hooks/useParameter';
 import { useChainActions } from '../hooks/useChainActions';
@@ -334,8 +335,13 @@ const PanRailChips: React.FC<{
  * (0 = hard left, 1 = hard right): Pan L covers hard left..center on a half
  * track, Pan R center..hard right. Linked (default) mirrors the knobs so
  * width changes stay symmetric.
+ *
+ * `monoSum` (a rig that can't reproduce stereo): native sums the chains to
+ * mono, so the pans dim and go inert, and the seam pill swaps its link/swap
+ * buttons for a MONO chip that says why. Solo and polarity stay live: they
+ * act on the chains inside the sum.
  */
-export const StereoPanRail: React.FC = () => {
+export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
   const { swapChains } = useChainActions();
   const [panLeft, setPanLeft, onPanLeftDrag] = useParameter('chainPanLeft', 'slider');
   const [panRight, setPanRight, onPanRightDrag] = useParameter('chainPanRight', 'slider');
@@ -392,6 +398,11 @@ export const StereoPanRail: React.FC = () => {
     alignItems: 'center',
     gap: '6rem',
   };
+  // Mono sum: the pans can't be heard, so they dim and go inert; the
+  // wrapper carries the hint that says why. The [S|Ø] chips stay outside
+  // the wrappers: solo and polarity act inside the sum.
+  const panOffWrap: React.CSSProperties = { transition: 'opacity 0.2s ease' };
+  const panOffHelp = monoSum ? helpProps(HELP.panMonoSum) : {};
 
   return (
     <div
@@ -410,21 +421,23 @@ export const StereoPanRail: React.FC = () => {
       <div style={knobRegion}>
         <div style={spacer} />
         <div style={panKnobWrap}>
-          <KnobControl
-            label="Pan L"
-            value={panLeft}
-            onChange={handlePanLeft}
-            variant="panLeft"
-            min={0}
-            max={0.5}
-            size={KNOB_SIZE_SECONDARY}
-            thumb="secondary"
-            scale={PAN_LEFT_SCALE}
-            defaultValue={0}
-            help={HELP.panLeft}
-            labelBright
-            onDragStateChange={onPanLeftDrag}
-          />
+          <div className={uiOffClass(monoSum)} style={panOffWrap} {...panOffHelp}>
+            <KnobControl
+              label="Pan L"
+              value={panLeft}
+              onChange={handlePanLeft}
+              variant="panLeft"
+              min={0}
+              max={0.5}
+              size={KNOB_SIZE_SECONDARY}
+              thumb="secondary"
+              scale={PAN_LEFT_SCALE}
+              defaultValue={0}
+              help={HELP.panLeft}
+              labelBright
+              onDragStateChange={onPanLeftDrag}
+            />
+          </div>
           <PanRailChips
             solo={soloLeft}
             invert={invertLeft}
@@ -436,48 +449,74 @@ export const StereoPanRail: React.FC = () => {
         </div>
         <div style={connector} />
       </div>
+      {/* Seam pill: pan link + whole-chain swap, or the MONO chip when the
+          rig sums the chains (linking pans and swapping lanes matter little
+          to a mono blend, and the chip describes the lanes' joint output
+          from the same spot). The inner footprint is fixed to the two icon
+          boxes so both faces share one oval. */}
       <div
+        {...(monoSum ? helpProps(HELP.monoSum) : {})}
         style={{
           display: 'flex',
-          flexDirection: 'row',
           alignItems: 'center',
           gap: '4rem',
-          border: BORDER,
+          border: monoSum ? `1rem solid ${BRAND_YELLOW}` : BORDER,
           borderRadius: '9999rem',
           padding: '3rem 5rem',
         }}
       >
-        <ChromeIconButton
-          tone="link"
-          on={linked}
-          help={HELP.panLink}
-          onClick={handleToggleLink}
-          offsetY={0}
-        >
-          <Link size={ICON_SIZE} style={{ transform: 'rotate(0deg)' }} />
-        </ChromeIconButton>
-        <ChromeIconButton help={HELP.swapChains} onClick={swapChains} offsetY={0}>
-          <ArrowUpDown size={ICON_SIZE} />
-        </ChromeIconButton>
+        {monoSum ? (
+          <div
+            style={{
+              width: `${ICON_BOX_SIZE * 2 + 4}rem`,
+              height: `${ICON_BOX_SIZE}rem`,
+              display: 'grid',
+              placeItems: 'center',
+              color: BRAND_YELLOW,
+              fontSize: '11rem',
+              fontFamily: 'monospace',
+              lineHeight: 1,
+            }}
+          >
+            MONO
+          </div>
+        ) : (
+          <>
+            <ChromeIconButton
+              tone="link"
+              on={linked}
+              help={HELP.panLink}
+              onClick={handleToggleLink}
+              offsetY={0}
+            >
+              <Link size={ICON_SIZE} style={{ transform: 'rotate(0deg)' }} />
+            </ChromeIconButton>
+            <ChromeIconButton help={HELP.swapChains} onClick={swapChains} offsetY={0}>
+              <ArrowUpDown size={ICON_SIZE} />
+            </ChromeIconButton>
+          </>
+        )}
       </div>
       <div style={knobRegion}>
         <div style={connector} />
         <div style={panKnobWrap}>
-          <KnobControl
-            label="Pan R"
-            value={panRight}
-            onChange={handlePanRight}
-            variant="panRight"
-            min={0.5}
-            max={1}
-            size={KNOB_SIZE_SECONDARY}
-            thumb="secondary"
-            scale={PAN_RIGHT_SCALE}
-            defaultValue={1}
-            help={HELP.panRight}
-            labelBright
-            onDragStateChange={onPanRightDrag}
-          />
+          <div className={uiOffClass(monoSum)} style={panOffWrap} {...panOffHelp}>
+            <KnobControl
+              label="Pan R"
+              value={panRight}
+              onChange={handlePanRight}
+              variant="panRight"
+              min={0.5}
+              max={1}
+              size={KNOB_SIZE_SECONDARY}
+              thumb="secondary"
+              scale={PAN_RIGHT_SCALE}
+              defaultValue={1}
+              help={HELP.panRight}
+              labelBright
+              onDragStateChange={onPanRightDrag}
+            />
+          </div>
           <PanRailChips
             solo={soloRight}
             invert={invertRight}

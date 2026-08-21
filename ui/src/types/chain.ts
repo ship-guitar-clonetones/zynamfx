@@ -210,6 +210,10 @@ export interface ChainState {
       revision bump, so pollers always see them fresh. */
   canUndo: boolean;
   canRedo: boolean;
+  /** Whether the native block clipboard holds a copied block (Paste enabled
+      on insert slots). The clipboard is a self-contained snapshot, so this
+      survives preset switches and deleting the copied block. */
+  canPasteBlock?: boolean;
   /** Active preset, absent when none is loaded. Changes with revision bumps. */
   preset?: ActivePreset;
   stereoEnabled: boolean;
@@ -220,8 +224,9 @@ export interface ChainState {
   stereoInput: boolean;
   /** True when the plugin can drive two distinct output channels (stereo
       host bus, 2+ channel standalone output device). False greys the
-      stereo-image slot and collapses the balance knob; native keeps Spread
-      idle to match, so the output is the plain mono chain. */
+      Spread group (native keeps it idle: a double can't be heard on one
+      channel), while stereo chains keep running and native sums them to
+      mono; the pan rail dims its pans and shows the MONO chip. */
   stereoOutput: boolean;
   /** True in the standalone app; gates standalone-only settings. */
   standalone: boolean;

@@ -56,6 +56,7 @@ export const Plugin: React.FC = () => {
     branch,
     canUndo,
     canRedo,
+    canPaste,
     activePreset,
     stereoEnabled,
     stereoInput,
@@ -79,11 +80,16 @@ export const Plugin: React.FC = () => {
 
   // The output carries a real stereo image only when a stereo-image feature
   // is on (stereo mode, or mono-mode spread) AND the rig can reproduce it
-  // (stereoOutput: stereo host bus / 2+ channel output device). On a mono
-  // rig the meter and balance knob stay in their mono forms, and the plate
-  // greys the stereo-image slot out (native keeps Spread idle to match).
+  // (stereoOutput: stereo host bus / 2+ channel output device); drives the
+  // output meter's stereo form. On a mono rig, Spread is idle and greyed
+  // out, while stereo chains keep running and native sums them to mono
+  // (monoSum below): the Bal knob then trims the two chains *inside* the
+  // sum, so it stays visible whenever stereo chains are on, regardless of
+  // the rig (balanceActive).
   const [spreadEnabled] = useParameter('spreadEnabled', 'toggle');
   const stereoImage = (stereoEnabled || spreadEnabled) && stereoOutput;
+  const balanceActive = stereoEnabled || (spreadEnabled && stereoOutput);
+  const monoSum = stereoEnabled && !stereoOutput;
 
   const setTunerEnabled = useNativeFunction<boolean>('setTunerEnabled');
   const copyToClipboard = useNativeFunction<boolean>('copyToClipboard');
@@ -311,6 +317,8 @@ export const Plugin: React.FC = () => {
       reorderBlocks: actions.reorderBlocks,
       moveBlock: actions.moveBlockToChain,
       duplicateBlock: actions.duplicateBlock,
+      copyBlock: actions.copyBlock,
+      pasteBlock: actions.pasteBlock,
       swapChains: actions.swapChains,
       setBranch: actions.setBranch,
       clearBranch: actions.clearBranch,
@@ -482,6 +490,8 @@ export const Plugin: React.FC = () => {
                     chain={chain}
                     chainRight={stereoEnabled ? (chainRight ?? []) : null}
                     branch={stereoEnabled ? branch : null}
+                    monoSum={monoSum}
+                    canPaste={canPaste}
                     sampleRate={sampleRate}
                     onFillToFaceplate={setFillToFaceplate}
                     returnToGallery={returnToGallery}
@@ -508,7 +518,7 @@ export const Plugin: React.FC = () => {
         {/* Pinned faceplate at the bottom (gains, gate, tone stack), with the
           hint strip under it (hidden entirely when hints are off). */}
         <Faceplate
-          stereoImage={stereoImage}
+          balanceActive={balanceActive}
           stereoOutput={stereoOutput}
           stereoChains={stereoEnabled}
           stereoInput={stereoInput}

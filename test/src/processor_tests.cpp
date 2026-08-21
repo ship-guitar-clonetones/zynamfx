@@ -10,6 +10,8 @@
 //   - toggling oversampling never changes reported latency (no PDC churn),
 //   - without a stereo output the spread parameter is inert (plain mono out)
 //     and getChainState reports the capability to the UI,
+//   - without a stereo output stereo chains keep running and are summed to
+//     mono, ½(L+R) with solo/polarity live inside the sum,
 //   - parameter state survives a save/restore round trip,
 //   - garbage, legacy-format, and newer-schema state blobs are ignored,
 //   - the tail report covers the DC blocker floor.
@@ -107,6 +109,75 @@ TEST(ProcessorTest, SpreadStaysIdleWithoutAStereoOutput) {
   stereoProc.setPlayConfigDetails(2, 2, kFs, 512);
   stereoProc.prepareToPlay(kFs, 512);
   EXPECT_TRUE(static_cast<bool>(stereoProc.getChainState(-1)["stereoOutput"]));
+}
+
+TEST(ProcessorTest, StereoChainsFoldToMonoWithoutAStereoOutput) {
+  // Stereo chains on a rig that can't reproduce stereo (a mono host track
+  // here) keep running and are summed at the output: ½(balL·L + balR·R),
+  // the same fold a host applies when it sums a stereo bus to mono, so a
+  // rig keeps its level when moved between track types. With two identical
+  // (empty) lanes the sum is transparent; polarity and solo keep acting
+  // inside it, which also pins that the Right lane really processes
+  // (before this, a mono track silently played the Left lane alone).
+  TONE3000Processor proc;
+  proc.setPlayConfigDetails(1, 1, kFs, 512);
+  proc.setStereoMode(true);
+  proc.prepareToPlay(kFs, 512);
+  EXPECT_FALSE(static_cast<bool>(proc.getChainState(-1)["stereoOutput"]));
+
+  const int total = 93 * 512;
+  const auto in = makeSine(total, 997.0, 0.5f);
+  juce::MidiBuffer midi;
+  const auto run = [&] {
+    std::vector<float> out(in.size(), 0.0f);
+    juce::AudioBuffer<float> buffer(1, 512);
+    for (int off = 0; off < total; off += 512) {
+      buffer.copyFrom(0, 0, in.data() + off, 512);
+      proc.processBlock(buffer, midi);
+      std::copy(buffer.getReadPointer(0), buffer.getReadPointer(0) + 512, out.begin() + off);
+    }
+    return out;
+  };
+
+  // Identical lanes at centered balance: ½(in + in) = in, transparent.
+  EXPECT_NEAR(settledGainDb(run(), in, 997.0, kFs), 0.0, 0.05);
+
+  // Flipping one lane's polarity cancels the sum: lane R is really in there.
+  proc.parameters.getParameter("chainInvertRight")->setValueNotifyingHost(1.0f);
+  {
+    const auto out = run();
+    float peak = 0.0f;
+    for (int i = 16384; i < total; ++i)
+      peak = std::max(peak, std::abs(out[i]));
+    EXPECT_LT(peak, 1.0e-4f) << "inverted lane failed to cancel: the fold is broken";
+  }
+
+  // Solo auditions one lane, at the fold's ½ share.
+  proc.parameters.getParameter("chainInvertRight")->setValueNotifyingHost(0.0f);
+  proc.parameters.getParameter("chainSoloLeft")->setValueNotifyingHost(1.0f);
+  EXPECT_NEAR(settledGainDb(run(), in, 997.0, kFs), -6.02, 0.1);
+
+  // The same fold covers a stereo buffer on a mono rig (standalone
+  // one-channel output device: the buffer is stereo but only channel 0 is
+  // audible). Both channels carry the sum, so the listener hears the whole
+  // rig; the polarity null proves the fold ran here too.
+  TONE3000Processor monoOutProc;
+  monoOutProc.setPlayConfigDetails(2, 1, kFs, 512);
+  monoOutProc.setStereoMode(true);
+  monoOutProc.prepareToPlay(kFs, 512);
+  monoOutProc.parameters.getParameter("chainInvertRight")->setValueNotifyingHost(1.0f);
+  juce::AudioBuffer<float> buffer(2, 512);
+  float peak = 0.0f;
+  for (int off = 0; off < total; off += 512) {
+    buffer.copyFrom(0, 0, in.data() + off, 512);
+    buffer.copyFrom(1, 0, in.data() + off, 512);
+    monoOutProc.processBlock(buffer, midi);
+    if (off >= 16384)
+      for (int ch = 0; ch < 2; ++ch)
+        for (int i = 0; i < 512; ++i)
+          peak = std::max(peak, std::abs(buffer.getReadPointer(ch)[i]));
+  }
+  EXPECT_LT(peak, 1.0e-4f) << "a 2-channel buffer on a mono rig must fold both channels";
 }
 
 TEST(ProcessorTest, BoundaryReportedLatencyMatchesMeasuredDelay) {

@@ -241,13 +241,29 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
                 args[0].toString().toStdString(), args[1].toString(), static_cast<int>(args[2])));
           }))
       .withNativeFunction(
-          // (sourceBlockId, "left" | "right", targetIndex): clone a tone
-          // block with all its settings (copy/paste and alt-drag duplicate).
-          // Returns the new block id, "" on failure.
+          // (sourceBlockId, "left" | "right", targetIndex): clone a live tone
+          // block with all its settings (alt-drag duplicate). Returns the new
+          // block id, "" on failure.
           "duplicateChainBlock",
           guarded(3, juce::var(""), [editor](const juce::Array<juce::var>& args) {
             return juce::var(juce::String(editor->processor.duplicateChainBlock(
                 args[0].toString().toStdString(), args[1].toString(), static_cast<int>(args[2]))));
+          }))
+      .withNativeFunction(
+          // (blockId): snapshot the block (tone + settings + model bytes)
+          // into the in-app block clipboard. The snapshot is self-contained,
+          // so paste survives preset switches and deleting the source.
+          "copyChainBlock", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
+            return juce::var(editor->processor.copyChainBlock(args[0].toString().toStdString()));
+          }))
+      .withNativeFunction(
+          // ("left" | "right", targetIndex): rebuild the copied block there
+          // (an insert slot at the index is filled). Returns the new block
+          // id, "" on failure (empty clipboard, right lane while mono).
+          "pasteChainBlock",
+          guarded(2, juce::var(""), [editor](const juce::Array<juce::var>& args) {
+            return juce::var(juce::String(editor->processor.pasteChainBlock(
+                args[0].toString(), static_cast<int>(args[1]))));
           }))
       .withNativeFunction(
           "swapChains", guarded(0, false, [editor](const juce::Array<juce::var>&) {

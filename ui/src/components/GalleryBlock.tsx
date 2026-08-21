@@ -20,7 +20,6 @@ import type { ChainSide, ToneBlock } from '../types/chain';
 import { ChromeIconButton } from './ChromeIconButton';
 import { TileMenu } from './TileMenu';
 import type { TileMenuAnchor } from './TileMenu';
-import { copyBlock } from '../hooks/useBlockClipboard';
 import { useToast } from './Toast';
 import { GRAY, ICON_SIZE, SURFACE, SURFACE_RAISED } from './theme';
 
@@ -403,7 +402,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
                 label: 'Copy',
                 icon: <Copy size={16} />,
                 help: HELP.copyBlock,
-                onSelect: () => copyBlock(blockId),
+                onSelect: () => actions.copyBlock(blockId),
               },
             ]}
           />

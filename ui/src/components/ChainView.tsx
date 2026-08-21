@@ -25,7 +25,6 @@ import {
   gapCenterX,
 } from './GalleryLane';
 import { useChainActions } from '../hooks/useChainActions';
-import { useCopiedBlockId } from '../hooks/useBlockClipboard';
 import { WHITE } from './theme';
 import type { ChainBranch, ChainItem, ChainSide, ToneBlock } from '../types/chain';
 import { isInsertSlot } from '../types/chain';
@@ -59,6 +58,13 @@ interface ChainViewProps {
   chainRight: ChainItem[] | null;
   /** Active branch (stereo only), or null when the chains are independent. */
   branch: ChainBranch | null;
+  /** Stereo chains on a rig that can't reproduce stereo: native sums them
+      to mono. The pan rail dims its pans and shows the MONO chip. */
+  monoSum: boolean;
+  /** Whether the native block clipboard holds a copied block (enables Paste
+      on insert slots). Survives preset switches: the clipboard snapshot is
+      self-contained, not a reference into the current chain. */
+  canPaste: boolean;
   sampleRate: number;
   /** Block info view: drop the meter-band bottom pad so scroll reaches the faceplate. */
   onFillToFaceplate?: (fill: boolean) => void;
@@ -100,6 +106,8 @@ export const ChainView: React.FC<ChainViewProps> = ({
   chain,
   chainRight,
   branch,
+  monoSum,
+  canPaste,
   sampleRate,
   onFillToFaceplate,
   returnToGallery = 0,
@@ -128,11 +136,6 @@ export const ChainView: React.FC<ChainViewProps> = ({
 
   /** ⌥ held during the current drag; the drop duplicates instead of moving. */
   const altDragRef = useRef(false);
-
-  // Copy/paste clipboard: paste is only offered while the copied block still
-  // exists (native resolves the data from the id, so a deleted source can't
-  // be pasted).
-  const copiedBlockId = useCopiedBlockId();
 
   /**
    * Optimistic mirror of both lanes. Drag gestures mutate this immediately
@@ -371,16 +374,6 @@ export const ChainView: React.FC<ChainViewProps> = ({
   const stereo = chainRight != null;
   const tileSize = stereo ? STEREO_TILE_SIZE : TILE_SIZE;
 
-  // Validated against the live chain each render, so a copied-then-deleted
-  // block leaves Paste disabled rather than pasting a ghost.
-  const pasteSourceId =
-    copiedBlockId != null &&
-    [...chain, ...(chainRight ?? [])].some(
-      (item) => !isInsertSlot(item) && item.blockId === copiedBlockId
-    )
-      ? copiedBlockId
-      : null;
-
   // Branched layout: the branch lane starts at the trunk's tap gap, so its
   // row is indented past the whole trunk prefix (matching the signal flow:
   // its input *is* that prefix's output). Resolved against the optimistic
@@ -413,11 +406,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
         stereo={stereo}
         onOpen={setDetailBlockId}
         onAdd={(insertBlockId) => actions.addModel(side, insertBlockId)}
-        onPasteBlock={
-          pasteSourceId != null
-            ? (index) => actions.duplicateBlock(pasteSourceId, side, index)
-            : null
-        }
+        onPasteBlock={canPaste ? (index) => actions.pasteBlock(side, index) : null}
         side={side}
         branch={branchLayout != null ? branch : null}
         branchInteractive={stereo && activeDrag == null}
@@ -438,7 +427,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
         padding: '0 24rem',
       }}
     >
-      {stereo && <StereoPanRail />}
+      {stereo && <StereoPanRail monoSum={monoSum} />}
       <DragDropProvider
         sensors={sensors}
         onDragStart={handleDragStart}

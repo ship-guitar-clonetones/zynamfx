@@ -132,6 +132,19 @@ public:
   // in-memory model bytes (no network). Returns the new id, "" on failure.
   std::string duplicateChainBlock(const std::string& sourceBlockId, const juce::String& side,
                                   int index);
+  // In-app block clipboard (Copy on a tone tile / Paste on an insert slot).
+  // Copy stores a self-contained snapshot (the serializeBlockSettings tree +
+  // the block's in-memory model bytes) on this instance, so paste keeps
+  // working after the source block is gone: preset switches, undo, deleting
+  // the copied block. Not undoable; bumps the revision so `canPasteBlock`
+  // (getChainState) reaches the UI. Returns false for stale/insert ids.
+  bool copyChainBlock(const std::string& blockId);
+  // Rebuild a block from the clipboard snapshot into `side` at `index` (same
+  // landing rules as duplicateChainBlock: an insert slot there is consumed,
+  // anywhere else splices in). The paste gets a fresh id and loads its model
+  // cache-first from the copied bytes. Returns the new id, "" on failure
+  // (empty clipboard, or the right lane while mono).
+  std::string pasteChainBlock(const juce::String& side, int index);
 
   // TONE3000 OAuth access token. Updated by the UI after the Select flow and
   // again on every refresh. `fetchModelFromUrl` attaches it as a Bearer header
@@ -523,9 +536,23 @@ private:
   // The whole chain stage at the chain rate: lane L (and lane R in stereo
   // mode) over the given channel pointers. Called either directly (48k host)
   // or as the boundary resampler's encapsulated callback. `inputs`/`outputs`
-  // both carry 2 pointers; processing is in place on `outputs` after an
+  // both carry 2 pointers (on a mono host buffer the second one is the
+  // scratch channel); processing is in place on `outputs` after an
   // input→output copy (skipped when they alias). Caller holds `chainMutex`.
   void processChainStage(float** inputs, float** outputs, int numFrames);
+
+  // The post-chain stereo image at the host rate, over the two chain output
+  // channels the stage above produced (`chR` is the scratch channel on a
+  // mono host buffer): the mode's image engine (Spread / Align), the
+  // auto-balance and auto-align taps, then the balance/pan matrix, which
+  // becomes a mono fold when stereo chains run on a rig that can't
+  // reproduce stereo (`stereoRig` false: mono bus, or a one-channel
+  // standalone output device). Called once per chain-stage slice so the
+  // fold stays correct even when a host exceeds its promised block size;
+  // every processor it touches is a streaming engine, so slicing is
+  // transparent. Caller holds `chainMutex` (it runs inside the chain-stage
+  // slice loop).
+  void processImageStage(float* chL, float* chR, int numFrames, bool stereoRig);
 
   // Prepare every engine in a chain for the current chain rate (see
   // chainSampleRate) and chain-domain block size. Holds no lock.
@@ -551,6 +578,14 @@ private:
 
   // Find a block by id across both chains (ids are globally unique). Returns nullptr if absent.
   ChainBlock* findBlockById(const std::string& blockId);
+
+  // Shared tail of duplicateChainBlock/pasteChainBlock: land a freshly built
+  // tone block in `side` at `index` (an insert slot there is consumed,
+  // anywhere else splices in), restore the lane invariants, bump the revision
+  // and queue the block's active model (cache-first). Returns the block's id.
+  // Caller holds chainMutex and has already recorded history.
+  std::string landToneBlock(std::unique_ptr<ChainBlock> block, const juce::String& side,
+                            int index);
 
   // State (de)serialization helpers.
   // serializeBlockSettings/applyBlockSettings cover everything user-editable
@@ -597,6 +632,14 @@ private:
 
   ChainHistory chainHistory;
 
+  // Block clipboard (see copyChainBlock/pasteChainBlock). `settings` is a
+  // serializeBlockSettings tree (invalid = nothing copied); the model bytes
+  // ride separately so paste comes up without a network round trip, exactly
+  // like duplicate. Guarded by chainMutex; in-memory only (deliberately not
+  // part of the DAW session state).
+  juce::ValueTree blockClipboardSettings;
+  std::map<int, std::vector<uint8_t>> blockClipboardModelCache;
+
   // MIDI performance handlers (wired to midiMapper in the constructor,
   // both invoked on the message thread).
   // Program change n loads the nth preset in list order (user first, then
@@ -639,7 +682,8 @@ private:
   // Output-side twin: the standalone app with a one-channel output device.
   // The buffer can still be stereo then (the device only plays channel 0),
   // so this feeds stereoOutputDetected below; without it Spread would run
-  // and the listener would hear half the double.
+  // and the listener would hear half the double, and a stereo-chain rig
+  // would play its Left chain alone instead of the mono sum.
   std::atomic<bool> standaloneMonoOutput{false};
 
   // The two chains: lanes[0] = Left/primary (the only lane in mono mode),
@@ -738,11 +782,16 @@ private:
   // Boundary latency in host samples (0 at a 48k host). Constant per host
   // rate; chain edits never change reported latency.
   int chainBoundaryLatency = 0;
-  // Silent second channel handed to the boundary when the host buffer is
-  // mono (the boundary is a fixed 2-channel container).
+  // Second channel handed to the boundary when the host buffer is mono (the
+  // boundary is a fixed 2-channel container). Silent in mono chain mode;
+  // with stereo chains it becomes the Right lane's working channel: fed a
+  // copy of the mono input per slice, and folded into channel 0 by the
+  // image stage afterwards.
   juce::AudioBuffer<float> chainScratchChannel;
   // Per-callback routing state for processChainStage, set by processBlock
   // under chainMutex just before invoking the stage (audio thread only).
+  // rtStereoChains follows the *mode* alone: stereo chains run on any rig
+  // (a mono rig hears them summed; see processImageStage).
   int rtChainChannels = 2;
   bool rtStereoChains = false;
   // True when this callback's chain stage should fork the two lanes across
@@ -940,10 +989,12 @@ private:
 
   // True when the plugin can drive two distinct output channels (stereo bus
   // in a host, 2+ output channels in the standalone app). When false, Spread
-  // stays idle no matter what its parameter says (see the image stage in
-  // processBlock) and the UI greys the stereo-image slot out. Starts true so
-  // an editor opening before the first prepareToPlay doesn't flash the slot
-  // grey. Reported via getChainState; see updateStereoIoDetection().
+  // stays idle no matter what its parameter says (the UI greys it out), and
+  // stereo chains keep running but are summed to mono by the image stage
+  // (see processImageStage; the UI shows a MONO chip on the pan rail).
+  // Starts true so an editor opening before the first prepareToPlay doesn't
+  // flash those states. Reported via getChainState; see
+  // updateStereoIoDetection().
   std::atomic<bool> stereoOutputDetected{true};
 
   // Input channel mode (see InputMode). Atomic: written by the message
@@ -978,9 +1029,10 @@ private:
   // the chain-edit fade, so the hard stop is inaudible):
   //  - Mono mode: the Spread builds a stereo image from the single chain
   //    (an ADT-style double; see Spread.h). Its output correlation ships to
-  //    the UI via getMeterLevels.
+  //    the UI via getMeterLevels. Idle on rigs that can't reproduce stereo.
   //  - Stereo mode: Align time-aligns the two chains via StereoOffset (see
-  //    StereoOffset.h).
+  //    StereoOffset.h). Runs on any rig; on a mono rig it shapes the chains
+  //    right before they are summed (see processImageStage).
   Spread spread;
   StereoOffset stereoOffset;
 
@@ -991,10 +1043,11 @@ private:
   AutoOffset autoOffset;
 
   // Post-chain image matrix gains (per-chain balance trim × constant-power
-  // pan; see imageMatrixGains in Processor.cpp), smoothed so balance/pan
-  // moves don't zipper. LtoR = how much of the Left chain lands in the
-  // Right output, etc. At the centered/hard-panned default the matrix is
-  // the identity and processBlock skips the mix loop entirely.
+  // pan, or the mono fold; see imageMatrixGains in Processor.cpp), smoothed
+  // so balance/pan moves don't zipper. LtoR = how much of the Left chain
+  // lands in the Right output, etc. At the centered/hard-panned default the
+  // matrix is the identity and the image stage skips the mix loop entirely;
+  // the fold configuration is never the identity, so it always runs.
   juce::SmoothedValue<float> imageGainLtoL, imageGainLtoR, imageGainRtoL, imageGainRtoR;
 
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TONE3000Processor)

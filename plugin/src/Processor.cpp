@@ -512,21 +512,32 @@ static float balanceChainGain(float balance, int chain) {
 // the UI; both on via MIDI leaves both audible), and a polarity invert
 // negates its chain's trim. Riding the matrix smoothers makes both
 // click-free: the mute glides, and a sign flip glides through zero.
+//
+// `foldToMono` (stereo chains on a rig that can't reproduce stereo, see the
+// image stage) reconfigures the matrix into a mono sum: both chains land on
+// both outputs at half their trim, ½(balL·L + balR·R), exactly what a host
+// produces when it folds a stereo bus down to mono at the default hard
+// pans. The ½ keeps levels consistent across rigs: a rig moved from a
+// stereo to a mono track doesn't jump, and one chain duplicated into both
+// lanes sums back to its mono-mode level. Balance/solo/invert shape the
+// blend as usual; the pans are inert (the UI dims them).
 struct ImageGains { float lToL, lToR, rToL, rToR; };
-static ImageGains imageMatrixGains(bool panActive, float balance, float panLeft, float panRight,
-                                   bool soloLeft, bool soloRight, bool invertLeft,
-                                   bool invertRight) {
-  float pLtoL = 1.0f, pLtoR = 0.0f, pRtoL = 0.0f, pRtoR = 1.0f;
-  if (panActive) {
-    std::tie(pLtoL, pLtoR) = constantPowerPanGains(panLeft);
-    std::tie(pRtoL, pRtoR) = constantPowerPanGains(panRight);
-  }
+static ImageGains imageMatrixGains(bool panActive, bool foldToMono, float balance,
+                                   float panLeft, float panRight, bool soloLeft,
+                                   bool soloRight, bool invertLeft, bool invertRight) {
   float balL = soloRight && !soloLeft ? 0.0f : balanceChainGain(balance, 0);
   float balR = soloLeft && !soloRight ? 0.0f : balanceChainGain(balance, 1);
   if (invertLeft)
     balL = -balL;
   if (invertRight)
     balR = -balR;
+  if (foldToMono)
+    return {0.5f * balL, 0.5f * balL, 0.5f * balR, 0.5f * balR};
+  float pLtoL = 1.0f, pLtoR = 0.0f, pRtoL = 0.0f, pRtoR = 1.0f;
+  if (panActive) {
+    std::tie(pLtoL, pLtoR) = constantPowerPanGains(panLeft);
+    std::tie(pRtoL, pRtoR) = constantPowerPanGains(panRight);
+  }
   return {balL * pLtoL, balL * pLtoR, balR * pRtoL, balR * pRtoR};
 }
 
@@ -535,9 +546,9 @@ static ImageGains imageMatrixGains(bool panActive, float balance, float panLeft,
 // doesn't affect it (the UI needs the button to stay visible so the user can
 // cycle back to stereo). Stereo output is the same idea on the way out: a
 // mono host bus or a one-channel output device can't reproduce a stereo
-// image, so Spread stays idle (see the image stage in processBlock) and the
-// UI greys the stereo-image slot. Both reported through getChainState, so
-// bump the revision on change.
+// image, so Spread stays idle (the UI greys it out) and stereo chains are
+// summed to mono (see processImageStage; the UI shows a MONO chip). Both
+// reported through getChainState, so bump the revision on change.
 void TONE3000Processor::updateStereoIoDetection() {
   const bool stereoIn = getMainBusNumInputChannels() >= 2 && !standaloneMonoInput.load();
   const bool stereoOut = getMainBusNumOutputChannels() >= 2 && !standaloneMonoOutput.load();
@@ -708,14 +719,18 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
   outputGainSmoother.reset(sampleRate, 0.02);
   outputGainSmoother.setCurrentAndTargetValue(mainStageGain(cacheOutputLevel));
 
-  // Post-chain image matrix (balance × pan): 20 ms ramps, primed from the
-  // current parameters so a restored session doesn't fade in from the wrong
-  // image or chain balance.
+  // Post-chain image matrix (balance × pan, or the mono fold): 20 ms ramps,
+  // primed from the current parameters and rig so a restored session doesn't
+  // fade in from the wrong image, chain balance or fold. Mirrors the gain
+  // resolution in processImageStage (stereoOutputDetected was just updated
+  // above).
   {
     const bool isStereo = stereoEnabled.load();
-    const bool applyBalance =
-        isStereo || (cacheSpreadEnabled && stereoOutputDetected.load());
-    const auto g = imageMatrixGains(isStereo, applyBalance ? cacheOutputBalance : 0.5f,
+    const bool stereoRig = stereoOutputDetected.load();
+    const bool monoFold = isStereo && !stereoRig;
+    const bool applyBalance = isStereo || (cacheSpreadEnabled && stereoRig);
+    const auto g = imageMatrixGains(isStereo && !monoFold, monoFold,
+                                    applyBalance ? cacheOutputBalance : 0.5f,
                                     cacheChainPanLeft, cacheChainPanRight,
                                     isStereo && cacheChainSoloLeft,
                                     isStereo && cacheChainSoloRight,
@@ -1336,6 +1351,124 @@ void TONE3000Processor::processChainStage(float** inputs, float** outputs, int n
   }
 }
 
+// ##############################
+// POST-CHAIN STEREO IMAGE (host rate)
+// ##############################
+// Runs right after each chain-stage slice, before the downstream stages
+// (DC / tone stack / output gain + meters) so they see the real image.
+// Order matters: the mode's image engine runs first so it always shapes
+// full chain output, then the balance/pan matrix mixes the result.
+//  - Mono chain mode: the Spread builds the stereo image from the channel-0
+//    chain output (an ADT-style double, see Spread.h). Engage/bypass is its
+//    internal ~25 ms crossfade against the untouched buffer; fully skipped
+//    once idle. It needs a rig that can reproduce the double (`stereoRig`);
+//    otherwise it stays idle no matter what its parameter says, so a preset
+//    arriving with spread on plays as the plain mono chain (the UI greys
+//    the group out).
+//  - Stereo chain mode: Align delays one chain in place via StereoOffset,
+//    corrective by default (see StereoOffset.h): 0 ms = identity, all
+//    transitions glide through identity; fully skipped once idle. It runs
+//    on any rig: on a mono rig it shapes the sum below (aligning two chains
+//    matters most when they are about to be summed).
+//  - The opposite mode's engine is force-idled (no fade needed): mode
+//    switches always ride the chain-edit fade, so the hard stop lands on
+//    silence.
+//  - Balance + pan (one 2×2 matrix, see imageMatrixGains): the balance trim
+//    scales each *chain*, then the constant-power pan blend mixes them
+//    across the output bus. The centered/hard-panned default is the
+//    identity and skips the loop. On a mono rig with stereo chains the same
+//    matrix becomes the mono fold, ½(balL·L + balR·R) onto both channel
+//    pointers; solo and polarity keep working inside the sum, the pans are
+//    inert. Balance is forced center whenever it can't do anything (mono
+//    chain without a running spread), so a leftover Bal setting can't skew
+//    a dual-mono bus, matching the UI hiding the knob.
+void TONE3000Processor::processImageStage(float* chL, float* chR, int numFrames,
+                                          bool stereoRig) {
+  // Allocation-free stereo view over the two chain channels, for the
+  // engines' AudioBuffer interfaces.
+  float* imageChannels[2] = {chL, chR};
+  juce::AudioBuffer<float> image(imageChannels, 2, numFrames);
+
+  const bool spreadActive = cacheSpreadEnabled && stereoRig;
+  const bool monoFold = rtStereoChains && !stereoRig;
+
+  if (rtStereoChains) {
+    spread.forceIdle();
+
+    // Auto-align probe capture: the raw chain outputs BEFORE the align
+    // delay and the image matrix's polarity flips, so the measurement is
+    // the chains' absolute misalignment and relative polarity, independent
+    // of the current corrections (a second run measures the total, not the
+    // residual). Zero work unless a probe is running.
+    autoOffset.captureChainOutputs(chL, chR, numFrames);
+
+    stereoOffset.setTarget(
+        StereoOffsetParams::fromNormalized(cacheAlignOffset, cacheAlignWobble,
+                                           cacheAlignCrossover, cacheAlignWobbleEnabled,
+                                           cacheAlignCrossoverEnabled, cacheAlignDiffuseEnabled),
+        cacheAlignEnabled);
+    if (stereoOffset.isRunning())
+      stereoOffset.process(image);
+  } else {
+    stereoOffset.forceIdle();
+    spread.setTarget(
+        SpreadParams::fromNormalized(cacheSpreadOffset, cacheSpreadWobble, cacheSpreadCrossover,
+                                     cacheSpreadWobbleEnabled, cacheSpreadCrossoverEnabled,
+                                     cacheSpreadDiffuseEnabled),
+        spreadActive);
+    if (spread.isRunning())
+      spread.process(image);
+  }
+
+  // Auto balance listening tap: the raw chain outputs, before the balance
+  // and pan gains, so the measurement is the chains' true mismatch. It must
+  // sit pre-pan: post-pan the two channels converge as the pans approach
+  // center even when the chains are badly mismatched, which would starve
+  // the measurement. Zero work unless armed.
+  if (autoBalanceState.load(std::memory_order_acquire) ==
+      static_cast<int>(AutoBalanceState::Listening))
+    runAutoBalanceStage(image, numFrames);
+
+  // The matrix has work only when two real output channels exist, or when
+  // folding stereo chains onto a mono rig (mono chain mode there needs no
+  // matrix: channel 0 already is the output). Solo and polarity key on the
+  // chain mode, not the rig: two chains are worth auditioning and
+  // re-polarizing inside the sum too. All four gains are smoothed so knob
+  // moves AND the solo/invert/fold gating glide instead of stepping (pop).
+  if (stereoRig || monoFold) {
+    const bool applyBalance = rtStereoChains || spreadActive;
+    const auto g = imageMatrixGains(rtStereoChains && !monoFold, monoFold,
+                                    applyBalance ? cacheOutputBalance : 0.5f,
+                                    cacheChainPanLeft, cacheChainPanRight,
+                                    rtStereoChains && cacheChainSoloLeft,
+                                    rtStereoChains && cacheChainSoloRight,
+                                    rtStereoChains && cacheChainInvertLeft,
+                                    rtStereoChains && cacheChainInvertRight);
+    imageGainLtoL.setTargetValue(g.lToL);
+    imageGainLtoR.setTargetValue(g.lToR);
+    imageGainRtoL.setTargetValue(g.rToL);
+    imageGainRtoR.setTargetValue(g.rToR);
+
+    const bool smoothing = imageGainLtoL.isSmoothing() || imageGainLtoR.isSmoothing() ||
+                           imageGainRtoL.isSmoothing() || imageGainRtoR.isSmoothing();
+    const bool identity = std::abs(g.lToL - 1.0f) < 1.0e-4f &&
+                          std::abs(g.rToR - 1.0f) < 1.0e-4f && std::abs(g.lToR) < 1.0e-4f &&
+                          std::abs(g.rToL) < 1.0e-4f;
+    if (smoothing || !identity) {
+      for (int i = 0; i < numFrames; ++i) {
+        const float ll = imageGainLtoL.getNextValue();
+        const float lr = imageGainLtoR.getNextValue();
+        const float rl = imageGainRtoL.getNextValue();
+        const float rr = imageGainRtoR.getNextValue();
+        const float chainL = chL[i];
+        const float chainR = chR[i];
+        chL[i] = chainL * ll + chainR * rl;
+        chR[i] = chainL * lr + chainR * rr;
+      }
+    }
+  }
+}
+
 // ################
 // RT PROCESS BLOCK
 // ################
@@ -1443,13 +1576,13 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   // instrument. Injected downstream of the whole input stage, so the meters
   // and gate keep tracking the live signal but none of it reaches the
   // measurement; the output is muted for the duration (the probe mute stage
-  // below). Stereo chain mode only; losing it mid-run cancels (the atomic
-  // flip is audio-thread safe).
+  // below). Stereo chain mode only (any rig: on a mono buffer the scratch
+  // mirror in the chain-stage loop feeds the probe to the Right lane);
+  // losing the mode mid-run cancels (the atomic flip is audio-thread safe).
   // #########################
-  if (autoOffset.state() != AutoOffset::State::Idle &&
-      (numChannels < 2 || !stereoEnabled.load()))
+  if (autoOffset.state() != AutoOffset::State::Idle && !stereoEnabled.load())
     autoOffset.cancel();
-  if (numChannels >= 2 && autoOffset.renderProbeInput(buffer.getWritePointer(0), numSamples))
+  if (autoOffset.renderProbeInput(buffer.getWritePointer(0), numSamples) && numChannels > 1)
     buffer.copyFrom(1, 0, buffer, 0, 0, numSamples);
 
   // ####################
@@ -1467,8 +1600,19 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   // the stage wait-free: inaudible, and the splice can take as long as it
   // needs. Contention outside a landed fade is ordinary and brief (UI state
   // pulls, engine installs), so fall back to the blocking lock as before.
+
+  // The rig can reproduce a stereo image: two buffer channels AND a detected
+  // stereo output (a standalone mono output device still hands us a stereo
+  // buffer but plays only channel 0). Gates Spread, and flips the image
+  // matrix into the mono fold for stereo chains (see processImageStage).
+  const bool stereoRig =
+      numChannels >= 2 && stereoOutputDetected.load(std::memory_order_relaxed);
+
   const auto runChainStage = [&] {
-    rtStereoChains = stereoEnabled.load() && numChannels >= 2;
+    // Stereo chains follow the mode alone: on a mono rig both lanes still
+    // run (the Right lane on the scratch channel) and the image stage sums
+    // them, so a two-chain rig is heard in full instead of half.
+    rtStereoChains = stereoEnabled.load();
     rtChainChannels = juce::jmin(numChannels, 2);
 
     // One multi-core resolution per callback (under chainMutex): the phase
@@ -1502,17 +1646,24 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
       const int sliceLen = juce::jmin(maxSlice, numSamples - offset);
 
       // The boundary is a fixed 2-channel container, so a mono host buffer
-      // gets the pre-cleared scratch as its second channel (processChainStage
-      // only touches rtChainChannels of them; the boundary passes the rest
-      // through).
+      // gets the scratch as its second channel: silent in mono chain mode,
+      // the Right lane's working channel with stereo chains (mirrored input
+      // in, lane output out, consumed by the fold below).
       float* channels[2] = {buffer.getWritePointer(0) + offset,
                             numChannels > 1 ? buffer.getWritePointer(1) + offset
                                             : chainScratchChannel.getWritePointer(0)};
+      if (numChannels == 1 && rtStereoChains)
+        std::memcpy(channels[1], channels[0], sizeof(float) * static_cast<size_t>(sliceLen));
 
       if (chainBoundary != nullptr)
         chainBoundary->ProcessBlock(channels, channels, sliceLen, chainStageFunc);
       else
         processOversampledChainStage(channels, channels, sliceLen);
+
+      // Image stage per slice: on a mono host buffer the scratch channel
+      // only holds the Right lane's output for this slice, so it must be
+      // folded before the next slice reuses it.
+      processImageStage(channels[0], channels[1], sliceLen, stereoRig);
     }
   };
 
@@ -1528,121 +1679,6 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     } else {
       juce::ScopedLock lock(chainMutex);
       runChainStage();
-    }
-  }
-
-  // ##########
-  // Post-chain stereo image, before the downstream stereo stages (DC / tone
-  // stack / output gain + meters) so they see the real image. Order
-  // matters: the mode's image engine runs first so it always shapes full
-  // chain output, then the balance/pan matrix mixes the result.
-  //  - Mono mode: the Spread builds the stereo image from the channel-0
-  //    chain output (an ADT-style double, see Spread.h). Engage/bypass is
-  //    its internal ~25 ms crossfade against the untouched buffer; fully
-  //    skipped once idle.
-  //  - Stereo mode: Align delays one chain in place via StereoOffset,
-  //    corrective by default (see StereoOffset.h): 0 ms = identity, all
-  //    transitions glide through identity; fully skipped once idle. Its
-  //    advanced deck (wobble / crossover / diffuse, all default off) layers
-  //    the spread-style treatments onto the delayed chain.
-  //  - The opposite mode's engine is force-idled (no fade needed): mode
-  //    switches always ride the chain-edit fade above, so the hard stop
-  //    lands on silence.
-  //  - Balance + pan (one 2×2 matrix, see imageMatrixGains): the balance
-  //    trim scales each *chain*, then the constant-power pan blend mixes
-  //    them across the output bus. The centered/hard-panned default is the
-  //    identity and skips the loop.
-  // ##########
-  {
-    const bool isStereo = stereoEnabled.load() && numChannels >= 2;
-    // Spread only runs when the rig can actually reproduce the double: a
-    // 2-channel buffer AND a detected stereo output (a standalone mono
-    // output device still hands us a stereo buffer but plays only channel
-    // 0). Otherwise the deck stays idle and the output is the plain mono
-    // chain, even when a preset arrives with spread switched on; the
-    // parameter keeps its value and the UI shows the group greyed out.
-    const bool spreadActive = cacheSpreadEnabled && numChannels >= 2 &&
-                              stereoOutputDetected.load(std::memory_order_relaxed);
-
-    if (isStereo) {
-      spread.forceIdle();
-
-      // Auto-align probe capture: the raw chain outputs BEFORE the align
-      // delay and the image matrix's polarity flips, so the measurement is
-      // the chains' absolute misalignment and relative polarity, independent
-      // of the current corrections (a second run measures the total, not
-      // the residual). Zero work unless a probe is running.
-      autoOffset.captureChainOutputs(buffer.getReadPointer(0), buffer.getReadPointer(1),
-                                     numSamples);
-
-      stereoOffset.setTarget(
-          StereoOffsetParams::fromNormalized(cacheAlignOffset, cacheAlignWobble,
-                                             cacheAlignCrossover, cacheAlignWobbleEnabled,
-                                             cacheAlignCrossoverEnabled,
-                                             cacheAlignDiffuseEnabled),
-          cacheAlignEnabled);
-      if (stereoOffset.isRunning())
-        stereoOffset.process(buffer);
-    } else {
-      stereoOffset.forceIdle();
-      spread.setTarget(
-          SpreadParams::fromNormalized(cacheSpreadOffset, cacheSpreadWobble,
-                                       cacheSpreadCrossover, cacheSpreadWobbleEnabled,
-                                       cacheSpreadCrossoverEnabled, cacheSpreadDiffuseEnabled),
-          spreadActive);
-      if (spread.isRunning())
-        spread.process(buffer);
-    }
-
-    // Auto balance listening tap: the raw chain outputs, before the balance
-    // and pan gains, so the measurement is the chains' true mismatch. It must
-    // sit pre-pan: post-pan the two channels converge as the pans approach
-    // center even when the chains are badly mismatched, which would starve
-    // the measurement. Zero work unless armed.
-    if (autoBalanceState.load(std::memory_order_acquire) ==
-        static_cast<int>(AutoBalanceState::Listening))
-      runAutoBalanceStage(buffer, numSamples);
-
-    // Balance + pan matrix. Balance is forced center whenever the output
-    // image isn't actually stereo (mono mode without spread), so a leftover
-    // Bal setting from a prior session can't skew a mono (identical L/R)
-    // bus, matching the UI hiding the knob. Solos and polarity flips are
-    // likewise gated to stereo mode: in mono+spread the two channels are one
-    // chain's double, not chains to audition or re-polarize. All four gains
-    // are smoothed so knob moves AND the balance/solo/invert gating glide
-    // instead of stepping (pop).
-    if (numChannels >= 2) {
-      const bool applyBalance = isStereo || spreadActive;
-      const auto g = imageMatrixGains(isStereo, applyBalance ? cacheOutputBalance : 0.5f,
-                                      cacheChainPanLeft, cacheChainPanRight,
-                                      isStereo && cacheChainSoloLeft,
-                                      isStereo && cacheChainSoloRight,
-                                      isStereo && cacheChainInvertLeft,
-                                      isStereo && cacheChainInvertRight);
-      imageGainLtoL.setTargetValue(g.lToL);
-      imageGainLtoR.setTargetValue(g.lToR);
-      imageGainRtoL.setTargetValue(g.rToL);
-      imageGainRtoR.setTargetValue(g.rToR);
-
-      const bool smoothing = imageGainLtoL.isSmoothing() || imageGainLtoR.isSmoothing() ||
-                             imageGainRtoL.isSmoothing() || imageGainRtoR.isSmoothing();
-      const bool identity = std::abs(g.lToL - 1.0f) < 1.0e-4f &&
-                            std::abs(g.rToR - 1.0f) < 1.0e-4f &&
-                            std::abs(g.lToR) < 1.0e-4f && std::abs(g.rToL) < 1.0e-4f;
-      if (smoothing || !identity) {
-        auto* l = buffer.getWritePointer(0);
-        auto* r = buffer.getWritePointer(1);
-        for (int i = 0; i < numSamples; ++i) {
-          const float ll = imageGainLtoL.getNextValue();
-          const float lr = imageGainLtoR.getNextValue();
-          const float rl = imageGainRtoL.getNextValue();
-          const float rr = imageGainRtoR.getNextValue();
-          const float chainL = l[i];
-          const float chainR = r[i];
-          l[i] = chainL * ll + chainR * rl;
-          r[i] = chainL * lr + chainR * rr;
-        }
-      }
     }
   }
 

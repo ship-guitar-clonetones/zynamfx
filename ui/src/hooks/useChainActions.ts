@@ -29,10 +29,17 @@ export interface ChainActions {
   reorderBlocks: (orderedIds: string[]) => void;
   /** Move a block into the other lane at the given index (stereo drag). */
   moveBlock: (blockId: string, side: ChainSide, index: number) => void;
-  /** Clone a tone block (all settings + model) into `side` at `index`.
-      An insert slot there is filled (paste), otherwise the clone splices
-      in (alt-drag duplicate). */
+  /** Clone a live tone block (all settings + model) into `side` at `index`
+      (alt-drag duplicate). An insert slot there is filled, otherwise the
+      clone splices in. */
   duplicateBlock: (sourceBlockId: string, side: ChainSide, index: number) => void;
+  /** Copy a block into the native block clipboard (tone + settings + model
+      bytes). The snapshot is self-contained, so pasting keeps working after
+      preset switches or deleting the source block. */
+  copyBlock: (blockId: string) => void;
+  /** Paste the copied block into `side` at `index` (the insert slot there
+      is filled). Gate on `canPaste` from useChainState. */
+  pasteBlock: (side: ChainSide, index: number) => void;
   /** Swap the Left and Right chains wholesale (stereo only). */
   swapChains: () => void;
   /** Branch the other lane off `side` after one of its tone blocks (stereo

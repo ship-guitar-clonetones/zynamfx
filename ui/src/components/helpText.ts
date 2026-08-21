@@ -163,8 +163,8 @@ export const HELP = {
   spreadAdvert: 'Spread: mono-to-stereo double via a wobbling short lag. Click: enable.',
   spreadPower: 'Spread Power: spread off; collapses its controls. Right-click: advanced.',
   imageCorrelation: 'Mono safety: dim: safe · yellow: caution · red: cancellation on mono sum.',
-  imageMonoOutput:
-    'Stereo image: unavailable, the output is mono (mono track or one-channel output device).',
+  spreadMonoOutput:
+    'Spread: unavailable, the output is mono (mono track or one-channel output device).',
   alignOffset: knobHelp(
     'Offset',
     'corrective chain alignment, ≤24 ms toward L or R. Center: off. Right-click: advanced.'
@@ -213,6 +213,8 @@ export const HELP = {
   panLeft: knobHelp('Pan L', 'Left chain, hard left ↔ center.'),
   panRight: knobHelp('Pan R', 'Right chain, center ↔ hard right.'),
   panLink: 'Link Pans: mirror both pan knobs.',
+  monoSum: 'Mono output: both chains summed to one channel. Bal/S/Ø still shape the blend; pans are off.',
+  panMonoSum: 'Pan: unavailable, the output is mono. The chains are summed instead (see MONO).',
   soloLeft: 'Solo L: hear the Left chain alone.',
   soloRight: 'Solo R: hear the Right chain alone.',
   invertLeft: 'Invert L: flip the Left chain polarity. Fixes chains that hollow out or cancel.',

@@ -321,6 +321,23 @@ std::string TONE3000Processor::loadTone(const juce::String& toneJsonString,
   return blockId;
 }
 
+std::string TONE3000Processor::landToneBlock(std::unique_ptr<ChainBlock> block,
+                                             const juce::String& side, int index) {
+  const std::string newId = block->id;
+  Lane& target = side == "right" ? lane(ChainSide::Right) : lane(ChainSide::Left);
+  index = juce::jlimit(0, static_cast<int>(target.size()), index);
+  if (index < static_cast<int>(target.size()) && isInsertBlock(target[static_cast<size_t>(index)]))
+    target[static_cast<size_t>(index)] = std::move(block);  // paste fills the empty tile
+  else
+    target.insert(target.begin() + index, std::move(block));
+  normalizeLaneInserts(target);
+  refreshBranchTapIndex();  // insert-slot churn can shift the tap index
+
+  bumpChainRevision();
+  queueActiveModelLoad(*findBlockById(newId));
+  return newId;
+}
+
 std::string TONE3000Processor::duplicateChainBlock(const std::string& sourceBlockId,
                                                    const juce::String& side, int index) {
   // Structural like reorder/move (a whole new block splices into the running
@@ -356,19 +373,70 @@ std::string TONE3000Processor::duplicateChainBlock(const std::string& sourceBloc
   clone->modelLoading = true;
   clone->applyDefaultMixOnLoad = false;  // the copied mix is a setting, not a default
 
-  Lane& target = side == "right" ? lane(ChainSide::Right) : lane(ChainSide::Left);
-  index = juce::jlimit(0, static_cast<int>(target.size()), index);
-  if (index < static_cast<int>(target.size()) && isInsertBlock(target[static_cast<size_t>(index)]))
-    target[static_cast<size_t>(index)] = std::move(clone);  // paste fills the empty tile
-  else
-    target.insert(target.begin() + index, std::move(clone));
-  normalizeLaneInserts(target);
-  refreshBranchTapIndex();  // insert-slot churn can shift the tap index
-
-  bumpChainRevision();
-  queueActiveModelLoad(*findBlockById(newId));
+  landToneBlock(std::move(clone), side, index);
   DBG("Duplicated block " << sourceBlockId << " -> " << newId << " (" << side << " @ " << index
                           << ")");
+  return newId;
+}
+
+bool TONE3000Processor::copyChainBlock(const std::string& blockId) {
+  juce::ScopedLock lock(chainMutex);
+
+  const ChainBlock* source = findBlockById(blockId);
+  if (source == nullptr || source->type == ChainBlockType::INSERT) {
+    DBG("copyChainBlock: source not a tone block: " << blockId);
+    return false;
+  }
+
+  // A self-contained snapshot, not a reference: the same per-block tree the
+  // undo/preset paths persist, plus the in-memory model bytes so a later
+  // paste comes up offline. Copying never touches the chain, so no history
+  // entry; the revision bump only publishes `canPasteBlock` to the UI.
+  blockClipboardSettings = serializeBlockSettings(*source);
+  blockClipboardModelCache = source->modelCache;
+
+  bumpChainRevision();
+  DBG("Copied block " << blockId << " to the block clipboard");
+  return true;
+}
+
+std::string TONE3000Processor::pasteChainBlock(const juce::String& side, int index) {
+  // Structural like duplicate: a whole new block lands in the running chain.
+  ChainEditFade editFade(*this);
+  juce::ScopedLock lock(chainMutex);
+
+  if (!blockClipboardSettings.isValid()) {
+    DBG("pasteChainBlock: clipboard is empty");
+    return "";
+  }
+  if (side == "right" && !stereoEnabled.load()) {
+    DBG("pasteChainBlock: right lane requires stereo mode");
+    return "";
+  }
+
+  pushChainHistory();
+
+  // Rebuild from the snapshot the way undo/preset restores do (fresh id: the
+  // copied block may still be in the chain, and ids are globally unique).
+  // The tone JSON is re-parsed rather than shared so nothing in the live
+  // chain can mutate the clipboard behind our back (see switchModel, which
+  // edits a block's toneVar in place).
+  const std::string newId = juce::Uuid().toString().toStdString();
+  const ChainBlockType type =
+      chainBlockTypeFromString(blockClipboardSettings.getProperty("type").toString());
+  auto block = std::make_unique<ChainBlock>(newId, type);
+  applyBlockSettings(*block, blockClipboardSettings);
+  const juce::String toneJson = blockClipboardSettings.getProperty("toneJson").toString();
+  setToneOnBlock(*block, blockClipboardSettings.getProperty("toneId", 0), toneJson,
+                 juce::JSON::parse(toneJson));
+  block->activeModelId = blockClipboardSettings.getProperty("activeModelId", 0);
+  block->modelCache = blockClipboardModelCache;
+  block->loaded = false;
+  block->modelLoading = true;
+  block->applyDefaultMixOnLoad = false;  // the copied mix is a setting, not a default
+
+  landToneBlock(std::move(block), side, index);
+  DBG("Pasted clipboard block -> " << newId << " (" << side << " @ " << index << ")");
   return newId;
 }
 
@@ -904,6 +972,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   juce::uint32 revision = 0;
   std::vector<BlockRow> left, right;
   bool stereo = false, canUndo = false, canRedo = false, branched = false;
+  bool canPaste = false;
   juce::String presetId, presetName, branchSide, activeSide, branchAfter;
 
   {
@@ -974,6 +1043,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
 
     canUndo = chainHistory.canUndo();
     canRedo = chainHistory.canRedo();
+    canPaste = blockClipboardSettings.isValid();
     presetId = activePresetId;
     presetName = activePresetName;
     branched = stereo && !branchAfterBlockId.empty();
@@ -1054,6 +1124,10 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   // together with a revision bump (mutation, undo/redo or a state load).
   state->setProperty("canUndo", canUndo);
   state->setProperty("canRedo", canRedo);
+  // Whether the in-app block clipboard holds a copied block (Paste enabled
+  // on insert slots). The clipboard snapshot is self-contained, so this
+  // stays true across preset switches and after the source block is gone.
+  state->setProperty("canPasteBlock", canPaste);
   if (presetId.isNotEmpty()) {
     juce::DynamicObject::Ptr preset = new juce::DynamicObject();
     preset->setProperty("id", presetId);
@@ -1076,8 +1150,9 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   // and the dual input meters.
   state->setProperty("stereoInput", stereoInputDetected.load());
   // Output-side twin: false on a mono rig (mono host bus, or a one-channel
-  // standalone output device). The UI greys the stereo-image slot and
-  // collapses the balance knob; the DSP keeps Spread idle to match.
+  // standalone output device). Spread is idle then (the UI greys it out),
+  // and stereo chains are summed to mono (see processImageStage): the UI
+  // dims the pans and shows the MONO chip on the pan rail.
   state->setProperty("stereoOutput", stereoOutputDetected.load());
   // True in the standalone app; gates standalone-only settings.
   state->setProperty("standalone", isStandalone());

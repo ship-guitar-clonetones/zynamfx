@@ -384,24 +384,43 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   const [models, setModels] = useState<Model[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
 
-  useEffect(() => {
+  // Same stale guard as fetchInfo: only the newest request may touch state
+  // (retries reuse this fetch, so a flag can't cover it).
+  const modelsFetchSeq = useRef(0);
+  const fetchModels = useCallback(async () => {
     if (isLocal || !actions.authenticated) return;
-    let stale = false;
-    setModels([]);
+    const seq = ++modelsFetchSeq.current;
     setModelsLoading(true);
-    actions
-      .listToneModels(tone.id, tone.format)
-      .then((list) => {
-        if (!stale) setModels(list);
-      })
-      .catch((err) => console.error('Failed to load models', err))
-      .finally(() => {
-        if (!stale) setModelsLoading(false);
-      });
-    return () => {
-      stale = true;
-    };
+    try {
+      const list = await actions.listToneModels(tone.id, tone.format);
+      if (seq === modelsFetchSeq.current) setModels(list);
+    } catch (err) {
+      // No error UI: the picker keeps the stored model, and opening it
+      // retries (handleModelsOpen), so a transient failure never sticks.
+      console.error('Failed to load models', err);
+    } finally {
+      if (seq === modelsFetchSeq.current) setModelsLoading(false);
+    }
   }, [actions, isLocal, tone.format, tone.id]);
+
+  // Fetch on mount, tone change, and auth arrival (`actions` carries
+  // `authenticated`, so logging in re-runs this with the guard now open).
+  useEffect(() => {
+    setModels([]);
+    void fetchModels();
+    return () => {
+      // Reading the counter's latest value here is the point (bumping it
+      // orphans whatever fetch is in flight), not a stale-closure bug.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      modelsFetchSeq.current++;
+    };
+  }, [fetchModels]);
+
+  // A failed fetch leaves the catalog at just the stored model; opening the
+  // picker retries so the card never strands on "1/N". No-op once loaded.
+  const handleModelsOpen = useCallback(() => {
+    if (!modelsLoading && models.length === 0) void fetchModels();
+  }, [fetchModels, models.length, modelsLoading]);
 
   // Local tones own their model list; catalog tones show the full catalog
   // once loaded, just the active model until then.
@@ -964,6 +983,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                         options={modelOptions.map((m) => ({ id: String(m.id), name: m.name }))}
                         value={String(block.activeModelId)}
                         onChange={handleModelSelect}
+                        onOpen={handleModelsOpen}
                         height={36}
                         disabled={!isLocal && !actions.authenticated}
                         loading={modelsLoading}

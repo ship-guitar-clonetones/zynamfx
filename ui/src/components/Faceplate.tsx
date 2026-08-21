@@ -37,16 +37,20 @@ import {
  * both. The mode is chain state (session-persisted, not a preset value;
  * it's I/O routing, not tone).
  *
- * Output gain: the main level knob plus a small balance knob that trims L/R
- * against each other (±12 dB opposing, center = off). The balance knob only
- * appears when the output actually runs stereo (stereo mode, or mono +
- * spread); DSP forces center when inactive so a leftover setting can't skew
- * a mono bus. All values are host parameters, so presets/undo get them for free.
+ * Output gain: the main level knob plus a small balance knob that trims the
+ * two chains (or spread's two channels) against each other (±12 dB
+ * opposing, center = off). The balance knob only appears when the trim is
+ * audible (stereo chains on any rig, or spread on a stereo rig); DSP forces
+ * center when inactive so a leftover setting can't skew a mono bus. All
+ * values are host parameters, so presets/undo get them for free.
  *
  * Mono rigs (mono host track, or a one-channel standalone output device):
- * the stereo-image slot dims and goes inert as a whole, since no setting in
- * it can be heard. Native keeps Spread idle to match, so the output is the
- * plain mono chain even when a preset carries spread switched on.
+ * Spread dims and goes inert as a whole, since a double can't be heard on
+ * one channel; native keeps it idle to match, so the output is the plain
+ * mono chain even when a preset carries spread switched on. Align stays
+ * live: native sums stereo chains to mono there, and aligning them shapes
+ * that sum. The Bal knob and auto balance stay too (they trim the two
+ * chains inside the sum); the pan rail carries the MONO chip.
  */
 
 export const PLATE_HEIGHT = 108;
@@ -262,10 +266,11 @@ const AutoBalanceButton: React.FC = () => {
 };
 
 /**
- * Output gain knob. When the output runs stereo, a smaller balance knob
- * joins it (center = no effect, off-center trims L/R against each other by
- * up to ±12 dB on top of the main level), plus the auto-balance (=) button
- * when two independent chains are running.
+ * Output gain knob. When the balance trim is audible, a smaller balance
+ * knob joins it (center = no effect, off-center trims the two chains, or
+ * spread's two channels, against each other by up to ±12 dB on top of the
+ * main level), plus the auto-balance (=) button when two independent
+ * chains are running.
  */
 const OutputGainKnob: React.FC<{
   stereo: boolean;
@@ -313,15 +318,17 @@ const OutputGainKnob: React.FC<{
 };
 
 interface FaceplateProps {
-  /** Output stage actually runs stereo (stereo mode or mono-mode spread, on
-      a rig that can reproduce it); shows the output balance knob. */
-  stereoImage: boolean;
+  /** The balance trim is audible (stereo chains on any rig, or spread on a
+      stereo rig; on a mono rig it trims the chains inside the mono sum);
+      shows the output balance knob. */
+  balanceActive: boolean;
   /** The rig can drive two distinct output channels at all (stereo host
-      bus / 2+ channel output device). False dims the whole stereo-image
-      slot and makes it inert, power button included: the feature is
-      unavailable, not merely off. Native keeps Spread idle to match, so a
-      preset saved with spread on plays as plain mono until the plugin
-      lands on a stereo rig again. */
+      bus / 2+ channel output device). False dims the Spread group and makes
+      it inert, power button included: the feature is unavailable, not
+      merely off (native keeps it idle to match, so a preset saved with
+      spread on plays as plain mono until the plugin lands on a stereo rig
+      again). The Align group stays live: it shapes the mono sum of stereo
+      chains. */
   stereoOutput: boolean;
   /** Two independent chains are running (stereo mode); shows the auto
       balance button and swaps the Spread group for the Align group.
@@ -340,7 +347,7 @@ interface FaceplateProps {
 // Memoized: Plugin re-renders on every chain poll tick, but the plate only
 // depends on these few flags (its knobs subscribe to their own parameters).
 export const Faceplate = React.memo(function Faceplate({
-  stereoImage,
+  balanceActive,
   stereoOutput,
   stereoChains,
   stereoInput,
@@ -478,18 +485,18 @@ export const Faceplate = React.memo(function Faceplate({
 
       {/* Stereo-image slot: Spread in mono, Align in stereo. Fixed footprint
           (IMAGE_GROUP_WIDTH) so mode switches never shift the plate. On a
-          mono rig the slot dims and goes inert as a whole (the hover hint
-          says why); auto balance collapses with it since the balance matrix
-          can't run either. */}
+          mono rig only Spread dims and goes inert as a whole (the hover
+          hint says why): a double can't be heard on one channel. Align
+          stays live there: it shapes the mono sum of the two chains. */}
       <div
-        className={uiOffClass(!stereoOutput)}
+        className={uiOffClass(!stereoOutput && !stereoChains)}
         style={{ transition: 'opacity 0.2s ease' }}
-        {...(!stereoOutput ? helpProps(HELP.imageMonoOutput) : {})}
+        {...(!stereoOutput && !stereoChains ? helpProps(HELP.spreadMonoOutput) : {})}
       >
         {stereoChains ? <AlignGroup /> : <SpreadGroup />}
       </div>
 
-      <OutputGainKnob stereo={stereoImage} autoBalance={stereoChains && stereoOutput} />
+      <OutputGainKnob stereo={balanceActive} autoBalance={stereoChains} />
     </div>
   );
 });

@@ -18,6 +18,9 @@ interface ModelSelectProps {
   options: Option[];
   value: string;
   onChange: (id: string) => void;
+  /** The dropdown just opened. Lets the owner retry a failed catalog fetch
+      (the `loading` dots row covers the retry while it runs). */
+  onOpen?: () => void;
   height?: number;
   /** Grays out and blocks all interaction (e.g. signed out; switching
       models needs an authenticated native download). */
@@ -32,6 +35,7 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
   options,
   value,
   onChange,
+  onOpen,
   height = 46,
   disabled = false,
   loading = false,
@@ -111,7 +115,10 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
 
         {/* Name / Dropdown trigger */}
         <div
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => {
+            if (!isOpen) onOpen?.();
+            setIsOpen(!isOpen);
+          }}
           style={{
             flex: 1,
             minWidth: 0,
