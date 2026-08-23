@@ -47,7 +47,6 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
 
   const currentIndex = options.findIndex((opt) => opt.id === value);
   const selectedOption = options[currentIndex];
-  const positionText = `${currentIndex + 1}/${totalCount}`;
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -186,7 +185,19 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
           }}
         >
           <FolderClosed size={14} />
-          {positionText}
+          <span style={{ display: 'flex', fontVariantNumeric: 'tabular-nums' }}>
+            <span
+              style={{
+                display: 'inline-block',
+                // 3 tabular digits at 13rem so 9→10 / 99→100 don't shift the slash.
+                width: '24rem',
+                textAlign: 'left',
+              }}
+            >
+              {currentIndex + 1}
+            </span>
+            /{totalCount}
+          </span>
         </span>
       </div>
 
