@@ -27,7 +27,7 @@ import { meterId } from '../hooks/useMeters';
 import { useChainActions } from '../hooks/useChainActions';
 import { useParameter } from '../hooks/useParameter';
 import type { BlockParamName, ToneBlock } from '../types/chain';
-import type { Model, Tone } from '../types/tone';
+import { catalogModelCount, type Model, type Tone } from '../types/tone';
 import { isEqFlat } from '../types/chain';
 import {
   CARD_WIDTH,
@@ -473,9 +473,8 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   // local drops are validated), so NAM badges always carry the A2 mark.
   const formatBadge = formatLabel(tone.format);
 
-  // Picker's "n/N" total from the tone metadata (A2-only for NAM; that's
-  // all the plugin loads).
-  const modelsTotal = isNam ? tone.a2_models_count : tone.models_count;
+  // Picker "n/N" and the folder stat: A2 for NAM, models_count for IR.
+  const modelsTotal = catalogModelCount(tone);
 
   // EQ is shaping this block's audio: powered on and not flat (a flat or
   // bypassed EQ is skipped natively). Uses the optimistic power state so the
@@ -921,7 +920,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                             />
                             <CountStat
                               icon={<FolderClosed size={16} />}
-                              value={tone.models_count ?? 0}
+                              value={modelsTotal ?? 0}
                             />
                           </div>
                         )}

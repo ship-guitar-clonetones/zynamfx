@@ -162,9 +162,9 @@ juce::var TONE3000Processor::makeToneSummary(const juce::var& toneVar) {
   if (local)
     out->setProperty("local", true);
 
-  // Catalog totals for the model picker's "n/N" (only the active model is
-  // stored, so the UI can't count the catalog itself). NAM blocks use the
-  // v2-architecture total; the plugin only loads A2 weights.
+  // Catalog totals for the model picker's "n/N" and the folder stat (only
+  // the active model is stored, so the UI can't count the catalog itself).
+  // NAM uses the v2-architecture total; IR and other formats use models_count.
   out->setProperty("models_count", tone->getProperty("models_count"));
   out->setProperty("a2_models_count", tone->getProperty("a2_models_count"));
   // Tone-info stats row: downloads, bookmarks, models (same order as the

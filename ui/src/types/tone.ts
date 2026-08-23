@@ -65,6 +65,19 @@ export interface Tone {
   url: string;
 }
 
+/** Models this plugin actually loads: A2 for NAM, otherwise `models_count`
+    (IR and other formats). NAM's `models_count` is architecture-filtered and
+    excludes A2 by default, so the folder stat / picker must use `a2_models_count`. */
+export function catalogModelCount(tone: {
+  format?: string;
+  models_count?: number;
+  a2_models_count?: number;
+}): number {
+  return tone.format?.toLowerCase() === 'nam'
+    ? (tone.a2_models_count ?? 0)
+    : (tone.models_count ?? 0);
+}
+
 export interface T3kDownloadEvent {
   type: 't3k.download.tone';
   tone: Tone;

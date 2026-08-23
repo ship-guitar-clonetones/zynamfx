@@ -119,8 +119,8 @@ export interface ToneSummary {
       its stash model_url: that's what a switch call needs, and there is no
       catalog to fetch it from. */
   models: { id: number; name: string; model_url?: string }[];
-  /** Catalog totals (picker count). NAM uses `a2_models_count` because the plugin
-      only loads v2 architectures. */
+  /** Catalog totals. NAM uses `a2_models_count` (the plugin only loads v2);
+      IR and other formats use `models_count`. */
   models_count: number;
   a2_models_count: number;
   /** Public tallies for the tone-info stats row (downloads, then bookmarks). */
