@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X as XIcon } from './icons';
 import { useNativeFunction } from '../hooks/useFunction';
-import { BRAND_BLUE, BRAND_RED, BRAND_YELLOW, GRAY } from './theme';
+import { BRAND_BLUE, BRAND_RED, BRAND_YELLOW, FONT_MONO, GRAY } from './theme';
 
 interface TunerReading {
   frequency: number;
@@ -275,7 +275,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 marginTop: '-6rem',
                 fontSize: '13rem',
                 fontWeight: 400,
-                fontFamily: 'monospace',
+                fontFamily: FONT_MONO,
                 textAlign: 'center',
                 color: GRAY,
                 opacity: hasSignal ? 1 : 0,

@@ -182,21 +182,13 @@ export const ModelSelect: React.FC<ModelSelectProps> = ({
             fontWeight: '400',
             whiteSpace: 'nowrap',
             flexShrink: 0,
+            width: '70rem',
+            justifyContent: 'center',
           }}
         >
           <FolderClosed size={14} />
           <span style={{ display: 'flex', fontVariantNumeric: 'tabular-nums' }}>
-            <span
-              style={{
-                display: 'inline-block',
-                // 3 tabular digits at 13rem so 9→10 / 99→100 don't shift the slash.
-                width: '24rem',
-                textAlign: 'left',
-              }}
-            >
-              {currentIndex + 1}
-            </span>
-            /{totalCount}
+            {currentIndex + 1}/{totalCount}
           </span>
         </span>
       </div>

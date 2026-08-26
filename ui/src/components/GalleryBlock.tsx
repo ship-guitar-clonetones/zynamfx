@@ -154,7 +154,7 @@ const TileSurface: React.FC<{
         style={{
           width: `${size}rem`,
           height: `${size}rem`,
-          borderRadius: '12rem',
+          borderRadius: '16rem',
           backgroundColor: SURFACE,
           position: 'relative',
           overflow: 'hidden',
@@ -290,7 +290,7 @@ const TileSurface: React.FC<{
             above the inset glow; red dot only while clipped. */}
       </div>
 
-      {!dropArmed && <BlockEnergyBorder meterId={outMeterId} borderRadius={12} />}
+      {!dropArmed && <BlockEnergyBorder meterId={outMeterId} borderRadius={16} />}
       {!dropArmed && (
         <div style={{ position: 'absolute', bottom: '8rem', right: '8rem', zIndex: 4 }}>
           <BlockLed meterId={outMeterId} size={10} />
@@ -413,8 +413,9 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
 );
 GalleryBlock.displayName = 'GalleryBlock';
 
-/** Radius of the PlusCircle glyph; routing lines run edge-to-circle. */
-const PLUS_CIRCLE_RADIUS = 20;
+/** Plus glyph: 48 on mono tiles (224), 40 on stereo (160). Half of that is
+    the radius the routing lines run edge-to-circle against. */
+export const plusIconSize = (tileSize: number) => (tileSize <= 160 ? 40 : 48);
 
 /** Which tile edges get a routing line into the plus circle (signal-flow
     continuation of the lane's connector lines). */
@@ -424,7 +425,7 @@ export type AddTileRouting = 'left' | 'right' | 'both' | 'none';
 const addTileFaceStyle = (size: number): React.CSSProperties => ({
   width: `${size}rem`,
   height: `${size}rem`,
-  borderRadius: '12rem',
+  borderRadius: '16rem',
   backgroundColor: SURFACE_RAISED,
   border: ADD_TILE_BORDER,
   position: 'relative',
@@ -487,9 +488,10 @@ export const AddTile: React.FC<AddTileProps> = ({
         position: 'absolute',
         top: '50%',
         [edge]: 0,
-        width: `${size / 2 - PLUS_CIRCLE_RADIUS}rem`,
-        height: '1rem',
+        width: `${size / 2 - plusIconSize(size) / 2}rem`,
+        height: '2rem',
         backgroundColor: '#ffffff',
+        transform: 'translateY(-50%)',
       }}
     />
   );
@@ -528,7 +530,7 @@ export const AddTile: React.FC<AddTileProps> = ({
       {dropArmed ? (
         <Upload size={FILE_DROP_ICON_SIZE} color={GRAY} />
       ) : (
-        <PlusCircle size={40} strokeWidth={1} />
+        <PlusCircle size={plusIconSize(size)} strokeWidth={1} />
       )}
       {menuAnchor && (
         <TileMenu

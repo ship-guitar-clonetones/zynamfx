@@ -1,5 +1,6 @@
 import React from 'react';
 import { rem } from '../hooks/useUiScale';
+import { FONT_MONO } from './theme';
 
 /** The web app's A2-architecture mark (gradient "A2" rounded square), a
     touch taller than the format badge. The gradient id is per-instance: a
@@ -43,7 +44,7 @@ export const FormatBadge: React.FC<{ label: string; a2?: boolean }> = ({ label, 
   >
     <span
       style={{
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         fontSize: '12rem',
         fontWeight: 400,
         color: '#000000',

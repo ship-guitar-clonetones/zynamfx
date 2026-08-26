@@ -363,7 +363,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         // Idle labels are muted by default; pan-rail labels pass
         // labelBright to read as section titles. Readout is always white.
         color: showReadout || labelBright ? WHITE : GRAY,
-        letterSpacing: showReadout ? 'normal' : '1rem',
+        letterSpacing: 'normal',
         whiteSpace: 'nowrap',
         fontVariantNumeric: 'tabular-nums',
       }}

@@ -29,6 +29,7 @@ import {
   ICON_BOX_RADIUS,
   ICON_SIZE,
   MUTED,
+  FONT_MONO,
   SEGMENTED_TRACK,
   SUBTLE,
   TEXT_BOX_HEIGHT,
@@ -135,7 +136,7 @@ const EditableChip: React.FC<{
       }}
       style={{ ...style, cursor: disabled || editing ? undefined : 'text' }}
     >
-      <span style={{ fontSize: '12rem', fontFamily: 'monospace', color: SUBTLE }}>{label}</span>
+      <span style={{ fontSize: '12rem', fontFamily: FONT_MONO, color: SUBTLE }}>{label}</span>
       {editing ? (
         <input
           ref={inputRef}
@@ -155,7 +156,7 @@ const EditableChip: React.FC<{
             border: 'none',
             color: '#ffffff',
             fontSize: '12rem',
-            fontFamily: 'monospace',
+            fontFamily: FONT_MONO,
             textAlign: 'left',
             outline: 'none',
             padding: 0,
@@ -166,7 +167,7 @@ const EditableChip: React.FC<{
           style={{
             width: `${valueWidth}rem`,
             fontSize: '12rem',
-            fontFamily: 'monospace',
+            fontFamily: FONT_MONO,
             color: '#ffffff',
             textAlign: 'left',
             whiteSpace: 'nowrap',

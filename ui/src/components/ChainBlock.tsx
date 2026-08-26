@@ -52,6 +52,7 @@ import {
   ICON_BOX_SIZE,
   ICON_SIZE,
   KNOB_SIZE_SECONDARY,
+  FONT_MONO,
   MUTED,
   SEGMENTED_TRACK,
   WHITE,
@@ -529,7 +530,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
           <ArrowLeft size={16} style={{ display: 'block', flexShrink: 0 }} />
           <span
             style={{
-              fontFamily: 'monospace',
+              fontFamily: FONT_MONO,
               fontSize: '16rem',
               fontWeight: 400,
               textTransform: 'uppercase',

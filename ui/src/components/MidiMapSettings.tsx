@@ -5,7 +5,7 @@ import type { MidiMapping } from '../types/midiMap';
 import type { ChainItem, ToneBlock } from '../types/chain';
 import { FieldRow, FIELD_BORDER, SelectField, captionStyle } from './controls';
 import { MAPPABLE_TARGETS, behaviorLabel, sourceLabel, targetById } from './midiCatalog';
-import { BORDER, MUTED, SUBTLE, BRAND_YELLOW } from './theme';
+import { BORDER, FONT_MONO, MUTED, SUBTLE, BRAND_YELLOW } from './theme';
 
 /**
  * MIDI Mapping (inline in Plugin Settings): control the plugin from pedals
@@ -125,7 +125,7 @@ const MappingRow: React.FC<{
           display: 'block',
           fontSize: '13rem',
           fontWeight: 400,
-          fontFamily: 'monospace',
+          fontFamily: FONT_MONO,
           color: '#ffffff',
           whiteSpace: 'nowrap',
         }}
@@ -155,7 +155,7 @@ const ccInputStyle: React.CSSProperties = {
   color: '#ffffff',
   fontSize: '12rem',
   fontWeight: 400,
-  fontFamily: 'monospace',
+  fontFamily: FONT_MONO,
   textAlign: 'center',
   padding: '4rem 6rem',
   outline: 'none',

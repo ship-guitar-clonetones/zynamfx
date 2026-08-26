@@ -25,7 +25,7 @@ import {
   gapCenterX,
 } from './GalleryLane';
 import { useChainActions } from '../hooks/useChainActions';
-import { WHITE } from './theme';
+import { FONT_MONO, WHITE } from './theme';
 import type { ChainBranch, ChainItem, ChainSide, ToneBlock } from '../types/chain';
 import { isInsertSlot } from '../types/chain';
 
@@ -450,10 +450,10 @@ export const ChainView: React.FC<ChainViewProps> = ({
                 left: rem(EDGE_FADE_WIDTH),
                 zIndex: 1,
                 pointerEvents: 'none',
-                fontFamily: 'monospace',
+                fontFamily: FONT_MONO,
                 fontSize: '16rem',
                 fontWeight: 400,
-                letterSpacing: '0.08em',
+                letterSpacing: 'normal',
                 textTransform: 'uppercase',
                 color: WHITE,
               }}

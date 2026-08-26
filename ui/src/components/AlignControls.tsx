@@ -90,7 +90,7 @@ const AdvertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
       borderRadius: `${ADVERT_HEIGHT / 2}rem`,
       padding: 0,
       fontSize: '12rem',
-      letterSpacing: '0.08em',
+      letterSpacing: 'normal',
       gap: '8rem',
     }}
   >

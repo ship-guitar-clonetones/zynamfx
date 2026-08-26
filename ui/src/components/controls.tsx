@@ -68,7 +68,7 @@ export const SettingsGroup: React.FC<{
         style={{
           fontSize: '16rem',
           fontWeight: 600,
-          letterSpacing: '0.08em',
+          letterSpacing: 'normal',
           color: '#ffffff',
           textTransform: 'uppercase',
         }}

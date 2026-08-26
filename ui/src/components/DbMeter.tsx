@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useMeter, useMeterClip, meterId } from '../hooks/useMeters';
 import { METER_MAX_DB, METER_MIN_DB, getGradientColor } from './meterColor';
 import { HELP, helpProps } from './helpText';
-import { GRAY } from './theme';
+import { FONT_MONO, GRAY } from './theme';
 
 interface DbMeterProps {
   type: 'input' | 'output';
@@ -110,7 +110,7 @@ export const DbMeter: React.FC<DbMeterProps> = ({
             textAlign: 'right',
             width: '18rem',
             lineHeight: 1,
-            fontFamily: 'monospace',
+            fontFamily: FONT_MONO,
           }}
         >
           {db}

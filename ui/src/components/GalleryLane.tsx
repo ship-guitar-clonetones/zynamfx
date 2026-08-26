@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowUpDown, Link, PlusCircle } from './icons';
-import { GalleryBlock, AddTile } from './GalleryBlock';
+import { GalleryBlock, AddTile, plusIconSize } from './GalleryBlock';
 import type { AddTileRouting } from './GalleryBlock';
 import { KnobControl } from './KnobControl';
 import { panScale } from './knobScale';
@@ -15,6 +15,7 @@ import {
   BRAND_YELLOW,
   ICON_BOX_SIZE,
   ICON_SIZE,
+  FONT_MONO,
   KNOB_SIZE_SECONDARY,
   MUTED,
   WHITE,
@@ -39,8 +40,6 @@ export const STEREO_TILE_SIZE = 160;
 export const TILE_GAP = 24;
 /** Vertical gap between the two stereo lanes. */
 export const LANE_GAP = 24;
-/** Radius of the ghost rail's PlusCircle glyphs (size 40). */
-const RAIL_CIRCLE_RADIUS = 20;
 /** Gutter inside the scroll area; tiles fade out under it while scrolling. */
 export const EDGE_FADE_WIDTH = 32;
 
@@ -194,15 +193,16 @@ const GhostRail: React.FC<{ slots: number; tileSize: number }> = ({ slots, tileS
           <div
             style={{
               position: 'absolute',
-              left: `${-(TILE_GAP + tileSize / 2 - RAIL_CIRCLE_RADIUS)}rem`,
+              left: `${-(TILE_GAP + tileSize / 2 - plusIconSize(tileSize) / 2)}rem`,
               top: '50%',
-              width: `${TILE_GAP + tileSize - 2 * RAIL_CIRCLE_RADIUS}rem`,
-              height: '1rem',
+              width: `${TILE_GAP + tileSize - plusIconSize(tileSize)}rem`,
+              height: '2rem',
               backgroundColor: '#ffffff',
+              transform: 'translateY(-50%)',
             }}
           />
         )}
-        <PlusCircle size={40} strokeWidth={1} />
+        <PlusCircle size={plusIconSize(tileSize)} strokeWidth={1} />
       </span>
     ))}
   </div>
@@ -476,7 +476,7 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
               placeItems: 'center',
               color: MUTED,
               fontSize: '11rem',
-              fontFamily: 'monospace',
+              fontFamily: FONT_MONO,
               lineHeight: 1,
             }}
           >
@@ -562,8 +562,9 @@ export const BranchElbow: React.FC<{ x: number; tileSize: number; trunkOnTop: bo
           ...line,
           left: `${x}rem`,
           top: `${topLaneCenter}rem`,
-          width: '1rem',
+          width: '2rem',
           height: `${bottomLaneCenter - topLaneCenter}rem`,
+          transform: 'translateX(-50%)',
         }}
       />
       <div
@@ -572,7 +573,8 @@ export const BranchElbow: React.FC<{ x: number; tileSize: number; trunkOnTop: bo
           left: `${x}rem`,
           top: `${stubY}rem`,
           width: `${TILE_GAP / 2}rem`,
-          height: '1rem',
+          height: '2rem',
+          transform: 'translateY(-50%)',
         }}
       />
     </>

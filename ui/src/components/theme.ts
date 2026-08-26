@@ -21,6 +21,11 @@ import { rem } from '../hooks/useUiScale';
  *   4. Link (pan link): on = white icon; off = GRAY icon, never a fill.
  */
 
+/** The app's one monospace stack. Roboto Mono ships with the plugin
+    (@fontsource imports in main.tsx); the generic keyword is only a
+    fallback for the instant before the bundled face registers. */
+export const FONT_MONO = "'Roboto Mono', monospace";
+
 /** Lucide / custom glyph size inside ICON_BOX_SIZE chrome boxes. */
 export const ICON_SIZE = 14;
 /** Square hit-target for icon buttons beside knobs and in card headers. */
@@ -149,7 +154,7 @@ export const textBoxStyle = (): CSSProperties => ({
   padding: '0 4rem',
   fontSize: '12rem',
   fontWeight: 400,
-  fontFamily: 'monospace',
+  fontFamily: FONT_MONO,
   lineHeight: 1,
   boxSizing: 'border-box',
   flexShrink: 0,
@@ -192,7 +197,7 @@ export const segmentedCellStyle = (icon = false): CSSProperties => ({
   padding: '0 4rem',
   fontSize: icon ? 0 : '12rem',
   fontWeight: icon ? undefined : 400,
-  fontFamily: icon ? undefined : 'monospace',
+  fontFamily: icon ? undefined : FONT_MONO,
   lineHeight: icon ? 0 : 1,
   flexShrink: 0,
   boxSizing: 'border-box',

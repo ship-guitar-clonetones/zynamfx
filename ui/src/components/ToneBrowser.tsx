@@ -16,6 +16,7 @@ import {
   BORDER,
   BRAND_RED,
   DISABLED_OPACITY,
+  FONT_MONO,
   MUTED,
   SURFACE,
   SURFACE_RAISED,
@@ -804,7 +805,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
               <ArrowLeft size={16} style={{ display: 'block', flexShrink: 0 }} />
               <span
                 style={{
-                  fontFamily: 'monospace',
+                  fontFamily: FONT_MONO,
                   fontSize: '16rem',
                   fontWeight: 400,
                   textTransform: 'uppercase',

@@ -18,6 +18,7 @@ import {
   ICON_BOX_RADIUS,
   ICON_SIZE,
   KNOB_SIZE_PRIMARY,
+  FONT_MONO,
   KNOB_SIZE_SECONDARY,
   MUTED,
   SUBTLE,
@@ -91,7 +92,7 @@ const InputModeGlyph: React.FC<{ mode: InputMode }> = ({ mode }) =>
   mode === 'stereo' ? (
     <StereoIcon />
   ) : (
-    <span style={{ fontFamily: 'monospace', fontSize: '11rem', fontWeight: 700, lineHeight: 1 }}>
+    <span style={{ fontFamily: FONT_MONO, fontSize: '11rem', fontWeight: 700, lineHeight: 1 }}>
       {mode === 'left' ? 'L' : 'R'}
     </span>
   );
@@ -179,7 +180,7 @@ const InputModeButton: React.FC<{
               padding: '0 12rem 8rem',
               fontSize: '11rem',
               fontWeight: 600,
-              letterSpacing: '0.05em',
+              letterSpacing: 'normal',
               color: SUBTLE,
               whiteSpace: 'nowrap',
             }}
@@ -377,7 +378,7 @@ export const Faceplate = React.memo(function Faceplate({
         flexShrink: 0,
         borderTop: BORDER,
         background: '#1C1C1E',
-        padding: '16rem 24rem',
+        padding: '16rem 30rem', // align input/output with UV meters
         boxSizing: 'border-box',
       }}
     >

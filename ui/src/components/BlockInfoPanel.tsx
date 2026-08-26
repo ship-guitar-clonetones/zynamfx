@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, ExternalLink } from './icons';
 import type { Tone } from '../types/tone';
 import { HELP, helpProps } from './helpText';
-import { BORDER, GRAY, WHITE, filledPillButtonStyle, pillButtonStyle } from './theme';
+import { BORDER, FONT_MONO, GRAY, WHITE, filledPillButtonStyle, pillButtonStyle } from './theme';
 
 /** Collapsed description before MORE expands it. */
 const DESC_CLAMP_LINES = 3;
@@ -118,7 +118,7 @@ const DescriptionBlock: React.FC<{ text: string }> = ({ text }) => {
             background: 'transparent',
             color: WHITE,
             cursor: 'pointer',
-            fontFamily: 'monospace',
+            fontFamily: FONT_MONO,
             fontSize: '14rem',
             fontWeight: 400,
             lineHeight: 1.4,

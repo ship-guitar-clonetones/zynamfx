@@ -19,7 +19,7 @@ import type { ActivePreset, PresetInfo } from '../types/chain';
 import { useDismissable } from '../hooks/useDismissable';
 import { useToast } from './Toast';
 import { HELP, helpProps } from './helpText';
-import { BORDER, GRAY } from './theme';
+import { BORDER, FONT_MONO, GRAY, SEGMENTED_TRACK } from './theme';
 import { setPresetPcNumbersEnabled, usePresetPcNumbersEnabled } from './uiPreferences';
 
 /**
@@ -186,7 +186,7 @@ const PresetRow: React.FC<PresetRowProps> = ({
             color: MUTED,
             fontSize: '11rem',
             fontWeight: 400,
-            fontFamily: 'monospace',
+            fontFamily: FONT_MONO,
           }}
         >
           PC {pcNumber}
@@ -435,7 +435,8 @@ export const PresetBar: React.FC<PresetBarProps> = ({
           alignItems: 'stretch',
           height: '36rem',
           borderRadius: '8rem',
-          backgroundColor: '#1C1C1E',
+          // Same fill as the model select bar (SEGMENTED_TRACK).
+          backgroundColor: SEGMENTED_TRACK,
           padding: '0 4rem',
           flexShrink: 0,
         }}

@@ -24,7 +24,10 @@ body {
 }
 
 body {
-  font-family: 'Arial', monospace;
+  /* Arial is the app's base font; mono is reserved for accent chrome
+     (section titles, badges, readouts), which opts in via FONT_MONO in
+     components/theme.ts (bundled Roboto Mono, imported in main.tsx). */
+  font-family: Arial, sans-serif;
   /* Inherited default for anything without an explicit font-size: 16 design
      px, i.e. what the browser default was before the 1px root above. */
   font-size: 16rem;

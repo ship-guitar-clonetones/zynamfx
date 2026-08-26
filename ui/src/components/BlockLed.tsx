@@ -117,7 +117,7 @@ const INSET_OPACITY = 0.75;
  * `mix-blend-mode: screen` keeps the tint additive.
  */
 export const BlockEnergyBorder: React.FC<BlockEnergyBorderProps> = React.memo(
-  function BlockEnergyBorder({ meterId, borderRadius = 12 }) {
+  function BlockEnergyBorder({ meterId, borderRadius = 16 }) {
     const { color, presence } = useBlockEnergy(meterId);
 
     const blur = INSET_BLUR_MIN_PX + presence * (INSET_BLUR_MAX_PX - INSET_BLUR_MIN_PX);

@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import { installSpacePassthrough } from './spacePassthrough.ts';
+// Self-hosted Roboto Mono (bundled woff2, served from the plugin binary):
+// the DAW webview has no network, so no CDN fonts.
+import '@fontsource/roboto-mono/400.css';
+import '@fontsource/roboto-mono/700.css';
 import './index.css';
 
 // A file dropped anywhere on the plugin would make the webview navigate away

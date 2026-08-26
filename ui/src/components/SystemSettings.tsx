@@ -20,7 +20,7 @@ import { MidiInputsSection } from './MidiInputsSection';
 import { bannerRuleById } from './AppBanner';
 import { DotMeter } from './BlockMeter';
 import { METER_MAX_DB } from './meterColor';
-import { MUTED, SUBTLE } from './theme';
+import { FONT_MONO, MUTED, SUBTLE } from './theme';
 
 /** Hardcase / interface glyph for the AUDIO INTERFACE group header. */
 const AudioInterfaceIcon: React.FC = () => (
@@ -162,7 +162,7 @@ const ChannelRow: React.FC<{
       style={{
         fontSize: '11rem',
         color: SUBTLE,
-        fontFamily: 'monospace',
+        fontFamily: FONT_MONO,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',

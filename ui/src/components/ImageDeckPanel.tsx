@@ -258,7 +258,7 @@ export const ImageDeckPanel = React.forwardRef<
           style={{
             fontSize: '14rem',
             fontWeight: 400,
-            letterSpacing: '1rem',
+            letterSpacing: 'normal',
             color: GRAY,
             lineHeight: 1.2,
             whiteSpace: 'nowrap',
