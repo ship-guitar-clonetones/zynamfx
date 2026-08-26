@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Bookmark, Download, FolderClosed, Search as Sear
 import type { T3KClient } from '../t3k/tone3000-client';
 import { catalogModelCount, type Tone } from '../types/tone';
 import { formatCount } from '../t3k/formatCount';
+import { timeAgoShort } from '../t3k/timeAgoShort';
 import { formatLabel, gearLabel, GEAR_FILTERS } from '../t3k/labels';
 import { AvatarImage } from './AvatarFallback';
 import { FormatBadge } from './FormatBadge';
@@ -48,10 +49,10 @@ import {
 
 type StreamKind = 'trending' | 'downloaded' | 'favorited' | 'created';
 
-const TABS: { id: StreamKind; label: string }[] = [
+const TABS: { id: StreamKind; label: string; icon?: React.ComponentType<{ size?: number }> }[] = [
   { id: 'trending', label: 'Trending' },
   { id: 'downloaded', label: 'Recently used' },
-  { id: 'favorited', label: 'Favorites' },
+  { id: 'favorited', label: 'Favorites', icon: Bookmark },
   { id: 'created', label: 'Created' },
 ];
 
@@ -79,34 +80,19 @@ const STREAM_STORAGE_KEY = 't3k_browser_stream';
 const COLUMN_MAX_WIDTH = CARD_WIDTH;
 const CARD_IMAGE_SIZE = 112;
 
-/** Compact relative time (e.g. "13h", "3d", "2w") for the card creator line. */
-const timeAgo = (iso?: string): string => {
-  if (!iso) return '';
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '';
-  const secs = Math.max(0, (Date.now() - then) / 1000);
-  const mins = secs / 60;
-  const hours = mins / 60;
-  const days = hours / 24;
-  if (secs < 60) return `${Math.floor(secs)}s`;
-  if (mins < 60) return `${Math.floor(mins)}m`;
-  if (hours < 24) return `${Math.floor(hours)}h`;
-  if (days < 7) return `${Math.floor(days)}d`;
-  if (days < 365) return `${Math.floor(days / 7)}w`;
-  return `${Math.floor(days / 365)}y`;
-};
-
-/** Stream header as tabs: white text + underline when active, muted
-    otherwise, each sized to its own label (not stretched full-width). Weight
-    stays constant across states: bolding only the active label reflows the
-    others and shifts the row every time the tab changes. */
+/** Stream header as tabs: evenly distributed across the full column width
+    (each tab flex:1 with its label centered), white text + a full-tab-width
+    underline when active, muted otherwise. Weight stays constant across
+    states: bolding only the active label would reflow it inside its segment
+    every time the tab changes. */
 const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => void }> = ({
   active,
   onChange,
 }) => (
-  <div role="tablist" style={{ display: 'flex', gap: '28rem', borderBottom: BORDER }}>
+  <div role="tablist" style={{ display: 'flex', borderBottom: BORDER }}>
     {TABS.map((tab) => {
       const selected = tab.id === active;
+      const Icon = tab.icon;
       return (
         <button
           key={tab.id}
@@ -115,6 +101,11 @@ const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => vo
           aria-selected={selected}
           onClick={() => onChange(tab.id)}
           style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8rem',
             background: 'transparent',
             border: 'none',
             padding: '0 0 12rem',
@@ -127,6 +118,7 @@ const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => vo
             whiteSpace: 'nowrap',
           }}
         >
+          {Icon && <Icon size={15} />}
           {tab.label}
         </button>
       );
@@ -416,8 +408,8 @@ const ToneCard: React.FC<{
           }}
         >
           {tone.user?.username}
-          {timeAgo(tone.created_at) && (
-            <span style={{ color: MUTED }}> · {timeAgo(tone.created_at)}</span>
+          {tone.published_at && (
+            <span style={{ color: MUTED }}> · {timeAgoShort(tone.published_at)}</span>
           )}
         </span>
       </div>

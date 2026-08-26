@@ -18,6 +18,11 @@ const DOT_GAP = 10;
 const COLUMN_GAP = 5;
 /** Gap between the label rail and the dot column(s). */
 const LABEL_GAP = 10;
+/** Tighter gap when labels sit to the right of the dots (output meter): the
+    right-aligned digits are ragged on the side facing the dots, so the visual
+    gap already reads larger there. */
+const LABEL_GAP_RIGHT = 6;
+const LABEL_WIDTH = 18;
 const LABEL_COLOR = GRAY;
 
 /**
@@ -96,7 +101,7 @@ export const DbMeter: React.FC<DbMeterProps> = ({
         fontWeight: '500',
         color: LABEL_COLOR,
         flexShrink: 0,
-        width: '18rem',
+        width: `${LABEL_WIDTH}rem`,
       }}
     >
       {scaleMarks.map((db) => (
@@ -108,7 +113,7 @@ export const DbMeter: React.FC<DbMeterProps> = ({
             right: 0,
             transform: 'translateY(50%)',
             textAlign: 'right',
-            width: '18rem',
+            width: `${LABEL_WIDTH}rem`,
             lineHeight: 1,
             fontFamily: FONT_MONO,
           }}
@@ -122,29 +127,59 @@ export const DbMeter: React.FC<DbMeterProps> = ({
   // One column subscribed to the combined level, or L/R columns per channel.
   const columns = stereo ? [meterId.main(type, 'l'), meterId.main(type, 'r')] : [type];
 
-  return (
+  const dots = (
     <div
       style={{
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'flex-end',
-        gap: `${LABEL_GAP}rem`,
+        gap: `${COLUMN_GAP}rem`,
+        flexShrink: 0,
       }}
     >
-      {labelsPosition === 'left' && labels}
+      {columns.map((id) => (
+        <DotColumn key={id} id={id} numDots={numDots} />
+      ))}
+    </div>
+  );
+
+  const labelGap = labelsPosition === 'left' ? LABEL_GAP : LABEL_GAP_RIGHT;
+
+  return (
+    // Fixed mono-footprint slot: the meter always occupies its mono width, and
+    // the labels+dots row is centered inside it. In stereo the row widens by
+    // one column and overflows the slot symmetrically, which lands the dot
+    // pair's center exactly where the mono column's center was (over the gain
+    // knob) while the labels shift outward by half the growth — keeping the
+    // label-to-dots gap constant in every state.
+    <div
+      style={{
+        width: `${LABEL_WIDTH + labelGap + DOT_SIZE}rem`,
+        // A tighter-than-default gap shrinks the slot; give the savings back
+        // as margin on the label side so the meter's overall footprint (and
+        // thus the dots' position over the knob) is gap-independent.
+        [labelsPosition === 'left' ? 'marginLeft' : 'marginRight']:
+          `${LABEL_GAP - labelGap}rem`,
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
       <div
         style={{
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'flex-end',
-          gap: `${COLUMN_GAP}rem`,
+          gap: `${labelGap}rem`,
+          flexShrink: 0,
         }}
       >
-        {columns.map((id) => (
-          <DotColumn key={id} id={id} numDots={numDots} />
-        ))}
+        {labelsPosition === 'left' && labels}
+        {dots}
+        {labelsPosition === 'right' && labels}
       </div>
-      {labelsPosition === 'right' && labels}
     </div>
   );
 };

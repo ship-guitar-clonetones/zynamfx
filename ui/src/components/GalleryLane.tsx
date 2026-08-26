@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowUpDown, Link, PlusCircle } from './icons';
-import { GalleryBlock, AddTile, plusIconSize } from './GalleryBlock';
+import { GalleryBlock, AddTile, plusIconSize, plusCircleInset } from './GalleryBlock';
 import type { AddTileRouting } from './GalleryBlock';
 import { KnobControl } from './KnobControl';
 import { panScale } from './knobScale';
@@ -190,12 +190,15 @@ const GhostRail: React.FC<{ slots: number; tileSize: number }> = ({ slots, tileS
         }}
       >
         {i > 0 && (
+          // Runs from the previous slot's plus ring to this slot's, extended
+          // past each icon's bounding box by plusCircleInset so the line
+          // actually meets the drawn circle (see GalleryBlock).
           <div
             style={{
               position: 'absolute',
-              left: `${-(TILE_GAP + tileSize / 2 - plusIconSize(tileSize) / 2)}rem`,
+              left: `${-(TILE_GAP + tileSize / 2 - plusIconSize(tileSize) / 2 + plusCircleInset(plusIconSize(tileSize)))}rem`,
               top: '50%',
-              width: `${TILE_GAP + tileSize - plusIconSize(tileSize)}rem`,
+              width: `${TILE_GAP + tileSize - plusIconSize(tileSize) + 2 * plusCircleInset(plusIconSize(tileSize))}rem`,
               height: '2rem',
               backgroundColor: '#ffffff',
               transform: 'translateY(-50%)',
@@ -321,10 +324,10 @@ const PanRailChips: React.FC<{
   return (
     <div style={segmentedGroupStyle()}>
       <button type="button" onClick={onSolo} {...helpProps(soloHelp)} style={cell(solo)}>
-        S
+        <span className="cap-trim">S</span>
       </button>
       <button type="button" onClick={onInvert} {...helpProps(invertHelp)} style={cell(invert)}>
-        Ø
+        <span className="cap-trim">Ø</span>
       </button>
     </div>
   );
@@ -388,17 +391,18 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
     alignItems: 'center',
   };
   const spacer: React.CSSProperties = { flex: 1 };
-  const connector: React.CSSProperties = {
+  // 8rem gap on the knob/chips side; flush against the link/swap pill.
+  const connector = (contentEdge: 'top' | 'bottom'): React.CSSProperties => ({
     flex: 1,
     width: 0,
     borderLeft: BORDER,
-    margin: '6rem 0',
-  };
+    margin: contentEdge === 'top' ? '10rem 0 0' : '0 0 10rem',
+  });
   const panKnobWrap: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: '6rem',
+    gap: '8rem',
   };
   // Mono sum: the pans can't be heard, so they dim and go inert; the
   // wrapper carries the hint that says why. The [S|Ø] chips stay outside
@@ -449,7 +453,7 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
             onInvert={() => setInvertLeft(!invertLeft)}
           />
         </div>
-        <div style={connector} />
+        <div style={connector('top')} />
       </div>
       {/* Seam pill: pan link + whole-chain swap, or the MONO chip when the
           rig sums the chains (linking pans and swapping lanes matter little
@@ -480,7 +484,7 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
               lineHeight: 1,
             }}
           >
-            MONO
+            <span className="cap-trim">MONO</span>
           </div>
         ) : (
           <>
@@ -500,7 +504,7 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
         )}
       </div>
       <div style={knobRegion}>
-        <div style={connector} />
+        <div style={connector('bottom')} />
         <div style={panKnobWrap}>
           <div className={uiOffClass(monoSum)} style={panOffWrap} {...panOffHelp}>
             <KnobControl

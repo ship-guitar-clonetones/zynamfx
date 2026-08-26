@@ -61,11 +61,12 @@ const AudioInterfaceIcon: React.FC = () => (
  * fixes it: same words as the banner, but no action/ignore buttons (you're
  * already in the form). Placement gating is the caller's; this just draws.
  */
-const InlineBannerAlert: React.FC<{ id: string; state: AudioDeviceState; show?: boolean }> = ({
-  id,
-  state,
-  show,
-}) => {
+const InlineBannerAlert: React.FC<{
+  id: string;
+  state: AudioDeviceState;
+  show?: boolean;
+  style?: React.CSSProperties;
+}> = ({ id, state, show, style }) => {
   const rule = bannerRuleById[id];
   if (!rule) return null;
   // Default to the banner's own trigger so the two never drift; callers pass an
@@ -73,7 +74,7 @@ const InlineBannerAlert: React.FC<{ id: string; state: AudioDeviceState; show?: 
   // the main-window banner (e.g. no-input lives in the channel picker).
   if (!(show ?? rule.when(state))) return null;
   return (
-    <AlertCard variant={rule.variant} style={{ marginTop: '12rem' }}>
+    <AlertCard variant={rule.variant} style={{ marginTop: '16rem', ...style }}>
       {rule.content(state)}
     </AlertCard>
   );
@@ -284,7 +285,7 @@ const InputChannelPicker: React.FC<{
             ))}
           </div>
           {mode === 'stereo' && (
-            <p style={{ ...captionStyle, marginTop: '8rem' }}>
+            <p style={captionStyle}>
               Pick any two. Selecting a third swaps out your oldest pick.
             </p>
           )}
@@ -403,12 +404,22 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
         value={state.hearYourself}
         onChange={(hear) => apply(() => actions.setHearYourself(hear))}
       >
-        <InlineBannerAlert
-          id="feedback-risk"
-          show={state.hearYourself && state.feedbackRisk}
-          state={state}
-        />
-        <InlineBannerAlert id="input-muted" show={showMuted} state={state} />
+        {((state.hearYourself && state.feedbackRisk) || showMuted) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16rem' }}>
+            <InlineBannerAlert
+              id="feedback-risk"
+              show={state.hearYourself && state.feedbackRisk}
+              state={state}
+              style={{ marginTop: 0 }}
+            />
+            <InlineBannerAlert
+              id="input-muted"
+              show={showMuted}
+              state={state}
+              style={{ marginTop: 0 }}
+            />
+          </div>
+        )}
       </ToggleRow>
 
       <SettingsGroup title="Audio Interface" icon={<AudioInterfaceIcon />}>

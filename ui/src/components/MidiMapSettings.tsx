@@ -3,7 +3,7 @@ import { RotateCcw, X } from './icons';
 import { useMidiMap } from '../hooks/useMidiMap';
 import type { MidiMapping } from '../types/midiMap';
 import type { ChainItem, ToneBlock } from '../types/chain';
-import { FieldRow, FIELD_BORDER, SelectField, captionStyle } from './controls';
+import { FieldRow, FIELD_BORDER, SECTION_GAP, SelectField, captionStyle } from './controls';
 import { MAPPABLE_TARGETS, behaviorLabel, sourceLabel, targetById } from './midiCatalog';
 import { BORDER, FONT_MONO, MUTED, SUBTLE, BRAND_YELLOW } from './theme';
 
@@ -321,7 +321,7 @@ export const MidiMapSettings: React.FC<{
     <>
       <style>{`@keyframes t3kMidiListen { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
 
-      <div style={{ marginBottom: '28rem' }}>
+      <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
         <div style={{ border: FIELD_BORDER, borderRadius: '10rem', overflow: 'hidden' }}>
           {state.mappings.map((mapping, index) =>
             mapping.targetId === learnTargetId ? (
@@ -376,7 +376,7 @@ export const MidiMapSettings: React.FC<{
         </div>
 
         {unmappedOptions.length > 0 && (
-          <div style={{ marginTop: '12rem' }}>
+          <div style={{ marginTop: '16rem' }}>
             <SelectField
               value={null}
               placeholder="Choose a control"
@@ -386,14 +386,14 @@ export const MidiMapSettings: React.FC<{
             />
           </div>
         )}
-        <p style={{ ...captionStyle, marginTop: '10rem' }}>
+        <p style={captionStyle}>
           Map Previous / Next Preset to step through presets from CC or note buttons. Program
           change messages also switch presets directly; each preset shows its PC number in the
           preset browser.
         </p>
       </div>
 
-      <FieldRow label="MIDI Channel" help="Omni listens on every channel.">
+      <FieldRow flush label="MIDI Channel" help="Omni listens on every channel.">
         <SelectField
           value={String(state.channel)}
           options={channelOptions}

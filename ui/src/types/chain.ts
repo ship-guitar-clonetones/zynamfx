@@ -114,6 +114,8 @@ export interface ToneSummary {
   /** First image only (block artwork). */
   images?: string[];
   user?: { username: string; avatar_url: string };
+  /** When the tone was published; absent on older stored tones. */
+  published_at?: string;
   /** Only the active model for catalog tones (the picker pages the catalog
       from the API). Local tones carry all their dropped files, each with
       its stash model_url: that's what a switch call needs, and there is no
@@ -214,6 +216,10 @@ export interface ChainState {
       on insert slots). The clipboard is a self-contained snapshot, so this
       survives preset switches and deleting the copied block. */
   canPasteBlock?: boolean;
+  /** True when nothing distinguishes the state from a fresh instance: empty
+      mono chain, faceplate params at defaults, no active preset. Greys out
+      the top bar's New button. */
+  atDefault: boolean;
   /** Active preset, absent when none is loaded. Changes with revision bumps. */
   preset?: ActivePreset;
   stereoEnabled: boolean;

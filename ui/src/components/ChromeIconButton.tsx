@@ -21,7 +21,7 @@ import {
  * forced to ICON_SIZE and grid-centered in the box (no nested flex/span
  * that WebKit can baseline-shift).
  */
-export type ChromeTone = 'plain' | 'power' | 'armed' | 'link' | 'outline';
+export type ChromeTone = 'plain' | 'power' | 'armed' | 'link';
 
 interface ChromeIconButtonProps {
   onClick: (e: React.MouseEvent) => void;
@@ -29,11 +29,10 @@ interface ChromeIconButtonProps {
   help: string;
   children: React.ReactNode;
   /**
-   * plain:   white icon (optional HIGHLIGHT via `filled`).
-   * power:   on = white/clear; off = GRAY + HIGHLIGHT.
-   * armed:   on = BRAND_YELLOW + BLACK (listening / engaged); off = BORDER + GRAY.
-   * link:    on = white; off = GRAY, never a fill (pan link).
-   * outline: on = WHITE border + icon; off = BORDER + GRAY (block normalize).
+   * plain: white icon (optional HIGHLIGHT via `filled`).
+   * power: on = white/clear; off = GRAY + HIGHLIGHT (section power, block normalize).
+   * armed: on = BRAND_YELLOW + BLACK (listening / engaged); off = BORDER + GRAY.
+   * link:  on = white; off = GRAY, never a fill (pan link).
    */
   tone?: ChromeTone;
   /** For power/armed/link: feature on / listening / linked. */
@@ -77,12 +76,6 @@ const toneChrome = (
         color: on ? WHITE : GRAY,
         backgroundColor: 'transparent',
         border: '1rem solid transparent',
-      };
-    case 'outline':
-      return {
-        color: on ? WHITE : GRAY,
-        backgroundColor: 'transparent',
-        border: on ? `1rem solid ${WHITE}` : BORDER,
       };
     default:
       return {
@@ -223,6 +216,7 @@ export const ChromeTextButton: React.FC<ChromeTextButtonProps> = ({
       ...style,
     }}
   >
-    {children}
+    {/* cap-trim span: optical centering for the mono label (see index.css). */}
+    <span className="cap-trim">{children}</span>
   </button>
 );

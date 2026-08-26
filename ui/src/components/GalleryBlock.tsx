@@ -40,7 +40,8 @@ const DRAG_GHOST_OPACITY = 0.75;
 
 /** File-drag drop-target chrome (tone tiles + add tile). */
 const FILE_DROP_BORDER = '2rem dashed rgba(0, 209, 59, 0.50)';
-const ADD_TILE_BORDER = '2rem dashed rgba(141, 141, 147, 0.65)';
+const ADD_TILE_BORDER_WIDTH = 2;
+const ADD_TILE_BORDER = `${ADD_TILE_BORDER_WIDTH}rem dashed rgba(141, 141, 147, 0.65)`;
 const FILE_DROP_ICON_SIZE = 36;
 
 const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
@@ -417,6 +418,13 @@ GalleryBlock.displayName = 'GalleryBlock';
     the radius the routing lines run edge-to-circle against. */
 export const plusIconSize = (tileSize: number) => (tileSize <= 160 ? 40 : 48);
 
+/** Lucide's circle-plus draws its circle at r=10 inside the 24-unit viewBox,
+    so the visible ring sits 2/24 of the rendered size in from the icon's
+    bounding box (measured to the stroke's centerline). Connector lines must
+    overshoot the box by this much to actually meet the ring; stopping half a
+    stroke short (at the box edge) reads as a hairline gap. */
+export const plusCircleInset = (iconSize: number) => (iconSize * 2) / 24;
+
 /** Which tile edges get a routing line into the plus circle (signal-flow
     continuation of the lane's connector lines). */
 export type AddTileRouting = 'left' | 'right' | 'both' | 'none';
@@ -482,13 +490,16 @@ export const AddTile: React.FC<AddTileProps> = ({
     if (error) toast.show(error);
   };
 
+  // Anchored inside the tile's border (absolute children position against
+  // the padding box), so the run to the plus ring is a border-width shorter
+  // than measured from the tile's outer edge.
   const routingLine = (edge: 'left' | 'right') => (
     <div
       style={{
         position: 'absolute',
         top: '50%',
         [edge]: 0,
-        width: `${size / 2 - plusIconSize(size) / 2}rem`,
+        width: `${size / 2 - plusIconSize(size) / 2 + plusCircleInset(plusIconSize(size)) - ADD_TILE_BORDER_WIDTH}rem`,
         height: '2rem',
         backgroundColor: '#ffffff',
         transform: 'translateY(-50%)',

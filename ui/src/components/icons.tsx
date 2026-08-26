@@ -28,6 +28,7 @@ import {
   LogOut as LLogOut,
   MidiPort as LMidiPort,
   Pencil as LPencil,
+  Plus as LPlus,
   PlusCircle as LPlusCircle,
   Power as LPower,
   Redo2 as LRedo2,
@@ -92,6 +93,7 @@ export const LogIn = scaled(LLogIn, 'LogIn');
 export const LogOut = scaled(LLogOut, 'LogOut');
 export const MidiPort = scaled(LMidiPort, 'MidiPort');
 export const Pencil = scaled(LPencil, 'Pencil');
+export const Plus = scaled(LPlus, 'Plus');
 export const PlusCircle = scaled(LPlusCircle, 'PlusCircle');
 export const Power = scaled(LPower, 'Power');
 export const Redo2 = scaled(LRedo2, 'Redo2');

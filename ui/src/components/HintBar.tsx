@@ -34,7 +34,7 @@ const NamSizeToggle: React.FC<HintBarProps> = ({ namFullSize, onNamFullSizeChang
           transition: 'color 0.15s ease',
         }}
       >
-        {full ? 'FULL' : 'LITE'}
+        <span className="cap-trim">{full ? 'FULL' : 'LITE'}</span>
       </button>
     ))}
   </div>
@@ -50,7 +50,12 @@ const CpuReadout: React.FC = () => {
       style={{
         display: 'flex',
         alignItems: 'baseline',
+        justifyContent: 'center',
         gap: '6rem',
+        // Fixed footprint sized for the widest value ("100.0%") so digit
+        // count changes never shift the row; the pair stays centered with a
+        // normal gap instead of a right-aligned value slot.
+        minWidth: '72rem',
         fontSize: '12rem',
         fontWeight: 400,
         color: MUTED,
@@ -60,7 +65,7 @@ const CpuReadout: React.FC = () => {
       }}
     >
       <span>CPU</span>
-      <span style={{ minWidth: '38rem', textAlign: 'right' }}>{cpu.toFixed(1)}%</span>
+      <span>{cpu.toFixed(1)}%</span>
     </span>
   );
 };

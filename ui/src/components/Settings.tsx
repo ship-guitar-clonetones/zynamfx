@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X as XIcon, Laptop, Info, Gauge } from './icons';
+import { X as XIcon, Laptop, Info, Gauge, Equal } from './icons';
 import { useParameter } from '../hooks/useParameter';
 import { useNativeFunction } from '../hooks/useFunction';
 import { setHintsEnabled, useHintsEnabled } from './helpText';
@@ -10,7 +10,7 @@ import {
 import type { UpdateNoticeData } from '../hooks/useUpdateNotice';
 import type { AudioDevice } from '../hooks/useAudioDevice';
 import type { ChainItem } from '../types/chain';
-import { GRAY, LINK_BLUE, SUBTLE, WHITE } from './theme';
+import { GRAY, LINK_BLUE, MUTED, SUBTLE, WHITE } from './theme';
 import {
   FIELD_BORDER,
   RadioOption,
@@ -262,19 +262,28 @@ export const Settings: React.FC<SettingsProps> = ({
         aria-label="NAM A2 Size"
       >
         <span style={sectionLabelStyle}>NAM A2 Size</span>
-        <p style={{ ...descriptionStyle, marginBottom: '18rem' }}>
-          Applies to every NAM tone in this plugin instance and saves with your
+        <p style={descriptionStyle}>
+          Applies to every NAM block in this plugin instance and saves with your
           session; also switchable from LITE/FULL in the info bar.
         </p>
-        {NAM_A2_SIZE_OPTIONS.map((option) => (
-          <RadioOption
-            key={option.label}
-            selected={namFullSize === option.full}
-            label={option.label}
-            description={option.description}
-            onSelect={() => onNamFullSizeChange(option.full)}
-          />
-        ))}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16rem',
+            marginTop: '16rem',
+          }}
+        >
+          {NAM_A2_SIZE_OPTIONS.map((option) => (
+            <RadioOption
+              key={option.label}
+              selected={namFullSize === option.full}
+              label={option.label}
+              description={option.description}
+              onSelect={() => onNamFullSizeChange(option.full)}
+            />
+          ))}
+        </div>
       </div>
 
       <ToggleRow
@@ -282,7 +291,38 @@ export const Settings: React.FC<SettingsProps> = ({
         description="Each block has normalization enabled, which levels output for consistent volume across signal blocks. Turning this on reveals an optional control that lets you disable normalization per block."
         value={blockNormalizeControlEnabled}
         onChange={setBlockNormalizeControlEnabled}
-      />
+      >
+        {blockNormalizeControlEnabled && (
+          <p
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16rem',
+              margin: 0,
+              fontSize: '14rem',
+              fontWeight: 400,
+              color: WHITE,
+              lineHeight: 1.45,
+            }}
+          >
+            <Info size={20} style={{ flexShrink: 0, color: WHITE }} aria-hidden />
+            <span>
+              Normalization is now controlled per block. Look for the{' '}
+              <Equal
+                size={12}
+                style={{
+                  display: 'inline',
+                  verticalAlign: '-1rem',
+                  margin: '0 2rem',
+                  color: WHITE,
+                }}
+                aria-label="equals"
+              />{' '}
+              icon on each block, enabled by default.
+            </span>
+          </p>
+        )}
+      </ToggleRow>
 
       <ToggleRow
         label="Calibration"
@@ -291,7 +331,7 @@ export const Settings: React.FC<SettingsProps> = ({
         onChange={setCalibrationEnabled}
       >
         {calibrationEnabled && (
-          <div style={{ marginTop: '14rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16rem' }}>
             {/* Kill the webkit number-input chrome (spinners, focus ring). */}
             <style>
               {`.settings-number-input::-webkit-outer-spin-button,
@@ -339,7 +379,7 @@ export const Settings: React.FC<SettingsProps> = ({
                 dBu
               </span>
             </div>
-            <p style={{ ...descriptionStyle, fontSize: '12rem', marginTop: '8rem' }}>
+            <p style={{ ...descriptionStyle, margin: 0 }}>
               Set the dBu level that matches your DAW's max digital level. Typical values: +12 dBu
               (professional gear), +4 dBu (semi-pro).{' '}
               <a
@@ -354,16 +394,16 @@ export const Settings: React.FC<SettingsProps> = ({
             <p
               style={{
                 display: 'flex',
-                alignItems: 'flex-start',
-                gap: '8rem',
-                margin: '14rem 0 0',
-                fontSize: '12rem',
+                alignItems: 'center',
+                gap: '16rem',
+                margin: 0,
+                fontSize: '14rem',
                 fontWeight: 400,
                 color: WHITE,
                 lineHeight: 1.45,
               }}
             >
-              <Info size={14} style={{ flexShrink: 0, marginTop: '1rem', color: WHITE }} aria-hidden />
+              <Info size={20} style={{ flexShrink: 0, color: WHITE }} aria-hidden />
               <span>
                 Captures that include calibration data show a{' '}
                 <Gauge
@@ -379,6 +419,10 @@ export const Settings: React.FC<SettingsProps> = ({
                 icon on their block and it’s enabled by default.
               </span>
             </p>
+            <p style={{ ...descriptionStyle, margin: 0 }}>
+              When one calibrated NAM feeds another, output calibration data also sets the handoff
+              level between them.
+            </p>
           </div>
         )}
       </ToggleRow>
@@ -389,34 +433,33 @@ export const Settings: React.FC<SettingsProps> = ({
         value={osEnabled}
         onChange={setOsEnabled}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12rem',
-            marginTop: '4rem',
-          }}
-        >
-          <span
+        {osEnabled && (
+          <div
             style={{
-              fontSize: '13rem',
-              fontWeight: 400,
-              color: osEnabled ? '#ffffff' : SUBTLE,
-              flexShrink: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8rem',
             }}
           >
-            Rate
-          </span>
-          <div style={{ width: '148rem', flexShrink: 0 }}>
-            <SelectField
-              value={String(osFactorIndex) as '0' | '1' | '2'}
-              options={OS_FACTOR_OPTIONS}
-              onChange={(v) => setOsFactorIndex(Number(v))}
-              disabled={!osEnabled}
-              ariaLabel="Oversampling rate"
-            />
+            <span
+              style={{
+                fontSize: '14rem',
+                fontWeight: 400,
+                color: MUTED,
+              }}
+            >
+              Rate
+            </span>
+            <div style={{ width: '148rem' }}>
+              <SelectField
+                value={String(osFactorIndex) as '0' | '1' | '2'}
+                options={OS_FACTOR_OPTIONS}
+                onChange={(v) => setOsFactorIndex(Number(v))}
+                ariaLabel="Oversampling rate"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </ToggleRow>
 
       <ToggleRow
@@ -430,18 +473,63 @@ export const Settings: React.FC<SettingsProps> = ({
           buffer), so it belongs here and works in DAW builds too. */}
       <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
         <span style={sectionLabelStyle}>MIDI Mapping</span>
-        <p style={{ ...descriptionStyle, marginBottom: '16rem' }}>
+        <p style={descriptionStyle}>
           Control the plugin from pedals and knobs. Mappings are saved with the plugin and work in
           your DAW too.
         </p>
-        <MidiMapSettings chain={chain} chainRight={chainRight} />
+        <div style={{ marginTop: '16rem' }}>
+          <MidiMapSettings chain={chain} chainRight={chainRight} />
+        </div>
       </div>
 
-      {/* Version. When the startup check found a newer build (even if its
-          modal was dismissed), offer the update here too. Sits above
-          Diagnostics so debugging stays last. */}
+      <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
+        <span style={sectionLabelStyle}>Diagnostics</span>
+        <p style={descriptionStyle}>
+          Copy recent diagnostic logs to the clipboard and paste them into a bug report.
+        </p>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16rem',
+            marginTop: '16rem',
+          }}
+        >
+          <button onClick={handleCopyLogs} style={ctaButtonStyle}>
+            Copy Logs
+          </button>
+          <button
+            onClick={handleRevealLogs}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: SUBTLE,
+              fontSize: '12rem',
+              cursor: 'pointer',
+              padding: 0,
+              textAlign: 'left',
+            }}
+          >
+            Reveal log file on disk
+          </button>
+          {logStatus && (
+            <p style={{ ...descriptionStyle, fontSize: '12rem', margin: 0 }}>{logStatus}</p>
+          )}
+        </div>
+      </div>
+
+      {webInspector?.supported && (
+        <ToggleRow
+          label="Inspector"
+          description="Debugging aid: right-click the plugin UI and choose Inspect Element. Also restores the webview Reload menu. Leave off unless support asks for it."
+          value={webInspector.enabled}
+          onChange={handleWebInspectorChange}
+        />
+      )}
+
+      {/* Version / update sit last so diagnostics stay above the footer. */}
       {(version || update) && (
-        <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
+        <div>
           {update && (
             <a
               href={update.url}
@@ -452,7 +540,7 @@ export const Settings: React.FC<SettingsProps> = ({
                 display: 'block',
                 boxSizing: 'border-box',
                 textDecoration: 'none',
-                marginBottom: '12rem',
+                marginBottom: version ? '16rem' : 0,
               }}
             >
               Update to v{update.version}
@@ -465,43 +553,6 @@ export const Settings: React.FC<SettingsProps> = ({
           )}
         </div>
       )}
-
-      <div style={{ marginBottom: `${SECTION_GAP}rem` }}>
-        <span style={sectionLabelStyle}>Diagnostics</span>
-        <p style={{ ...descriptionStyle, marginBottom: '16rem' }}>
-          Copy recent diagnostic logs to the clipboard and paste them into a bug report.
-        </p>
-        <button onClick={handleCopyLogs} style={ctaButtonStyle}>
-          Copy Logs
-        </button>
-        <button
-          onClick={handleRevealLogs}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: SUBTLE,
-            fontSize: '12rem',
-            cursor: 'pointer',
-            padding: '10rem 0 0',
-          }}
-        >
-          Reveal log file on disk
-        </button>
-        {logStatus && (
-          <p style={{ ...descriptionStyle, fontSize: '12rem', marginTop: '8rem' }}>{logStatus}</p>
-        )}
-        {webInspector?.supported && (
-          <div style={{ marginTop: '24rem' }}>
-            <ToggleRow
-              flush
-              label="Web Inspector"
-              description="Debugging aid: right-click the plugin UI and choose Inspect Element. Also restores the webview Reload menu. Leave off unless support asks for it."
-              value={webInspector.enabled}
-              onChange={handleWebInspectorChange}
-            />
-          </div>
-        )}
-      </div>
     </>
   );
 

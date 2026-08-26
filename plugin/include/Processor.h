@@ -320,6 +320,11 @@ public:
   // earlier). The custom order is user-facing truth: prev/next stepping and
   // MIDI program-change numbers follow it (see loadPresetAtIndex).
   bool movePreset(const juce::String& presetId, int delta);
+  // Back to the factory-default state: empty mono chain, every preset-managed
+  // faceplate parameter at its default, no active preset. One undoable step,
+  // mute-spliced like a preset load. Returns false (leaving the audio
+  // untouched) when the state is already at default.
+  bool resetToDefault();
 
   // Tuner: enabled by the UI while the tuner screen is visible. Reads the raw
   // (pre-gain, pre-gate) input so gating never starves the pitch detector.
@@ -673,6 +678,11 @@ private:
   // chain snapshot itself.)
   static const std::vector<juce::String>& presetParameterIds();
   void setActivePreset(const juce::String& id, const juce::String& name);
+  // True when nothing distinguishes the state from a fresh instance: no
+  // active preset, mono mode, no tone blocks, every preset-managed parameter
+  // at its default. Ships as getChainState's `atDefault`, which greys the
+  // top bar's New button. Caller must hold chainMutex.
+  bool isChainAtDefault() const;
 
   PresetManager presetManager;
   // Shown in the preset pill; guarded by chainMutex (written on the message

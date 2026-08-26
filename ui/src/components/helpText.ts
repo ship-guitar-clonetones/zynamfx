@@ -193,6 +193,7 @@ export const HELP = {
   presetNext: 'Next Preset: step forward through the list.',
   presetBrowse: 'Presets: browse factory and user presets.',
   presetSave: 'Save Preset: store the current chain. Same name: overwrite.',
+  presetNew: 'New: clear the chain and reset every control to its default.',
   presetRename: 'Rename: edit name. Enter: commit · Esc: cancel.',
   presetDelete: 'Delete: remove this preset.',
   presetReorder: 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',

@@ -60,7 +60,7 @@ export const SettingsGroup: React.FC<{
         display: 'flex',
         alignItems: 'center',
         gap: '10rem',
-        marginBottom: '24rem',
+        marginBottom: '16rem',
       }}
     >
       <span style={{ display: 'flex', color: '#ffffff', flexShrink: 0 }}>{icon}</span>
@@ -76,15 +76,17 @@ export const SettingsGroup: React.FC<{
         {title}
       </span>
     </div>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '28rem' }}>{children}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16rem' }}>{children}</div>
   </section>
 );
 
 export const descriptionStyle: React.CSSProperties = {
-  fontSize: '13rem',
+  fontSize: '14rem',
   fontWeight: 400,
   color: MUTED,
-  margin: '6rem 0 0',
+  // 8rem from a plain section header to the first help line. ToggleRow
+  // overrides to 4rem: the pill already adds visual weight under the label.
+  margin: '8rem 0 0',
   lineHeight: 1.45,
 };
 
@@ -101,10 +103,13 @@ export const ctaButtonStyle: React.CSSProperties = {
   textAlign: 'center',
 };
 
-/** Fine-print caption under a field (locked notes, hints). */
+/** Caption under a control inside a section (16rem from the control above). */
 export const captionStyle: React.CSSProperties = {
-  ...descriptionStyle,
-  fontSize: '12rem',
+  fontSize: '14rem',
+  fontWeight: 400,
+  color: MUTED,
+  margin: '16rem 0 0',
+  lineHeight: 1.45,
 };
 
 /** Green pill switch mirroring the web ToggleSimple: 40×24 track (zinc-500
@@ -291,8 +296,8 @@ export const FieldRow: React.FC<{
       <span style={sectionLabelStyle}>{label}</span>
       {labelExtra}
     </div>
-    {help && <p style={{ ...descriptionStyle, marginBottom: '12rem' }}>{help}</p>}
-    {!help && <div style={{ height: '12rem' }} />}
+    {help && <p style={{ ...descriptionStyle, marginBottom: '16rem' }}>{help}</p>}
+    {!help && <div style={{ height: '16rem' }} />}
     {children}
   </div>
 );
@@ -318,8 +323,9 @@ export const ToggleRow: React.FC<{
       <span style={sectionLabelStyle}>{label}</span>
       <PillToggle value={value} onChange={onChange} />
     </div>
-    <p style={descriptionStyle}>{description}</p>
-    {children}
+    <p style={{ ...descriptionStyle, margin: '4rem 0 0' }}>{description}</p>
+    {/* 16rem between the help line and any expanded controls / tips. */}
+    {children ? <div style={{ marginTop: '16rem' }}>{children}</div> : null}
   </div>
 );
 
@@ -364,7 +370,7 @@ export const RadioOption: React.FC<{
   onSelect: () => void;
   children?: React.ReactNode;
 }> = ({ selected, label, description, onSelect, children }) => (
-  <div style={{ marginBottom: '16rem' }}>
+  <div>
     <button
       type="button"
       role="radio"
@@ -401,7 +407,7 @@ export const RadioOption: React.FC<{
         <span
           style={{
             display: 'block',
-            fontSize: '13rem',
+            fontSize: '14rem',
             fontWeight: 400,
             color: MUTED,
             marginTop: '4rem',

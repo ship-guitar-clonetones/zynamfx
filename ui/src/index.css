@@ -84,6 +84,16 @@ svg {
   pointer-events: none !important;
 }
 
+/* Optically center the all-caps mono labels in small chrome boxes (EQ, PRE,
+   LITE/FULL, S/Ø): trim the text box to cap height / baseline so the flex
+   centering isn't skewed by Roboto Mono's tall ascent/descent metrics. Must
+   sit on an inner span (text-box doesn't apply to flex containers; as a
+   flex/grid item the span blockifies, which text-box does support). No-op on
+   engines without text-box support. */
+.cap-trim {
+  text-box: trim-both cap alphabetic;
+}
+
 /* Remove focus highlight for knobs */
 .knob:focus {
   outline: none;

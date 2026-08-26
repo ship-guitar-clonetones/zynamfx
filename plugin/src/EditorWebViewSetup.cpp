@@ -416,6 +416,13 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             return juce::var(editor->processor.movePreset(
                 args[0].toString(), static_cast<int>(coerceDouble(args[1]))));
           }))
+      .withNativeFunction(
+          // The top bar's New button: back to the factory-default state
+          // (empty mono chain, default faceplate params, no active preset).
+          // Undoable; false when already at default.
+          "resetToDefault", guarded(0, false, [editor](const juce::Array<juce::var>&) {
+            return juce::var(editor->processor.resetToDefault());
+          }))
       // --- Audio device settings (standalone only) ---------------------------
       // All of these route through the StandaloneAudioSettings controller,
       // which exists only under the standalone holder; in hosts they resolve

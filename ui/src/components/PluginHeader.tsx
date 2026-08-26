@@ -32,6 +32,9 @@ const TuningForkIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
 interface PluginHeaderProps {
   presetStore: PresetStore;
   activePreset: ActivePreset | null;
+  /** Greys out the preset bar's New button (see PresetBar). */
+  atDefault: boolean;
+  onReset: () => void;
   stereoEnabled: boolean;
   onStereoToggle: (enabled: boolean) => void;
   showTuner: boolean;
@@ -55,6 +58,8 @@ interface PluginHeaderProps {
 export const PluginHeader = React.memo(function PluginHeader({
   presetStore,
   activePreset,
+  atDefault,
+  onReset,
   stereoEnabled,
   onStereoToggle,
   showTuner,
@@ -97,11 +102,13 @@ export const PluginHeader = React.memo(function PluginHeader({
         <PresetBar
           active={activePreset}
           presets={presetStore.presets}
+          atDefault={atDefault}
           onSave={presetStore.actions.save}
           onLoad={presetStore.actions.load}
           onRename={presetStore.actions.rename}
           onDelete={presetStore.actions.remove}
           onMove={presetStore.actions.move}
+          onReset={onReset}
         />
         <StereoModeToggle stereoEnabled={stereoEnabled} onToggle={onStereoToggle} />
         <IconButton

@@ -7,10 +7,12 @@ import {
   GripVertical,
   MidiPort,
   Pencil,
+  Plus,
   Save,
   Search,
   Trash2,
 } from './icons';
+import { IconButton } from './IconButton';
 import { DragDropProvider } from '@dnd-kit/react';
 import { isSortable, useSortable } from '@dnd-kit/react/sortable';
 import { arrayMove } from '@dnd-kit/helpers';
@@ -23,10 +25,10 @@ import { BORDER, FONT_MONO, GRAY, SEGMENTED_TRACK } from './theme';
 import { setPresetPcNumbersEnabled, usePresetPcNumbersEnabled } from './uiPreferences';
 
 /**
- * Top-bar preset controls: ‹ name › pill + save button, with two anchored
- * panels: the save popover (name + save) and the preset browser (search,
- * user section with inline rename/delete, TONE3000 factory section, and a
- * reorder mode that swaps the row actions for a grip and drag-and-drop).
+ * Top-bar preset controls: ‹ name › pill, save and New buttons, with two
+ * anchored panels: the save popover (name + save) and the preset browser
+ * (search, user section with inline rename/delete, TONE3000 factory section,
+ * and a reorder mode that swaps the row actions for a grip and drag-and-drop).
  *
  * Pure view: the list and all mutations come from usePresets, the active
  * preset rides the chain state poll. Prev/next walk the list in its shown
@@ -237,12 +239,16 @@ const PresetRow: React.FC<PresetRowProps> = ({
 interface PresetBarProps {
   active: ActivePreset | null;
   presets: PresetInfo[];
+  /** Greys out the New button: nothing differs from a fresh instance. */
+  atDefault: boolean;
   onSave: (name: string) => Promise<{ id: string; name: string } | null>;
   onLoad: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
   /** N steps within the preset's section (negative = earlier). */
   onMove: (id: string, delta: number) => void;
+  /** Clear the chain and reset every control to its default. */
+  onReset: () => void;
 }
 
 type OpenPanel = 'none' | 'save' | 'browse';
@@ -250,11 +256,13 @@ type OpenPanel = 'none' | 'save' | 'browse';
 export const PresetBar: React.FC<PresetBarProps> = ({
   active,
   presets,
+  atDefault,
   onSave,
   onLoad,
   onRename,
   onDelete,
   onMove,
+  onReset,
 }) => {
   const [open, setOpen] = useState<OpenPanel>('none');
   const [saveName, setSaveName] = useState('');
@@ -477,6 +485,19 @@ export const PresetBar: React.FC<PresetBarProps> = ({
       <button onClick={openSave} {...helpProps(HELP.presetSave)} style={iconButtonStyle}>
         <Save size={18} />
       </button>
+
+      {/* New: back to the factory-default state, greyed once already there. */}
+      <IconButton
+        onClick={() => {
+          setOpen('none');
+          onReset();
+        }}
+        disabled={atDefault}
+        help={HELP.presetNew}
+        size={28}
+      >
+        <Plus size={18} />
+      </IconButton>
 
       {/* Save popover */}
       {open === 'save' && (

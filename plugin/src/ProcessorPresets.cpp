@@ -204,3 +204,57 @@ bool TONE3000Processor::movePreset(const juce::String& presetId, int delta) {
   // revision bump; the UI re-pulls the preset list after the call.
   return presetManager.move(presetId, delta);
 }
+
+bool TONE3000Processor::isChainAtDefault() const {
+  if (activePresetId.isNotEmpty() || stereoEnabled.load())
+    return false;
+  for (const auto& l : lanes)
+    for (const auto& b : l)
+      if (b->type != ChainBlockType::INSERT)
+        return false;
+  // Normalized-space tolerance: UI resets and preset loads land exactly on
+  // the default, but a knob dragged back or host automation can be a hair
+  // off. 1e-4 of a ±24 dB range is 0.005 dB, far below any UI step.
+  for (const auto& paramId : presetParameterIds())
+    if (auto* p = parameters.getParameter(paramId))
+      if (std::abs(p->getValue() - p->getDefaultValue()) > 1.0e-4f)
+        return false;
+  return true;
+}
+
+bool TONE3000Processor::resetToDefault() {
+  {
+    juce::ScopedLock lock(chainMutex);
+    if (isChainAtDefault())
+      return false;  // nothing to reset; spare the audio the edit fade
+  }
+
+  // The whole chain is replaced, so mute-splice the swap like a preset load.
+  ChainEditFade editFade(*this);
+
+  Lane retired;  // destroyed after the lock; see restoreChainSnapshot
+  {
+    juce::ScopedLock lock(chainMutex);
+    pushChainHistory();
+    // A bare snapshot *is* the default state: the restore retires every
+    // block (lanes pad back to fresh insert slots), turns stereo off and
+    // clears the branch, in one undoable step.
+    retired = restoreChainSnapshot(juce::ValueTree("ChainSnapshot"));
+    activePresetId.clear();
+    activePresetName.clear();
+  }
+  retired.clear();
+
+  // Gestured like loadPreset, so hosts treat the jumps as user edits.
+  for (const auto& paramId : presetParameterIds()) {
+    if (auto* p = parameters.getParameter(paramId)) {
+      p->beginChangeGesture();
+      p->setValueNotifyingHost(p->getDefaultValue());
+      p->endChangeGesture();
+    }
+  }
+
+  juce::Logger::writeToLog("[Presets] Reset to default");
+  // No deferred fade release: an empty chain queues no model loads.
+  return true;
+}

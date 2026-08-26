@@ -23,6 +23,7 @@ const EMPTY_STATE: ChainState = {
   revision: -1,
   canUndo: false,
   canRedo: false,
+  atDefault: true,
   stereoEnabled: false,
   activeSide: 'left',
   stereoInput: false,
@@ -79,6 +80,7 @@ export function useChainState() {
       clearChainBranch: backend.getPluginFunction('clearChainBranch'),
       undoChain: backend.getPluginFunction('undoChain'),
       redoChain: backend.getPluginFunction('redoChain'),
+      resetToDefault: backend.getPluginFunction('resetToDefault'),
     }),
     [backend]
   );
@@ -245,6 +247,9 @@ export function useChainState() {
       /** Step the chain edit history. No-ops (false) at the stack ends. */
       undo: () => run<boolean>('undoChain', () => native.undoChain()),
       redo: () => run<boolean>('redoChain', () => native.redoChain()),
+      /** Back to the factory-default state: empty mono chain, faceplate
+          params at defaults, no active preset. Undoable (chain part). */
+      resetToDefault: () => run<boolean>('resetToDefault', () => native.resetToDefault()),
     }),
     [native, run]
   );
@@ -256,6 +261,7 @@ export function useChainState() {
     canUndo: state.canUndo ?? false,
     canRedo: state.canRedo ?? false,
     canPaste: state.canPasteBlock ?? false,
+    atDefault: state.atDefault,
     activePreset: state.preset ?? null,
     stereoEnabled: state.stereoEnabled,
     stereoInput: state.stereoInput ?? false,

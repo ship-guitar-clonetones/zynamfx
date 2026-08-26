@@ -184,6 +184,12 @@ juce::var TONE3000Processor::makeToneSummary(const juce::var& toneVar) {
   if (url.isNotEmpty())
     out->setProperty("url", url);
 
+  // Publish time for the creator line's relative timestamp. Omitted when
+  // absent (older stored tones) so the UI skips the "· 3d" suffix.
+  const juce::String publishedAt = tone->getProperty("published_at").toString();
+  if (publishedAt.isNotEmpty())
+    out->setProperty("published_at", publishedAt);
+
   // Only the first image is ever rendered (block artwork).
   juce::Array<juce::var> images;
   if (auto* imgs = tone->getProperty("images").getArray(); imgs != nullptr && !imgs->isEmpty())
@@ -972,7 +978,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   juce::uint32 revision = 0;
   std::vector<BlockRow> left, right;
   bool stereo = false, canUndo = false, canRedo = false, branched = false;
-  bool canPaste = false;
+  bool canPaste = false, atDefault = false;
   juce::String presetId, presetName, branchSide, activeSide, branchAfter;
 
   {
@@ -1044,6 +1050,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
     canUndo = chainHistory.canUndo();
     canRedo = chainHistory.canRedo();
     canPaste = blockClipboardSettings.isValid();
+    atDefault = isChainAtDefault();
     presetId = activePresetId;
     presetName = activePresetName;
     branched = stereo && !branchAfterBlockId.empty();
@@ -1128,6 +1135,9 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   // on insert slots). The clipboard snapshot is self-contained, so this
   // stays true across preset switches and after the source block is gone.
   state->setProperty("canPasteBlock", canPaste);
+  // True when nothing distinguishes this state from a fresh instance (see
+  // isChainAtDefault); the top bar's New button greys out on it.
+  state->setProperty("atDefault", atDefault);
   if (presetId.isNotEmpty()) {
     juce::DynamicObject::Ptr preset = new juce::DynamicObject();
     preset->setProperty("id", presetId);

@@ -56,6 +56,11 @@ TONE3000Processor::TONE3000Processor()
   parameters.addParameterListener("osEnabled", this);
   parameters.addParameterListener("osFactor", this);
 
+  // The preset-managed faceplate params feed getChainState's atDefault flag,
+  // so their changes must reach pollers (see parameterChanged).
+  for (const auto& paramId : presetParameterIds())
+    parameters.addParameterListener(paramId, this);
+
   // MIDI performance events (delivered on the message thread, see
   // MidiMapper): program changes and prev/next steps walk the preset list,
   // mapped block-power and stereo stomps route through the normal undoable
@@ -260,10 +265,17 @@ int TONE3000Processor::resolvedOversampleFactor() const {
 }
 
 void TONE3000Processor::parameterChanged(const juce::String& parameterID, float newValue) {
-  // Only the oversampling params are subscribed. Defer to the message thread:
-  // this can fire from the UI relays or host restore, and the apply is heavy.
-  juce::ignoreUnused(parameterID, newValue);
-  triggerAsyncUpdate();
+  juce::ignoreUnused(newValue);
+  if (parameterID == "osEnabled" || parameterID == "osFactor") {
+    // Defer to the message thread: this can fire from the UI relays or host
+    // restore, and the apply is heavy.
+    triggerAsyncUpdate();
+    return;
+  }
+  // A preset-managed faceplate param moved, so getChainState's atDefault may
+  // have flipped. Deferred like block-param drags: a real bump per change
+  // would re-ship the whole chain state at knob-drag/automation rates.
+  deferredRevisionBump();
 }
 
 void TONE3000Processor::handleAsyncUpdate() {
@@ -326,6 +338,8 @@ void TONE3000Processor::applyOversamplingSettings() {
 TONE3000Processor::~TONE3000Processor() {
   parameters.removeParameterListener("osEnabled", this);
   parameters.removeParameterListener("osFactor", this);
+  for (const auto& paramId : presetParameterIds())
+    parameters.removeParameterListener(paramId, this);
   cancelPendingUpdate();
 
   releaseResources();

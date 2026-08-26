@@ -38,6 +38,7 @@ import {
   BODY_PADDING,
 } from './chainLayout';
 import { formatCount } from '../t3k/formatCount';
+import { timeAgoShort } from '../t3k/timeAgoShort';
 import { formatLabel, gearLabel } from '../t3k/labels';
 import { AvatarImage } from './AvatarFallback';
 import { FormatBadge } from './FormatBadge';
@@ -945,6 +946,9 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                             </div>
                             <span style={{ fontSize: '14rem', color: GRAY, fontWeight: 400 }}>
                               {tone.user.username}
+                              {tone.published_at && (
+                                <span style={{ color: MUTED }}> · {timeAgoShort(tone.published_at)}</span>
+                              )}
                             </span>
                           </div>
                         )}
@@ -1075,8 +1079,10 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                           }}
                         >
                           <ChromeIconButton
-                            tone="outline"
-                            on={normalizeOn}
+                            tone="power"
+                            // Overridden reads as off (gray + fill) even if
+                            // the stored setting is on.
+                            on={normalizeOn && !normalizeOverridden}
                             help={HELP.blockNormalize}
                             onClick={handleToggleNormalize}
                             disabled={normalizeOverridden}

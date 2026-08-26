@@ -40,6 +40,8 @@ export interface Tone {
   description: string | null;
   created_at: string;
   updated_at: string;
+  /** When the tone was published; absent on some older payloads. */
+  published_at?: string;
   gear: string;
   images: string[];
   is_public: boolean;

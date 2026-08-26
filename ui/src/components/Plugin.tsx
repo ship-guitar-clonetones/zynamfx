@@ -57,6 +57,7 @@ export const Plugin: React.FC = () => {
     canUndo,
     canRedo,
     canPaste,
+    atDefault,
     activePreset,
     stereoEnabled,
     stereoInput,
@@ -189,28 +190,40 @@ export const Plugin: React.FC = () => {
     setShowToneBrowser,
   });
 
-  // Loading a preset replaces the chain. Leave any takeover (tuner, tone
-  // browser, block detail) first so the new chain is visible on the gallery,
-  // matching closeTunerThen. Rename/delete/move only touch the preset list.
+  // Loading a preset or resetting to default replaces the chain. Leave any
+  // takeover (tuner, tone browser, block detail) first so the new chain is
+  // visible on the gallery, matching closeTunerThen.
+  const showChainThen = useCallback(
+    <A extends unknown[], R>(fn: (...args: A) => R) =>
+      (...args: A): R => {
+        if (showTuner) void handleToggleTuner(false);
+        if (showToneBrowser) {
+          loadFlow.clearPendingTargets();
+          setShowToneBrowser(false);
+        }
+        sessionStorage.removeItem(DETAIL_BLOCK_STORAGE_KEY);
+        setReturnToGallery((n) => n + 1);
+        return fn(...args);
+      },
+    [showTuner, handleToggleTuner, showToneBrowser, loadFlow]
+  );
+
+  const handleReset = useMemo(
+    () => showChainThen(actions.resetToDefault),
+    [showChainThen, actions]
+  );
+
+  // Rename/delete/move only touch the preset list, so they pass through.
   const headerPresetStore = useMemo(
     () => ({
       ...presetStore,
       actions: {
         ...presetStore.actions,
         save: closeTunerThen(presetStore.actions.save),
-        load: (id: string) => {
-          if (showTuner) void handleToggleTuner(false);
-          if (showToneBrowser) {
-            loadFlow.clearPendingTargets();
-            setShowToneBrowser(false);
-          }
-          sessionStorage.removeItem(DETAIL_BLOCK_STORAGE_KEY);
-          setReturnToGallery((n) => n + 1);
-          return presetStore.actions.load(id);
-        },
+        load: showChainThen(presetStore.actions.load),
       },
     }),
-    [presetStore, closeTunerThen, showTuner, handleToggleTuner, showToneBrowser, loadFlow]
+    [presetStore, closeTunerThen, showChainThen]
   );
 
   const openToneBrowser = useCallback(() => setShowToneBrowser(true), []);
@@ -404,6 +417,8 @@ export const Plugin: React.FC = () => {
         <PluginHeader
           presetStore={headerPresetStore}
           activePreset={activePreset}
+          atDefault={atDefault}
+          onReset={handleReset}
           stereoEnabled={stereoEnabled}
           onStereoToggle={handleStereoToggle}
           showTuner={showTuner}
