@@ -20,9 +20,10 @@
 #   PACE_ILOK_ACCOUNT       iLok User ID approved for AAX cloud signing
 #   PACE_ILOK_PASSWORD      password for that account
 #   PACE_WCGUID             wrap configuration GUID (PACE Central / Eden)
-#   PACE_TOOLS_URL          URL to a .zip containing wraptool.exe and
-#                           iloktool.exe (Eden SDK binaries from PACE Connect;
-#                           NOT redistributable, host them privately)
+#   PACE_TOOLS_URL          URL to a .zip containing wraptool.exe, iloktool.exe
+#                           and the SDK's redist\LicenseSupport.exe (Eden SDK
+#                           binaries from PACE Connect; NOT redistributable,
+#                           host them privately)
 #   PACE_TOOLS_TOKEN        optional bearer token for PACE_TOOLS_URL
 #
 # Optional environment (enables the Authenticode half):
@@ -68,38 +69,8 @@ if ($workDir -match ' ') {
     Write-Warning "Work dir contains spaces ($workDir); wraptool --signtool may misbehave."
 }
 
-# 1. PACE License Support (drivers/services iloktool and wraptool talk to).
-#    The installer is an InstallShield MSI wrapper; its own usage strings
-#    document silent mode as "/S /v/qn", so no recorded response file is
-#    needed.
-$paceInstalled = Test-Path (Join-Path $env:CommonProgramFiles 'PACE')
-if (-not $paceInstalled) {
-    Write-Host 'Installing PACE License Support...'
-    $lsZip = Join-Path $workDir 'LicenseSupport.zip'
-    Invoke-WebRequest -Uri 'https://installers.ilok.com/iloklicensemanager/LicenseSupportInstallerWin64.zip' -OutFile $lsZip
-    $lsDir = Join-Path $workDir 'license-support'
-    Expand-Archive -Path $lsZip -DestinationPath $lsDir -Force
-    $installer = Get-ChildItem -Path $lsDir -Recurse -Filter '*.exe' |
-        Where-Object { $_.Name -like '*License Support*' } | Select-Object -First 1
-    if (-not $installer) {
-        throw "License Support installer exe not found under $lsDir"
-    }
-    Start-Process -Wait -FilePath $installer.FullName -ArgumentList '/S', '/v/qn'
-    # The stub can hand off to msiexec and return early; wait for the PACE
-    # services directory to appear before continuing.
-    $deadline = (Get-Date).AddSeconds(180)
-    while (-not (Test-Path (Join-Path $env:CommonProgramFiles 'PACE'))) {
-        if ((Get-Date) -gt $deadline) {
-            throw 'PACE License Support install did not complete within 180s.'
-        }
-        Start-Sleep -Seconds 5
-    }
-}
-else {
-    Write-Host 'PACE License Support already installed.'
-}
-
-# 2. Eden tools (wraptool.exe + iloktool.exe) from private hosting.
+# 1. Eden tools (wraptool.exe + iloktool.exe + LicenseSupport.exe) from
+#    private hosting.
 Write-Host 'Fetching Eden tools...'
 $toolsZip = Join-Path $workDir 'eden-tools.zip'
 $headers = @{}
@@ -113,10 +84,40 @@ Invoke-WebRequest -Uri $env:PACE_TOOLS_URL -Headers $headers -OutFile $toolsZip
 $toolsDir = Join-Path $workDir 'eden'
 Expand-Archive -Path $toolsZip -DestinationPath $toolsDir -Force
 
-# wraptool ships in the Eden SDK (so it must be in the zip); iloktool is part
-# of the License Support install (like /usr/local/bin/iloktool on macOS), so
-# fall back to searching the PACE install locations when the zip doesn't
-# carry it.
+# 2. PACE License Support (drivers/services iloktool and wraptool talk to).
+#    Installed from the SDK's redist\LicenseSupport.exe bundled in the tools
+#    zip: that installer is an InstallShield MSI wrapper whose silent mode is
+#    "/S /v/qn" (proven in CI by the harvest workflow). Do NOT swap in the
+#    public installers.ilok.com "License Support Win64.exe" here - it is a
+#    different installer generation that silently ignores those switches, so
+#    nothing gets installed and the wait below times out.
+$paceInstalled = Test-Path (Join-Path $env:CommonProgramFiles 'PACE')
+if (-not $paceInstalled) {
+    Write-Host 'Installing PACE License Support...'
+    $installer = Get-ChildItem -Path $toolsDir -Recurse -Filter 'LicenseSupport*.exe' |
+        Select-Object -First 1
+    if (-not $installer) {
+        throw "LicenseSupport*.exe not found in the tools zip; bundle the SDK's redist\LicenseSupport.exe into the PACE_TOOLS_URL asset."
+    }
+    $proc = Start-Process -Wait -PassThru -FilePath $installer.FullName -ArgumentList '/S', '/v/qn'
+    Write-Host "License Support installer exit code: $($proc.ExitCode)"
+    # The stub hands off to msiexec and can return early; wait for the PACE
+    # services directory to appear before continuing.
+    $deadline = (Get-Date).AddSeconds(300)
+    while (-not (Test-Path (Join-Path $env:CommonProgramFiles 'PACE'))) {
+        if ((Get-Date) -gt $deadline) {
+            throw 'PACE License Support install did not complete within 300s.'
+        }
+        Start-Sleep -Seconds 5
+    }
+}
+else {
+    Write-Host 'PACE License Support already installed.'
+}
+
+# wraptool and iloktool are bundled in the tools zip (the Windows License
+# Support install does not put iloktool on disk, unlike macOS); the PACE
+# install locations below are a best-effort fallback only.
 function Find-Tool([string]$name) {
     $hit = Get-ChildItem -Path $toolsDir -Recurse -Filter $name -ErrorAction SilentlyContinue |
         Select-Object -First 1
