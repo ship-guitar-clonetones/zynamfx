@@ -413,6 +413,26 @@ jobs:
             Write-Host "Signing secrets not configured; artifacts will be unsigned."
           }
 
+      # PACE AAX signing is deliberately independent of the Authenticode
+      # (Azure) gate above: the PACE signature is what Pro Tools checks, so
+      # it should run as soon as the iLok secrets exist — even while Azure
+      # Trusted Signing approval is still pending. When the Azure secrets are
+      # also present, the sign script additionally applies Authenticode to
+      # the AAX's inner DLL through the signtool shim.
+      - name: Check PACE signing config
+        id: pacesign
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          PACE_ILOK_ACCOUNT: ${{ secrets.PACE_ILOK_ACCOUNT }}
+          PACE_TOOLS_URL_WIN: ${{ secrets.PACE_TOOLS_URL_WIN }}
+        run: |
+          $enabled = if ($env:PACE_ILOK_ACCOUNT -and $env:PACE_TOOLS_URL_WIN) { 'true' } else { 'false' }
+          "enabled=$enabled" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($enabled -eq 'false') {
+            Write-Host "PACE secrets not configured; AAX will be unsigned."
+          }
+
       # Sign the binaries users actually run before they are packaged (the
       # .vst3 and .clap are PE DLLs, signable like any exe).
       - name: Sign binaries (Windows)
@@ -434,16 +454,14 @@ jobs:
 
       # AAX must carry PACE's signature or Pro Tools refuses to load it.
       # Signed via PACE Eden cloud signing (headless iLok Cloud session +
-      # wraptool). The Authenticode half runs through the same Azure Artifact
-      # Signing account as the step above: wraptool delegates to signtool via
-      # the script/pace/aax-signtool.bat shim, so this needs both the PACE and
-      # the Azure secrets. The .aaxplugin is excluded from the step above
-      # (extension filter) precisely so wraptool is the only signer touching
-      # it. Bails out gracefully when the PACE secrets are not configured;
-      # the AAX then ships unsigned and only loads in Pro Tools Developer
-      # builds.
+      # wraptool). Runs on the PACE gate, not the Azure one: the Authenticode
+      # half is optional and only applied when the Azure secrets are present
+      # (wraptool then delegates to signtool via the
+      # script/pace/aax-signtool.bat shim). The .aaxplugin is excluded from
+      # the Azure steps (extension filter) precisely so wraptool is the only
+      # signer touching it.
       - name: Sign AAX with PACE (Windows)
-        if: matrix.os == 'windows' && steps.winsign.outputs.enabled == 'true'
+        if: matrix.os == 'windows' && steps.pacesign.outputs.enabled == 'true'
         shell: pwsh
         env:
           PACE_ILOK_ACCOUNT: ${{ secrets.PACE_ILOK_ACCOUNT }}
@@ -451,7 +469,6 @@ jobs:
           PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
           PACE_TOOLS_URL: ${{ secrets.PACE_TOOLS_URL_WIN }}
           PACE_TOOLS_TOKEN: ${{ secrets.PACE_TOOLS_TOKEN }}
-          PACE_ILM_RESPONSE_ISS: ${{ secrets.PACE_ILM_RESPONSE_ISS }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -459,10 +476,6 @@ jobs:
           AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
           AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
         run: |
-          if (-not $env:PACE_ILOK_ACCOUNT) {
-            Write-Host "PACE signing secrets not configured; AAX will be unsigned."
-            exit 0
-          }
           pwsh -File script/sign-aax-windows.ps1 `
             "$env:GITHUB_WORKSPACE\build\plugin\TONE3000_artefacts\${{ env.BUILD_TYPE }}\AAX\TONE3000.aaxplugin"
 

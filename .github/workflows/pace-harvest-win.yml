@@ -1,0 +1,118 @@
+# TEMPORARY utility workflow - delete once eden-win.zip is hosted on the
+# pace-tools release and PACE_TOOLS_URL_WIN points at it.
+#
+# Purpose: extract the Windows Eden SDK (wraptool.exe + wrapper binaries)
+# without owning a Windows machine. Installs the PACE Code Signing SDK
+# silently on a windows-latest runner and uploads the installed SDK tree as a
+# short-lived artifact, which then gets re-hosted as a private pace-tools
+# release asset. Along the way it also proves out the silent License Support
+# install that script/sign-aax-windows.ps1 performs at signing time.
+
+name: PACE Windows SDK harvest (temp)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  harvest:
+    name: Harvest Eden SDK (Windows)
+    runs-on: windows-latest
+    environment: builds
+    steps:
+      - name: Download PACE SDK installer
+        shell: pwsh
+        env:
+          PACE_TOOLS_TOKEN: ${{ secrets.PACE_TOOLS_TOKEN }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $headers = @{
+            Authorization = "Bearer $env:PACE_TOOLS_TOKEN"
+            Accept        = 'application/octet-stream'
+          }
+          Invoke-WebRequest -Uri 'https://api.github.com/repos/tone-3000/pace-tools/releases/assets/534092458' `
+            -Headers $headers -OutFile sdk.zip
+          Expand-Archive -Path sdk.zip -DestinationPath sdk -Force
+          Get-ChildItem -Recurse sdk | Select-Object -ExpandProperty FullName
+
+      # Same switches script/sign-aax-windows.ps1 uses at signing time, so a
+      # green run here validates that path too. Uses the License Support
+      # redist bundled inside the SDK zip (version-matched to the SDK).
+      - name: Install License Support silently
+        shell: pwsh
+        run: |
+          $ls = Get-ChildItem -Recurse -Path sdk -Filter 'LicenseSupport*.exe' | Select-Object -First 1
+          if (-not $ls) { throw 'LicenseSupport.exe not found in the SDK zip.' }
+          Write-Host "Running: $($ls.FullName) /S /v/qn"
+          Start-Process -Wait -FilePath $ls.FullName -ArgumentList '/S', '/v/qn'
+          $deadline = (Get-Date).AddSeconds(300)
+          while (-not (Test-Path "$env:CommonProgramFiles\PACE")) {
+            if ((Get-Date) -gt $deadline) { throw 'License Support install did not complete within 300s.' }
+            Start-Sleep -Seconds 5
+          }
+          Write-Host 'License Support installed.'
+          # Report where iloktool.exe landed (sign-aax-windows.ps1 searches
+          # these roots as its fallback).
+          foreach ($root in @("$env:CommonProgramFiles\PACE", "$env:ProgramFiles\PACE Anti-Piracy")) {
+            if (Test-Path $root) {
+              Get-ChildItem -Recurse -Path $root -Filter 'iloktool.exe' -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Host "iloktool: $($_.FullName)" }
+            }
+          }
+
+      - name: Install Eden SDK silently
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse -Path sdk -Filter 'PACECodeSigning*.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'PACE SDK installer exe not found in the SDK zip.' }
+          # InstallShield Suite installer: /silent is its documented quiet mode.
+          Write-Host "Running: $($exe.FullName) /silent"
+          $p = Start-Process -Wait -PassThru -FilePath $exe.FullName -ArgumentList '/silent'
+          Write-Host "Installer exit code: $($p.ExitCode)"
+          $roots = @("$env:ProgramFiles\PACEAntiPiracy", "${env:ProgramFiles(x86)}\PACEAntiPiracy")
+          $deadline = (Get-Date).AddSeconds(300)
+          do {
+            $wraptool = Get-ChildItem -Recurse -Path $roots -Filter 'wraptool.exe' -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($wraptool) { break }
+            Start-Sleep -Seconds 5
+          } while ((Get-Date) -lt $deadline)
+          if (-not $wraptool) {
+            Write-Host 'wraptool.exe not found; dumping Program Files for debugging:'
+            Get-ChildItem $env:ProgramFiles | Select-Object -ExpandProperty Name
+            Get-ChildItem ${env:ProgramFiles(x86)} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+            throw 'Eden SDK install did not produce wraptool.exe.'
+          }
+          Write-Host "wraptool: $($wraptool.FullName)"
+
+      - name: Package Eden SDK tree
+        shell: pwsh
+        run: |
+          $roots = @("$env:ProgramFiles\PACEAntiPiracy", "${env:ProgramFiles(x86)}\PACEAntiPiracy")
+          $wraptool = Get-ChildItem -Recurse -Path $roots -Filter 'wraptool.exe' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          # Mirror the macOS zip layout: the SDK version dir (bin/, lib/, ...)
+          # is the archive root, so bin\wraptool.exe is found recursively.
+          $versionDir = $wraptool.Directory.Parent
+          Write-Host "Packaging $($versionDir.FullName):"
+          Get-ChildItem -Recurse $versionDir.FullName | Select-Object -ExpandProperty FullName
+          $paths = @($versionDir.FullName)
+          # Bundle iloktool.exe at the zip root too, so the sign script never
+          # has to guess the License Support install location.
+          $iloktool = Get-ChildItem -Recurse -Path @("$env:CommonProgramFiles\PACE", "$env:ProgramFiles\PACE Anti-Piracy") `
+            -Filter 'iloktool.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($iloktool) {
+            Write-Host "Bundling iloktool: $($iloktool.FullName)"
+            $paths += $iloktool.FullName
+          }
+          else {
+            Write-Warning 'iloktool.exe not found; the sign script will need to locate it at runtime.'
+          }
+          Compress-Archive -Path $paths -DestinationPath eden-win.zip
+          Get-Item eden-win.zip | Select-Object FullName, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eden-win
+          path: eden-win.zip
+          retention-days: 1
