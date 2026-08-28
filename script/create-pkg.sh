@@ -86,7 +86,16 @@ else
   echo "Signing mode: ad-hoc"
 fi
 
-# 0. Helper: sign one bundle
+# 0. Helpers: sign one bundle / detect a PACE-signed AAX
+
+# AAX bundles that CI already ran through PACE's wraptool carry both the
+# PACE signature and the Developer ID signature (wraptool applies the
+# hardened-runtime codesign itself, see script/sign-aax-macos.sh).
+# Re-signing such a bundle here would invalidate the PACE signature and
+# Pro Tools would refuse to load it, so it must be left untouched.
+aax_already_signed() {
+  codesign -dvv "$1" 2>&1 | grep -q "Authority=Developer ID Application"
+}
 
 sign_bundle() {
   local bundle="$1"
@@ -168,7 +177,13 @@ echo "Signing staged bundles..."
 sign_bundle "$STAGE/standalone/Applications/TONE3000.app"
 [[ $HAVE_VST3 -eq 1 ]] && sign_bundle "$STAGE/vst3/TONE3000.vst3"
 [[ $HAVE_AU   -eq 1 ]] && sign_bundle "$STAGE/au/TONE3000.component"
-[[ $HAVE_AAX  -eq 1 ]] && sign_bundle "$STAGE/aax/TONE3000.aaxplugin"
+if [[ $HAVE_AAX -eq 1 ]]; then
+  if aax_already_signed "$STAGE/aax/TONE3000.aaxplugin"; then
+    echo "AAX already signed by PACE wraptool; leaving its signature intact."
+  else
+    sign_bundle "$STAGE/aax/TONE3000.aaxplugin"
+  fi
+fi
 [[ $HAVE_CLAP -eq 1 ]] && sign_bundle "$STAGE/clap/TONE3000.clap"
 
 # 3. Build component .pkg files (one per install location)

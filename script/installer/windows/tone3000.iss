@@ -21,6 +21,14 @@
   #define OutputDir "..\..\..\build"
 #endif
 
+; AAX is only in the installer when the artefact exists (it is built with
+; BUILD_AAX=ON and, in CI, PACE-signed beforehand; see sign-aax-windows.ps1).
+; Compile-time check so local builds without AAX still compile this script.
+#define AaxBundle ArtefactsDir + "\AAX\TONE3000.aaxplugin"
+#if DirExists(AaxBundle)
+  #define HaveAax
+#endif
+
 [Setup]
 AppId={{7B5C3F1E-9D24-4A8B-B1E6-3FD82A6C41B7}
 AppName=TONE3000
@@ -63,6 +71,9 @@ Name: "custom"; Description: "Custom installation"; Flags: iscustom
 [Components]
 Name: "standalone"; Description: "Standalone application"; Types: full custom
 Name: "vst3";       Description: "VST3 plug-in";           Types: full custom
+#ifdef HaveAax
+Name: "aax";        Description: "AAX plug-in (Pro Tools)"; Types: full custom
+#endif
 Name: "clap";       Description: "CLAP plug-in";           Types: full custom
 Name: "presets";    Description: "Factory presets";        Types: full custom
 
@@ -71,6 +82,10 @@ Name: "presets";    Description: "Factory presets";        Types: full custom
 Source: "{#ArtefactsDir}\Standalone\TONE3000.exe"; DestDir: "{app}"; Components: standalone; Flags: ignoreversion
 ; VST3 bundle → Common Files\VST3 (standard VST3 location)
 Source: "{#ArtefactsDir}\VST3\TONE3000.vst3\*"; DestDir: "{commoncf64}\VST3\TONE3000.vst3"; Components: vst3; Flags: ignoreversion recursesubdirs createallsubdirs
+#ifdef HaveAax
+; AAX bundle → Common Files\Avid\Audio\Plug-Ins (standard AAX location)
+Source: "{#AaxBundle}\*"; DestDir: "{commoncf64}\Avid\Audio\Plug-Ins\TONE3000.aaxplugin"; Components: aax; Flags: ignoreversion recursesubdirs createallsubdirs
+#endif
 ; CLAP (single file on Windows) → Common Files\CLAP (standard CLAP location)
 Source: "{#ArtefactsDir}\CLAP\TONE3000.clap"; DestDir: "{commoncf64}\CLAP"; Components: clap; Flags: ignoreversion
 ; Factory presets → ProgramData (all-users; PresetManager scans this as system Factory)

@@ -1,5 +1,6 @@
 # TONE3000 Plugin - Multi-platform build
-# Builds VST3, Standalone, AU (macOS) on macOS, Windows, and Linux. macOS is
+# Builds VST3, Standalone, AU (macOS), and AAX (macOS/Windows, PACE-signed
+# when secrets are configured) on macOS, Windows, and Linux. macOS is
 # universal via per-arch builds + lipo, since dual -arch clang invocations are
 # not sccache-cacheable.
 
@@ -117,7 +118,7 @@ jobs:
           cmake -B build-arm64 -S . \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DBUILD_AAX=OFF \
+            -DBUILD_AAX=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
             -DCMAKE_OBJC_COMPILER_LAUNCHER=sccache \
@@ -162,7 +163,7 @@ jobs:
         run: |
           cmake -B build -S . -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DBUILD_AAX=OFF \
+            -DBUILD_AAX=ON \
             -DASIO_SDK_PATH="$ASIO_SDK_PATH" \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
@@ -196,7 +197,7 @@ jobs:
           cmake -B build-arm64 -S . \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
-            -DBUILD_AAX=OFF \
+            -DBUILD_AAX=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
             -DCMAKE_OBJC_COMPILER_LAUNCHER=sccache \
@@ -208,7 +209,7 @@ jobs:
           cmake -B build-x86_64 -S . \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DBUILD_AAX=OFF \
+            -DBUILD_AAX=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
             -DCMAKE_OBJC_COMPILER_LAUNCHER=sccache \
@@ -220,7 +221,7 @@ jobs:
         run: |
           cmake -B build -S . -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DBUILD_AAX=OFF \
+            -DBUILD_AAX=ON \
             -DASIO_SDK_PATH="$ASIO_SDK_PATH" \
             -DCMAKE_C_COMPILER_LAUNCHER=sccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
@@ -331,6 +332,34 @@ jobs:
             --password  "$APPLE_APP_PASSWORD" \
             --keychain  "$KEYCHAIN_PATH"
 
+      # AAX must carry PACE's signature or Pro Tools refuses to load it.
+      # Signed via PACE Eden cloud signing: a headless iLok Cloud session
+      # authorizes wraptool, which applies the PACE signature and the Apple
+      # Developer ID signature in one pass (so create-pkg.sh skips re-signing
+      # this bundle; see sign_bundle there). The Eden tools are not
+      # redistributable and are fetched from a private URL. Bails out
+      # gracefully when the PACE secrets are not configured (e.g. PRs from
+      # forks); the AAX is then ad-hoc signed like the other formats and only
+      # loads in Pro Tools Developer builds.
+      - name: Sign AAX with PACE (macOS)
+        if: matrix.os == 'macos'
+        env:
+          PACE_ILOK_ACCOUNT: ${{ secrets.PACE_ILOK_ACCOUNT }}
+          PACE_ILOK_PASSWORD: ${{ secrets.PACE_ILOK_PASSWORD }}
+          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          PACE_TOOLS_URL: ${{ secrets.PACE_TOOLS_URL_MAC }}
+          PACE_TOOLS_TOKEN: ${{ secrets.PACE_TOOLS_TOKEN }}
+          SIGN_ID_APP: ${{ secrets.SIGN_ID_APP }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PACE_ILOK_ACCOUNT:-}" || -z "${SIGN_ID_APP:-}" ]]; then
+            echo "PACE signing secrets not configured; AAX will be ad-hoc signed."
+            exit 0
+          fi
+          chmod +x script/sign-aax-macos.sh
+          ./script/sign-aax-macos.sh \
+            "build/plugin/TONE3000_artefacts/${{ env.BUILD_TYPE }}/AAX/TONE3000.aaxplugin"
+
       - name: Build .pkg installer (macOS)
         if: matrix.os == 'macos'
         env:
@@ -402,6 +431,40 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+
+      # AAX must carry PACE's signature or Pro Tools refuses to load it.
+      # Signed via PACE Eden cloud signing (headless iLok Cloud session +
+      # wraptool). The Authenticode half runs through the same Azure Artifact
+      # Signing account as the step above: wraptool delegates to signtool via
+      # the script/pace/aax-signtool.bat shim, so this needs both the PACE and
+      # the Azure secrets. The .aaxplugin is excluded from the step above
+      # (extension filter) precisely so wraptool is the only signer touching
+      # it. Bails out gracefully when the PACE secrets are not configured;
+      # the AAX then ships unsigned and only loads in Pro Tools Developer
+      # builds.
+      - name: Sign AAX with PACE (Windows)
+        if: matrix.os == 'windows' && steps.winsign.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          PACE_ILOK_ACCOUNT: ${{ secrets.PACE_ILOK_ACCOUNT }}
+          PACE_ILOK_PASSWORD: ${{ secrets.PACE_ILOK_PASSWORD }}
+          PACE_WCGUID: ${{ secrets.PACE_WCGUID }}
+          PACE_TOOLS_URL: ${{ secrets.PACE_TOOLS_URL_WIN }}
+          PACE_TOOLS_TOKEN: ${{ secrets.PACE_TOOLS_TOKEN }}
+          PACE_ILM_RESPONSE_ISS: ${{ secrets.PACE_ILM_RESPONSE_ISS }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_PROFILE: ${{ secrets.AZURE_SIGNING_PROFILE }}
+        run: |
+          if (-not $env:PACE_ILOK_ACCOUNT) {
+            Write-Host "PACE signing secrets not configured; AAX will be unsigned."
+            exit 0
+          }
+          pwsh -File script/sign-aax-windows.ps1 `
+            "$env:GITHUB_WORKSPACE\build\plugin\TONE3000_artefacts\${{ env.BUILD_TYPE }}\AAX\TONE3000.aaxplugin"
 
       # Windows: build a setup.exe with Inno Setup. It ships on current
       # windows-latest images; install via choco if a future image drops it.
