@@ -30,14 +30,20 @@ def main() -> int:
     raw = " ".join(sys.argv[1:])
     print(f"aax-signtool shim: arguments from wraptool: {raw}", flush=True)
 
-    # wraptool composes something like: sign /sha1 <bogus id> <path to dll>.
-    # The path may contain spaces and may or may not be quoted; grab the
-    # first drive-letter path through the end of the line.
-    match = re.search(r'"?([A-Za-z]:[\\/].*?)"?\s*$', raw)
-    if not match:
+    # wraptool composes: sign /sha1 <id> [/t <timestamp-url>] <path to dll>.
+    # Do NOT regex the joined string for "[drive]:[/\]"..... that matches the
+    # "p:/" inside "http://..." and turns the URL+path into a bogus target
+    # (seen in CI as "signing p://timestamp.sectigo.com C:\..."). Take the
+    # last argv that looks like a real Windows filesystem path instead.
+    target = None
+    for arg in reversed(sys.argv[1:]):
+        candidate = arg.strip().strip('"')
+        if re.match(r"^[A-Za-z]:[\\/]", candidate) and "://" not in candidate:
+            target = candidate
+            break
+    if not target:
         print("aax-signtool shim: no file path found in arguments", flush=True)
         return 1
-    target = match.group(1).strip('"')
 
     missing = [v for v in ("SIGNTOOL_PATH", "ACS_DLIB", "ACS_JSON") if not os.environ.get(v)]
     if missing:
