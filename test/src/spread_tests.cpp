@@ -334,34 +334,24 @@ StereoResult runStereoOffset(const std::vector<float>& in, const AlignSettings& 
 
 TEST(StereoOffsetTest, DelaysTheChosenSideByTheDialedMs) {
   // Full-right knob = the right chain delayed by 24 ms; the left chain must
-  // pass through untouched.
+  // pass through untouched. Same mechanical check as Spread's pure-delay
+  // test: compare samples directly once the 40 ms glide has settled.
+  // (A short-window correlation was flaky on MSVC — it once reported a
+  // spurious peak at 879 samples against a correct 1152-sample delay.)
   const int frames = 96 * kBlock;
   const auto in = makeNoise(frames, 7, 0.5f);
+  const auto out = runStereoOffset(in, {.offsetNorm = 1.0f});
 
-  StereoOffset offset;
-  offset.prepare(kFs, kBlock);
-  juce::AudioBuffer<float> buf(2, kBlock);
-  std::vector<float> outL, outR;
-  for (size_t off = 0; off < in.size(); off += kBlock) {
-    for (int i = 0; i < kBlock; ++i) {
-      buf.setSample(0, i, in[off + static_cast<size_t>(i)]);
-      buf.setSample(1, i, in[off + static_cast<size_t>(i)]);
-    }
-    offset.setTarget(StereoOffsetParams::fromNormalized(1.0f), true);
-    offset.process(buf);
-    for (int i = 0; i < kBlock; ++i) {
-      outL.push_back(buf.getSample(0, i));
-      outR.push_back(buf.getSample(1, i));
-    }
-  }
+  EXPECT_EQ(out.l, in);  // untouched side: not one bit may move
 
-  EXPECT_EQ(outL, in);  // untouched side: not one bit may move
-
-  // After the glide-in settles, the right side sits at 24 ms = 1152 samples.
+  // 24 ms = 1152 samples at 48 kHz. Skip 1 s so we are well past the ramp
+  // and the delay line holds only post-settle audio.
   const int expectedLag = static_cast<int>(std::round(24.0e-3 * kFs));
-  const int start = static_cast<int>(kFs);  // well past the 40 ms ramp
-  const int lag = bestCorrelationLag(outR, in, start, 4 * kBlock, expectedLag + 64);
-  EXPECT_EQ(lag, expectedLag);
+  const size_t settled = static_cast<size_t>(kFs);
+  ASSERT_EQ(expectedLag, 1152);
+  for (size_t i = settled; i < in.size(); ++i)
+    ASSERT_NEAR(out.r[i], in[i - static_cast<size_t>(expectedLag)], 1e-4f)
+        << "delayed side is not a pure 24 ms delay at sample " << i;
 }
 
 TEST(StereoOffsetTest, WobblePowerOffIsTimeInvariant) {
