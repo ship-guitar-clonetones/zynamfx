@@ -66,6 +66,9 @@ interface ChainViewProps {
       self-contained, not a reference into the current chain. */
   canPaste: boolean;
   sampleRate: number;
+  /** Default NAM A2 size for new blocks; the detail card's size chip only
+      shows when a block differs from it. */
+  namSlimSizeDefault: number;
   /** Block info view: drop the meter-band bottom pad so scroll reaches the faceplate. */
   onFillToFaceplate?: (fill: boolean) => void;
   /** Bumped on preset load so an open detail takeover returns to the gallery. */
@@ -91,8 +94,8 @@ const sensors: Sensors = [
   // Stock keyboard sorting: Space or Enter on a focused tile picks it up,
   // arrows snap it one slot per press (the sortable's SortableKeyboardPlugin
   // owns the targeting), Space/Enter drops, Escape cancels. A grab can only
-  // start on the focused tile, so this stays intentional: Space anywhere
-  // else still falls through to the host DAW (see spacePassthrough.ts).
+  // start on the focused tile, so this stays intentional: Space/Enter
+  // anywhere else still falls through to the host DAW (see keyPassthrough.ts).
   KeyboardSensor,
 ];
 
@@ -109,6 +112,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
   monoSum,
   canPaste,
   sampleRate,
+  namSlimSizeDefault,
   onFillToFaceplate,
   returnToGallery = 0,
 }) => {
@@ -364,6 +368,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
           block={detailBlock}
           namDownstream={namDownstream}
           sampleRate={sampleRate}
+          namSlimSizeDefault={namSlimSizeDefault}
           onBack={() => setDetailBlockId(null)}
           onFillToFaceplate={onFillToFaceplate}
         />

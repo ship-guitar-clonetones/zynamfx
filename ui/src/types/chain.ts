@@ -68,6 +68,20 @@ export function isEqFlat(eq: BlockEqParams): boolean {
   return !eq.bands.some(isEqBandActive);
 }
 
+/**
+ * NAM slimmable-size requests (the native SetSlimmableSize domain): 0 asks
+ * for the smallest tier of an A2 container ("lite"), 1 for the largest
+ * ("full"). NAM assigns a boundary value to the tier above it, so on a
+ * two-tier container everything below 0.5 runs lite and 0.5 up runs full —
+ * which is what `isSlimSizeFull` mirrors for display.
+ */
+export const SLIM_SIZE_LITE = 0;
+export const SLIM_SIZE_FULL = 1;
+
+export function isSlimSizeFull(slimSize: number): boolean {
+  return slimSize >= 0.5;
+}
+
 /** Per-block user-editable parameters (all persisted with the plugin state). */
 export interface BlockParams {
   /** Block participates in processing (per-block on/off). */
@@ -76,6 +90,12 @@ export interface BlockParams {
       raw level). IR blocks are always normalized natively; this flag is
       inert for them. */
   normalize: boolean;
+  /** NAM A2 size in NAM's slimmable-size domain (0..1): the CPU/quality
+      request the block's engine runs at. Only the endpoints are set today
+      (see SLIM_SIZE_LITE/FULL); inert for IR blocks. Set via
+      `setBlockSlimSize`, not `setBlockParam`: changing it retiers the
+      loaded engine natively. */
+  slimSize: number;
   /** Normalized 0..1; 0.5 = unity, ±24 dB. Drives the block's DSP. */
   inputGain: number;
   /** Normalized 0..1; 0.5 = unity, ±24 dB. */
@@ -239,10 +259,10 @@ export interface ChainState {
   /** Which channels of a stereo source feed the plugin (faceplate button):
       both, or one mirrored onto both. */
   inputMode: InputMode;
-  /** NAM A2 size (per-instance, saved with the DAW session; false = lite,
-      true = full). Applies to every NAM block in this instance; set via
-      `setNamFullSize`. */
-  namFullSize: boolean;
+  /** Default NAM A2 size stamped on newly added blocks (machine-wide user
+      setting; existing blocks keep their own `params.slimSize`). Set via
+      `setNamSlimSizeDefault`. */
+  namSlimSizeDefault: number;
   /** Multi-core processing (machine-wide user setting). When true, stereo
       mode processes the two chains on separate CPU cores and oversampled NAM
       models split their phase instances across cores; set via

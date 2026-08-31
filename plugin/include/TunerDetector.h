@@ -11,6 +11,10 @@
  * message thread, which runs a YIN pitch analysis over the most recent window
  * and returns { frequency, confidence, level }. No locks are used: a torn
  * read across the ring wrap only ever produces a single throwaway reading.
+ *
+ * The search range covers 5-string bass low B through guitar high frets
+ * (kMinFrequency..kMaxFrequency) at any host sample rate: prepare() picks a
+ * decimation factor that lands the analysis near kTargetAnalysisRate.
  */
 class TunerDetector {
 public:
@@ -37,10 +41,16 @@ private:
   void analyze();
 
   static constexpr int kRingSize = 1 << 15;  // 32768 samples (~0.7 s at 48 kHz)
-  static constexpr int kDecimation = 4;      // analyze at sampleRate / 4
+  static constexpr int kMaxDecimation = 16;  // kWindowSize * 16 == kRingSize
   static constexpr int kWindowSize = 2048;   // decimated samples per analysis
 
-  static constexpr double kMinFrequency = 55.0;    // below low B on a 7-string
+  // Decimated analysis rate the decimation factor aims for. ~12 kHz keeps
+  // the YIN search window identical across host sample rates: low enough
+  // that kMinFrequency fits in kWindowSize/2 lags, high enough for
+  // kMaxFrequency to stay several samples per period.
+  static constexpr double kTargetAnalysisRate = 12000.0;
+
+  static constexpr double kMinFrequency = 28.0;    // below low B on a 5-string bass
   static constexpr double kMaxFrequency = 1500.0;  // above high-fret high E
   static constexpr double kSilenceDb = -55.0;
   static constexpr double kYinThreshold = 0.15;
@@ -50,6 +60,8 @@ private:
   std::atomic<int> writePos{0};
   std::atomic<bool> enabled{false};
   double sampleRate = 48000.0;
+  // sampleRate / decimation ≈ kTargetAnalysisRate; set in prepare().
+  int decimation = 4;
 
   // Message-thread scratch + cached result
   std::vector<float> rawWindow;

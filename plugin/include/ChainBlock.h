@@ -179,6 +179,16 @@ struct ChainBlock {
   // preference.
   bool normalizeEnabled{true};
 
+  // Per-block NAM A2 size, stored in NAM's own slimmable-size domain (0..1;
+  // 0.0 = lite, 1.0 = full, and the tier boundary belongs to the tier above,
+  // so 0.5 already selects full). The value feeds
+  // NamEngine::setSlimmableSize verbatim. Inert for IR blocks, like
+  // normalizeEnabled. Part of the chain state so presets carry each block's
+  // size; new blocks start at the machine-wide default
+  // (TONE3000Processor::setNamSlimSizeDefault) and setBlockSlimSize retiers
+  // the loaded engine in place.
+  double namSlimSize{0.0};
+
   // Per-block controls (normalized 0..1)
   float inputGainNormalized{0.5f};  // 0.5 = unity gain; drives the block harder/softer
   juce::LinearSmoothedValue<float> inputGainSmoother;

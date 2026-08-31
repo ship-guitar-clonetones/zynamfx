@@ -9,7 +9,7 @@ import { useSyncExternalStore } from 'react';
  * Copy conventions:
  * - `Name: what it does.` then a shortcut legend of `key: effect` pairs
  *   joined with middots. Keep it terse: the bar shares its row with the
- *   A2-size toggle and CPU readout, and long lines get ellipsized.
+ *   CPU readout, and long lines get ellipsized.
  * - Modifier keys are OS-correct: glyphs on macOS (⇧ ⌥, hyphen-joined per
  *   Apple convention), spelled out with `+` elsewhere (Shift+drag).
  * - Toggles describe the control, not the current state (the control's own
@@ -232,6 +232,9 @@ export const HELP = {
   blockNormalize: 'Normalize: level this block\u2019s loudness. Off: raw capture level.',
   blockNormalizeOverridden:
     'Normalize: overridden \u2014 calibration hands this model\u2019s true output level to the next NAM block.',
+  blockSize: 'NAM Size: LITE saves CPU · FULL is highest quality. Sets this block only.',
+  blockSizeChip:
+    'NAM Size: this block\u2019s size differs from your default. To choose per block, enable it in Settings.',
   blockCalibrated: 'Calibration: active \u2014 levels set from this model\u2019s calibration data.',
   blockUncalibrated: 'Calibration: inactive \u2014 this model has no calibration data.',
   eqToggle: 'EQ: 6-band EQ editor. Outline: EQ shaping the sound.',
@@ -266,7 +269,6 @@ export const HELP = {
   clipDot: 'Clip: latches on clipping. Click: clear.',
 
   // The hint bar itself
-  namSize: 'NAM Size: LITE saves CPU · FULL is highest quality. Applies to all NAM tones in this instance.',
   cpuLoad: 'CPU: audio engine load.',
   hideHints: 'Hide Info Bar: hide this bar. Re-enable in Settings.',
 } as const;

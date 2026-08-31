@@ -8,7 +8,7 @@ import type {
   EqBand,
   InputMode,
 } from '../types/chain';
-import { isUnchanged } from '../types/chain';
+import { isUnchanged, SLIM_SIZE_LITE } from '../types/chain';
 
 /**
  * Fallback poll cadence for chain state. The primary sync channel is the
@@ -30,7 +30,7 @@ const EMPTY_STATE: ChainState = {
   stereoOutput: true,
   standalone: false,
   inputMode: 'stereo',
-  namFullSize: false,
+  namSlimSizeDefault: SLIM_SIZE_LITE,
   multiCore: true,
   sampleRate: 48000,
   chain: [],
@@ -72,7 +72,8 @@ export function useChainState() {
       resetBlockEq: backend.getPluginFunction('resetBlockEq'),
       setStereoMode: backend.getPluginFunction('setStereoMode'),
       setInputMode: backend.getPluginFunction('setInputMode'),
-      setNamFullSize: backend.getPluginFunction('setNamFullSize'),
+      setBlockSlimSize: backend.getPluginFunction('setBlockSlimSize'),
+      setNamSlimSizeDefault: backend.getPluginFunction('setNamSlimSizeDefault'),
       setMultiCore: backend.getPluginFunction('setMultiCore'),
       setActiveEditChain: backend.getPluginFunction('setActiveEditChain'),
       swapChains: backend.getPluginFunction('swapChains'),
@@ -197,10 +198,15 @@ export function useChainState() {
         run('setStereoMode', () => native.setStereoMode(enabled)),
       /** Which channels of a stereo source feed the plugin (faceplate button). */
       setInputMode: (mode: InputMode) => run('setInputMode', () => native.setInputMode(mode)),
-      /** NAM A2 size (per-instance; false = lite, true = full). Retiers
-          every loaded NAM block natively; saves with the DAW session. */
-      setNamFullSize: (full: boolean) =>
-        run('setNamFullSize', () => native.setNamFullSize(full)),
+      /** The block's NAM A2 size (0 = lite, 1 = full; see BlockParams.
+          slimSize). Retiers the loaded engine natively under a short fade;
+          part of the chain state, so it lands in presets and undo. */
+      setBlockSlimSize: (blockId: string, slimSize: number) =>
+        run<boolean>('setBlockSlimSize', () => native.setBlockSlimSize(blockId, slimSize)),
+      /** Default NAM A2 size for newly added blocks (machine-wide; existing
+          blocks keep their own size). Persists on disk. */
+      setNamSlimSizeDefault: (slimSize: number) =>
+        run('setNamSlimSizeDefault', () => native.setNamSlimSizeDefault(slimSize)),
       /** Multi-core processing (machine-wide). Pure scheduling: applies
           instantly and persists on disk. */
       setMultiCore: (enabled: boolean) =>
@@ -267,7 +273,7 @@ export function useChainState() {
     stereoInput: state.stereoInput ?? false,
     stereoOutput: state.stereoOutput ?? true,
     inputMode: state.inputMode ?? 'stereo',
-    namFullSize: state.namFullSize ?? false,
+    namSlimSizeDefault: state.namSlimSizeDefault ?? SLIM_SIZE_LITE,
     multiCore: state.multiCore ?? true,
     standalone: state.standalone ?? false,
     sampleRate: state.sampleRate || 48000,

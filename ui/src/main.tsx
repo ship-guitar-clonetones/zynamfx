@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
-import { installSpacePassthrough } from './spacePassthrough.ts';
+import { installKeyPassthrough } from './keyPassthrough.ts';
 // Self-hosted Roboto Mono (bundled woff2, served from the plugin binary):
 // the DAW webview has no network, so no CDN fonts.
 import '@fontsource/roboto-mono/400.css';
@@ -14,9 +14,9 @@ import './index.css';
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => e.preventDefault());
 
-// Space is the DAW's play/stop key, not ours: swallow it and hand it to the
-// host (see spacePassthrough.ts).
-installSpacePassthrough();
+// Space and Enter are the DAW's transport keys, not ours: swallow them and
+// hand them to the host (see keyPassthrough.ts).
+installKeyPassthrough();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

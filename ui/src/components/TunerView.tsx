@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X as XIcon } from './icons';
 import { useNativeFunction } from '../hooks/useFunction';
-import { BRAND_BLUE, BRAND_RED, BRAND_YELLOW, FONT_MONO, GRAY } from './theme';
+import { BRAND_BLUE, BRAND_RED, BRAND_YELLOW, FONT_MONO, GRAY, SURFACE_RAISED, WHITE } from './theme';
 
 interface TunerReading {
   frequency: number;
@@ -24,13 +24,14 @@ const SIDE_COLORS = [
   BRAND_RED,
   BRAND_RED,
 ];
-const DIM_OPACITY = 0.14;
 const POLL_MS = 50;
 
-// Tapered panel geometry from the reference SVG (50×181 with the short inner
-// edge running from y=30 to y=151).
+// Tapered panel geometry from the idle-state SVG (50×181 with the short
+// inner edge running from y=30 to y=151). Gap is 16 so six bars land at
+// the mockup's 377-wide track.
 const BAR_WIDTH = 50;
 const BAR_HEIGHT = 181;
+const BAR_GAP = 16;
 const BAR_TAPER_TOP = (30 / 181) * 100;
 const BAR_TAPER_BOTTOM = (151 / 181) * 100;
 
@@ -106,6 +107,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }, [getTunerReading]);
 
   const absCents = Math.abs(cents);
+  const roundedCents = Math.round(cents);
   const inTune = hasSignal && absCents <= IN_TUNE_CENTS;
   const isFlat = hasSignal && cents < -IN_TUNE_CENTS;
   const isSharp = hasSignal && cents > IN_TUNE_CENTS;
@@ -117,7 +119,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const renderBars = (side: 'left' | 'right', litCount: number) => {
     // Bars ordered outermost → innermost for the left side, mirrored for right.
     const indices = side === 'left' ? [5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5];
-    // Tapered panel from the reference SVG (50×181: full-height outer edge,
+    // Tapered panel from the idle-state SVG (50×181: full-height outer edge,
     // inner edge running 30→151). The short edge faces the center, so both
     // sides read as receding toward the note.
     const clipPath =
@@ -130,7 +132,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: '12rem',
+          gap: `${BAR_GAP}rem`,
         }}
       >
         {indices.map((i) => {
@@ -139,15 +141,32 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div
               key={i}
               style={{
+                position: 'relative',
                 width: `${BAR_WIDTH}rem`,
                 height: `${BAR_HEIGHT}rem`,
-                backgroundColor: SIDE_COLORS[i],
-                clipPath,
-                opacity: lit ? 1 : DIM_OPACITY,
-                transition: 'opacity 90ms linear',
                 flexShrink: 0,
               }}
-            />
+            >
+              {/* Grey track stays put; color sits on top only while that
+                  segment is lit so unlit slots never flash or vanish. */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundColor: SURFACE_RAISED,
+                  clipPath,
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundColor: SIDE_COLORS[i],
+                  clipPath,
+                  opacity: lit ? 1 : 0,
+                }}
+              />
+            </div>
           );
         })}
       </div>
@@ -165,7 +184,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           direction === 'up'
             ? 'polygon(50% 0, 100% 100%, 0 100%)'
             : 'polygon(0 0, 100% 0, 50% 100%)',
-        opacity: lit ? 1 : DIM_OPACITY,
+        opacity: lit ? 1 : 0,
         transition: 'opacity 90ms linear',
       }}
     />
@@ -211,35 +230,37 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: '40rem',
+          gap: '32rem',
         }}
       >
         {renderBars('left', leftLit)}
 
-        {/* Center: triangles + note letter. The note sits in a relatively
-            positioned box with the Hz readout floated beneath it (out of
-            flow), so the letter stays vertically centered between the two
-            triangles regardless of whether the frequency is showing. */}
+        {/* Note + triangles always occupy the center so the grey track
+            doesn't shift when a pitch locks or drops. Idle is opacity 0. */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '36rem',
             minWidth: '120rem',
           }}
         >
           {/* Top triangle points down: lit when sharp ("tune down") or in tune */}
           {triangle('down', inTune || isSharp)}
-          <div style={{ position: 'relative' }}>
+          <div
+            style={{
+              position: 'relative',
+              opacity: hasSignal ? 1 : 0,
+            }}
+          >
             <div
               style={{
                 fontSize: '110rem',
                 lineHeight: 1,
                 fontWeight: 700,
-                color: '#ffffff',
-                opacity: hasSignal ? 1 : 0.25,
-                transition: 'opacity 150ms linear',
+                color: WHITE,
                 textAlign: 'center',
                 userSelect: 'none',
                 fontVariantNumeric: 'tabular-nums',
@@ -256,7 +277,7 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       position: 'absolute',
                       left: '100%',
                       top: '0.05em',
-                      fontSize: '0.55em',
+                      fontSize: '0.35em',
                     }}
                   >
                     {note.slice(1)}
@@ -265,24 +286,25 @@ export const TunerView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </span>
             </div>
             {/* Pulled up into the line box's descender whitespace so it sits
-                just under the visible letter, not down by the triangle. */}
+                just under the visible letter, not down by the triangle.
+                nowrap + centered so "329.6 Hz  −12¢" can extend past the
+                letter without wrapping or shifting it. */}
             <div
               style={{
                 position: 'absolute',
                 top: '100%',
-                left: 0,
-                right: 0,
+                left: '50%',
+                transform: 'translateX(-50%)',
                 marginTop: '-6rem',
                 fontSize: '13rem',
                 fontWeight: 400,
                 fontFamily: FONT_MONO,
                 textAlign: 'center',
                 color: GRAY,
-                opacity: hasSignal ? 1 : 0,
-                transition: 'opacity 150ms linear',
+                whiteSpace: 'nowrap',
               }}
             >
-              {`${frequency.toFixed(1)} Hz`}
+              {`${frequency.toFixed(1)} Hz  ${roundedCents >= 0 ? '+' : ''}${roundedCents}¢`}
             </div>
           </div>
           {/* Bottom triangle points up: lit when flat ("tune up") or in tune */}

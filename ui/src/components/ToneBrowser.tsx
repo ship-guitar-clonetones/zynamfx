@@ -18,6 +18,7 @@ import {
   BRAND_RED,
   DISABLED_OPACITY,
   FONT_MONO,
+  GRAY,
   MUTED,
   SURFACE,
   SURFACE_RAISED,
@@ -40,8 +41,9 @@ import {
  * while signed out routes into sign-in instead of a picker request that
  * would just fail. The OAuth redirect only ever fires from one of those
  * sign-in CTAs (no-prompt login, reopens this browser) or the header's
- * Browse button (always the full-catalog Select flow). Every stream carries
- * an optional single gear-type filter via radio-select pills.
+ * Browse button (always the full-catalog Select flow). A single gear-type
+ * filter (radio-select pills) is shared across every stream so it stays
+ * sticky when switching tabs.
  *
  * All queries run client-side against the TONE3000 API; native is only
  * involved for the final load (access token + model download).
@@ -73,6 +75,8 @@ const PAGE_SIZE = 12;
 
 /** Remembers the last-viewed stream so the next browse lands on it. */
 const STREAM_STORAGE_KEY = 't3k_browser_stream';
+/** Remembers the active gear-type filter across streams and remounts. */
+const GEAR_FILTER_STORAGE_KEY = 't3k_browser_gear_filter';
 
 /** Content column, same width as the expanded-block card so the browser
     frame lines up with BLOCK visually. Header / tabs / grid / filter pills
@@ -82,9 +86,8 @@ const CARD_IMAGE_SIZE = 112;
 
 /** Stream header as tabs: evenly distributed across the full column width
     (each tab flex:1 with its label centered), white text + a full-tab-width
-    underline when active, muted otherwise. Weight stays constant across
-    states: bolding only the active label would reflow it inside its segment
-    every time the tab changes. */
+    underline when active, muted otherwise. Bold on every label (Figma Arial
+    Bold) so switching tabs doesn't reflow the segment. */
 const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => void }> = ({
   active,
   onChange,
@@ -113,7 +116,7 @@ const StreamTabs: React.FC<{ active: StreamKind; onChange: (s: StreamKind) => vo
             borderBottom: `2rem solid ${selected ? WHITE : 'transparent'}`,
             color: selected ? WHITE : MUTED,
             fontSize: '14rem',
-            fontWeight: 400,
+            fontWeight: 700,
             cursor: 'pointer',
             whiteSpace: 'nowrap',
           }}
@@ -175,17 +178,17 @@ const GearFilterPill: React.FC<{
       borderRadius: '9999rem',
       border: active ? `1rem solid ${WHITE}` : BORDER,
       backgroundColor: 'transparent',
-      color: active ? WHITE : MUTED,
+      color: active ? WHITE : GRAY,
       cursor: 'pointer',
       whiteSpace: 'nowrap',
     }}
   >
-    <GearIcon gear={id} size={20} color={active ? WHITE : MUTED} />
+    <GearIcon gear={id} size={20} color={active ? WHITE : GRAY} />
     {label}
   </button>
 );
 
-/** Row of radio-select gear filters for the current stream; default is no
+/** Row of radio-select gear filters shared across streams; default is no
     filter (every gear type). Edges fade to black under the same gradient
     scrim as the chain gallery's horizontal scroll (`EdgeFade`). The row
     bleeds EDGE_FADE_WIDTH past the column on each side and re-applies that
@@ -401,16 +404,14 @@ const ToneCard: React.FC<{
         <span
           style={{
             fontSize: '13rem',
-            color: '#ffffff',
+            color: MUTED,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
         >
           {tone.user?.username}
-          {tone.published_at && (
-            <span style={{ color: MUTED }}> · {timeAgoShort(tone.published_at)}</span>
-          )}
+          {tone.published_at && <> · {timeAgoShort(tone.published_at)}</>}
         </span>
       </div>
     </div>
@@ -546,7 +547,10 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
     const saved = localStorage.getItem(STREAM_STORAGE_KEY);
     return TABS.some((s) => s.id === saved) ? (saved as StreamKind) : 'trending';
   });
-  const [gearFilter, setGearFilter] = useState<string | null>(null);
+  const [gearFilter, setGearFilter] = useState<string | null>(() => {
+    const saved = localStorage.getItem(GEAR_FILTER_STORAGE_KEY);
+    return GEAR_FILTERS.some((g) => g.id === saved) ? saved : null;
+  });
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<StreamResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -633,12 +637,12 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
     setStream(next);
     localStorage.setItem(STREAM_STORAGE_KEY, next);
     setPage(1);
-    // Each stream starts unfiltered; filters don't carry across tabs.
-    setGearFilter(null);
   };
 
   const handleGearFilterChange = (gear: string | null) => {
     setGearFilter(gear);
+    if (gear) localStorage.setItem(GEAR_FILTER_STORAGE_KEY, gear);
+    else localStorage.removeItem(GEAR_FILTER_STORAGE_KEY);
     setPage(1);
   };
 
@@ -753,18 +757,39 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
       {/* Header, pinned while the content scrolls beneath it. Matches the
           expanded block card header (back arrow + hairline rule). The tabs
           live in the pinned area too, so only the pills and results scroll
-          underneath. The sticky strip spans the full viewport width (the
-          filter pills bleed past the column for their edge fades, and must
-          pass behind it); the inner div re-centers the content column. */}
+          underneath. An inset black bar covers gear pills as they scroll
+          up; it's pulled in from the center-column edges so stereo VU
+          meters (which overflow their mono slot into this column) stay
+          visible. The inner div re-centers the 800px content column. */}
       <div
         style={{
           position: 'sticky',
           top: 0,
           zIndex: 2,
-          backgroundColor: '#000000',
         }}
       >
-        <div style={{ maxWidth: `${COLUMN_MAX_WIDTH}rem`, margin: '0 auto', width: '100%' }}>
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            // Stereo meters overflow ~6px into this column; 12px clears
+            // them while still covering the 32px pill-row edge fade.
+            left: '12rem',
+            right: '12rem',
+            backgroundColor: '#000000',
+            pointerEvents: 'none',
+          }}
+        />
+        <div
+          style={{
+            position: 'relative',
+            maxWidth: `${COLUMN_MAX_WIDTH}rem`,
+            margin: '0 auto',
+            width: '100%',
+          }}
+        >
           <div
             style={{
               display: 'flex',

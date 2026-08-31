@@ -5,12 +5,23 @@ import { useNativeFunction } from '../hooks/useFunction';
 import { setHintsEnabled, useHintsEnabled } from './helpText';
 import {
   setBlockNormalizeControlEnabled,
+  setBlockSizeControlEnabled,
   useBlockNormalizeControlEnabled,
+  useBlockSizeControlEnabled,
 } from './uiPreferences';
 import type { UpdateNoticeData } from '../hooks/useUpdateNotice';
 import type { AudioDevice } from '../hooks/useAudioDevice';
 import type { ChainItem } from '../types/chain';
-import { GRAY, LINK_BLUE, MUTED, SUBTLE, WHITE } from './theme';
+import { isSlimSizeFull, SLIM_SIZE_FULL, SLIM_SIZE_LITE } from '../types/chain';
+import {
+  GRAY,
+  LINK_BLUE,
+  MUTED,
+  SUBTLE,
+  WHITE,
+  segmentedCellStyle,
+  segmentedGroupStyle,
+} from './theme';
 import {
   FIELD_BORDER,
   RadioOption,
@@ -24,6 +35,35 @@ import {
 } from './controls';
 import { SystemSettings } from './SystemSettings';
 import { MidiMapSettings } from './MidiMapSettings';
+
+/** Inline LITE/FULL chrome matching the block-header toggle, for Settings
+    copy that points at that control. Decorative only (not interactive). */
+const LiteFullTogglePreview: React.FC = () => (
+  <span
+    aria-hidden
+    style={{
+      ...segmentedGroupStyle(),
+      display: 'inline-flex',
+      verticalAlign: 'middle',
+      margin: '0 2rem',
+      cursor: 'default',
+    }}
+  >
+    {(['LITE', 'FULL'] as const).map((label) => (
+      <span
+        key={label}
+        style={{
+          ...segmentedCellStyle(),
+          cursor: 'default',
+          // Both muted: an example of the control, not a selection.
+          color: MUTED,
+        }}
+      >
+        <span className="cap-trim">{label}</span>
+      </span>
+    ))}
+  </span>
+);
 
 // External docs: how to measure your rig's calibration levels.
 const CALIBRATION_DOCS_URL =
@@ -55,9 +95,10 @@ interface SettingsProps {
   /** Newer published build, if the startup check found one (even if the
       startup modal was dismissed); shows an update button in the footer. */
   update: UpdateNoticeData | null;
-  /** Global NAM A2 size (false = lite, true = full). */
-  namFullSize: boolean;
-  onNamFullSizeChange: (full: boolean) => void;
+  /** Default NAM A2 size for newly added blocks (0 = lite, 1 = full; see
+      ChainState.namSlimSizeDefault). */
+  namSlimSizeDefault: number;
+  onNamSlimSizeDefaultChange: (slimSize: number) => void;
   /** Multi-core processing (spreads stereo chains and oversampled NAM
       models across CPU cores). */
   multiCore: boolean;
@@ -76,12 +117,12 @@ const OS_FACTOR_OPTIONS: { value: '0' | '1' | '2'; label: string }[] = [
   { value: '2', label: '8X' },
 ];
 
-// NAM A2 size: one tier for every NAM block in this plugin instance (saved
-// with the DAW session, not presets). The info bar carries a secondary
-// LITE/FULL toggle for the same setting.
-const NAM_A2_SIZE_OPTIONS: { full: boolean; label: string; description: string }[] = [
-  { full: false, label: 'A2-Lite', description: 'Sounds great and uses less CPU' },
-  { full: true, label: 'A2-Full', description: 'Maximum accuracy model' },
+// Default NAM A2 size for newly added blocks (machine-wide). Each block's
+// own size lives in the chain state and rides presets; this only decides
+// what a fresh block starts at.
+const NAM_A2_SIZE_OPTIONS: { slimSize: number; label: string; description: string }[] = [
+  { slimSize: SLIM_SIZE_LITE, label: 'A2-Lite', description: 'Sounds great and uses less CPU' },
+  { slimSize: SLIM_SIZE_FULL, label: 'A2-Full', description: 'Maximum accuracy model' },
 ];
 
 /** Full-width tab bar (mockup style: optional icon + label, active underline).
@@ -140,8 +181,8 @@ export const Settings: React.FC<SettingsProps> = ({
   initialTab = 'system',
   version,
   update,
-  namFullSize,
-  onNamFullSizeChange,
+  namSlimSizeDefault,
+  onNamSlimSizeDefaultChange,
   multiCore,
   onMultiCoreChange,
   chain,
@@ -151,6 +192,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
   const hintsEnabled = useHintsEnabled();
   const blockNormalizeControlEnabled = useBlockNormalizeControlEnabled();
+  const blockSizeControlEnabled = useBlockSizeControlEnabled();
 
   const [calibrationEnabled, setCalibrationEnabled] = useParameter('calibrateInput', 'toggle');
   const [dbuValueNormalized, setDbuValueNormalized] = useParameter(
@@ -251,7 +293,7 @@ export const Settings: React.FC<SettingsProps> = ({
     <>
       <ToggleRow
         label="Info Bar"
-        description="Strip under the faceplate with hover tips, LITE/FULL, and CPU load."
+        description="Strip under the faceplate with hover tips and CPU load."
         value={hintsEnabled}
         onChange={setHintsEnabled}
       />
@@ -263,8 +305,8 @@ export const Settings: React.FC<SettingsProps> = ({
       >
         <span style={sectionLabelStyle}>NAM A2 Size</span>
         <p style={descriptionStyle}>
-          Applies to every NAM block in this plugin instance and saves with your
-          session; also switchable from LITE/FULL in the info bar.
+          Default size for new NAM blocks. Existing blocks keep their own, so
+          presets load as saved.
         </p>
         <div
           style={{
@@ -277,14 +319,47 @@ export const Settings: React.FC<SettingsProps> = ({
           {NAM_A2_SIZE_OPTIONS.map((option) => (
             <RadioOption
               key={option.label}
-              selected={namFullSize === option.full}
+              selected={isSlimSizeFull(namSlimSizeDefault) === isSlimSizeFull(option.slimSize)}
               label={option.label}
               description={option.description}
-              onSelect={() => onNamFullSizeChange(option.full)}
+              onSelect={() => onNamSlimSizeDefaultChange(option.slimSize)}
             />
           ))}
         </div>
       </div>
+
+      <ToggleRow
+        label="Per-Block NAM Size"
+        description={
+          <>
+            Adds a <LiteFullTogglePreview /> toggle to every NAM block. When
+            off, a block only shows its size if it differs from your default.
+          </>
+        }
+        value={blockSizeControlEnabled}
+        onChange={setBlockSizeControlEnabled}
+      >
+        {blockSizeControlEnabled && (
+          <p
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16rem',
+              margin: 0,
+              fontSize: '14rem',
+              fontWeight: 400,
+              color: WHITE,
+              lineHeight: 1.45,
+            }}
+          >
+            <Info size={20} style={{ flexShrink: 0, color: WHITE }} aria-hidden />
+            <span>
+              Look for <LiteFullTogglePreview /> next to each block&apos;s
+              power button.
+            </span>
+          </p>
+        )}
+      </ToggleRow>
 
       <ToggleRow
         label="Per-Block Normalization"
@@ -450,14 +525,12 @@ export const Settings: React.FC<SettingsProps> = ({
             >
               Rate
             </span>
-            <div style={{ width: '148rem' }}>
-              <SelectField
-                value={String(osFactorIndex) as '0' | '1' | '2'}
-                options={OS_FACTOR_OPTIONS}
-                onChange={(v) => setOsFactorIndex(Number(v))}
-                ariaLabel="Oversampling rate"
-              />
-            </div>
+            <SelectField
+              value={String(osFactorIndex) as '0' | '1' | '2'}
+              options={OS_FACTOR_OPTIONS}
+              onChange={(v) => setOsFactorIndex(Number(v))}
+              ariaLabel="Oversampling rate"
+            />
           </div>
         )}
       </ToggleRow>

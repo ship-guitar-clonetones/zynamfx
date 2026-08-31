@@ -63,7 +63,7 @@ export const Plugin: React.FC = () => {
     stereoInput,
     stereoOutput,
     inputMode,
-    namFullSize,
+    namSlimSizeDefault,
     multiCore,
     standalone,
     sampleRate,
@@ -342,6 +342,7 @@ export const Plugin: React.FC = () => {
       setToneFavorite: session.setToneFavorite,
       refreshToneMetadata: actions.refreshToneMetadata,
       setBlockParam: actions.setBlockParam,
+      setBlockSlimSize: actions.setBlockSlimSize,
       setBlockEqBand: actions.setBlockEqBand,
       setBlockEqEnabled: actions.setBlockEqEnabled,
       setBlockEqPre: actions.setBlockEqPre,
@@ -463,6 +464,10 @@ export const Plugin: React.FC = () => {
                 justifyContent: 'center',
                 flexShrink: 0,
                 backgroundColor: '#000000',
+                // Above the Select Tone header scrim, so stereo columns that
+                // overflow this slot into the center aren't covered by it.
+                position: 'relative',
+                zIndex: 3,
               }}
             >
               {/* 358 matches Figma's BLOCK column (title + gap + card). */}
@@ -508,6 +513,7 @@ export const Plugin: React.FC = () => {
                     monoSum={monoSum}
                     canPaste={canPaste}
                     sampleRate={sampleRate}
+                    namSlimSizeDefault={namSlimSizeDefault}
                     onFillToFaceplate={setFillToFaceplate}
                     returnToGallery={returnToGallery}
                   />
@@ -523,6 +529,10 @@ export const Plugin: React.FC = () => {
                 justifyContent: 'center',
                 flexShrink: 0,
                 backgroundColor: '#000000',
+                // Above the Select Tone header scrim, so stereo columns that
+                // overflow this slot into the center aren't covered by it.
+                position: 'relative',
+                zIndex: 3,
               }}
             >
               <DbMeter type="output" stereo={stereoImage} height={358} labelsPosition="right" />
@@ -541,7 +551,7 @@ export const Plugin: React.FC = () => {
           inputMode={inputMode}
           onInputModeChange={actions.setInputMode}
         />
-        <HintBar namFullSize={namFullSize} onNamFullSizeChange={actions.setNamFullSize} />
+        <HintBar />
 
         {/* Settings takeover, mounted only while open so its parameter
           subscriptions and screen state don't run behind the main UI. */}
@@ -553,8 +563,8 @@ export const Plugin: React.FC = () => {
             initialTab={settingsTabRef.current}
             version={localVersion}
             update={update}
-            namFullSize={namFullSize}
-            onNamFullSizeChange={actions.setNamFullSize}
+            namSlimSizeDefault={namSlimSizeDefault}
+            onNamSlimSizeDefaultChange={actions.setNamSlimSizeDefault}
             multiCore={multiCore}
             onMultiCoreChange={actions.setMultiCore}
             chain={chain}

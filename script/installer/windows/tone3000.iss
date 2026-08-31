@@ -91,6 +91,12 @@ Source: "{#ArtefactsDir}\CLAP\TONE3000.clap"; DestDir: "{commoncf64}\CLAP"; Comp
 ; Factory presets → ProgramData (all-users; PresetManager scans this as system Factory)
 Source: "..\..\..\resources\factory-presets\*.t3kpreset"; DestDir: "{commonappdata}\TONE3000\Presets\Factory"; Components: presets; Flags: ignoreversion
 
+[InstallDelete]
+; Installs overlay files and never remove presets dropped from (or renamed
+; in) the shipped set, so clear the factory folder before copying the new
+; one. User presets live elsewhere (%APPDATA%) and are untouched.
+Type: files; Name: "{commonappdata}\TONE3000\Presets\Factory\*.t3kpreset"; Components: presets
+
 [Icons]
 Name: "{autoprograms}\TONE3000"; Filename: "{app}\TONE3000.exe"; Components: standalone
 

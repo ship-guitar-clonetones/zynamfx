@@ -176,15 +176,24 @@ public:
   // deferredRevisionBump) so drag-rate calls never force full chain resyncs.
   bool setBlockParam(const std::string& blockId, const juce::String& param, double value);
 
-  // NAM A2 size (per-instance session setting).
-  // One tier for every A2 NAM block in this instance: false = lite (default),
-  // true = full. It's a CPU/quality budget, not part of the tone, so it rides
-  // getStateInformation with the other session-only settings (saves with the
-  // DAW project) and deliberately NOT chains/presets/undo. Setting it retiers
-  // all loaded NAM engines in place (under the chain-edit fade) and bumps the
-  // chain revision so the UI resyncs.
-  bool getNamFullSize() const { return namFullSize.load(); }
-  void setNamFullSize(bool full);
+  // Per-block NAM A2 size, in NAM's slimmable-size domain (0..1, clamped;
+  // 0.0 = lite, 1.0 = full; see ChainBlock::namSlimSize). Chain state like
+  // mix or the active model, so presets/undo/duplication carry each block's
+  // size. Not routed through setBlockParam because it retiers the block's
+  // loaded engine in place: weight swaps are discontinuous and the retier
+  // can hold chainMutex through a submodel prewarm, so it mute-splices the
+  // chain like a structural edit (processBlock's try-lock keeps the audio
+  // thread off the lock while the fade holds). Undoable; no-op sets never
+  // dip the audio.
+  bool setBlockSlimSize(const std::string& blockId, double slimSize);
+
+  // Default NAM A2 size for newly added blocks (machine-wide user setting,
+  // like multi-core), in the same slimmable-size domain. Existing blocks
+  // keep their own per-block size; this only stamps blocks as loadTone
+  // creates them, so it persists in the shared settings file rather than
+  // sessions or presets.
+  double getNamSlimSizeDefault() const { return namSlimSizeDefault.load(); }
+  void setNamSlimSizeDefault(double slimSize);
 
   /** True while a chain-edit fade session holds the chain muted (including
       the deferred hold that waits out a restore's background loads). Lets
@@ -433,9 +442,11 @@ private:
   };
 
   /** CPU/file heavy; call without holding `chainMutex`. NAM engines come out
-      at the instance's current A2 tier (see setNamFullSize). */
+      at the given slimmable size (the callers read it off the block, so the
+      tier selection and prewarm run out here instead of under the apply
+      lock). */
   PreparedBlockModel prepareBlockModelOffThread(ChainBlockType type, const std::vector<uint8_t>& modelData,
-                                                const juce::String& filename);
+                                                const juce::String& filename, double namSlimSize);
   /** Short path under `chainMutex` only: swaps the new engines onto `block`
       and stamps `newType` (a tone swap may change the block's type; the old
       engine kept processing under the old type until this moment). The
@@ -979,14 +990,10 @@ private:
   std::array<juce::AudioBuffer<float>, kNumLanes> laneDryScratch;
   double hostSampleRate = 48000.0;  // Default, updated dynamically in prepareToPlay
 
-  // NAM A2 size (see setNamFullSize). Per-instance: defaults to lite and is
-  // overwritten by setStateInformation when the host restores a project.
-  // Atomic: written on the message thread, read by loader threads when a
-  // model prepares.
-  /** The preference as the size NamEngine::setSlimmableSize expects
-      (0.0 = lite, 1.0 = full; the tier boundary at 0.5 belongs to full). */
-  double namSlimmableSizeValue() const { return namFullSize.load() ? 1.0 : 0.0; }
-  std::atomic<bool> namFullSize{false};
+  // Default NAM A2 size for new blocks (see setNamSlimSizeDefault). Atomic:
+  // written on the message thread, read wherever loadTone stamps a block.
+  static double readPersistedNamSlimSizeDefault();
+  std::atomic<double> namSlimSizeDefault{readPersistedNamSlimSizeDefault()};
 
   // Audio-callback load (timed around processBlock); ships to the UI as the
   // `cpu` field of getMeterLevels for the hint-bar readout.

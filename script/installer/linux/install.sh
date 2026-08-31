@@ -280,6 +280,10 @@ install -m 755 "$HERE/TONE3000" "$BIN_DIR/TONE3000"
 if compgen -G "${HERE}/factory-presets/*.t3kpreset" > /dev/null; then
   echo "Installing factory presets to $FACTORY_DIR ..."
   mkdir -p "$FACTORY_DIR"
+  # Replace, don't overlay: presets dropped from (or renamed in) the shipped
+  # set would otherwise linger from a previous install. User presets live in
+  # the parent directory and are untouched.
+  rm -f "$FACTORY_DIR"/*.t3kpreset
   cp "${HERE}/factory-presets"/*.t3kpreset "$FACTORY_DIR/"
 fi
 

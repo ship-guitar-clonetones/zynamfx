@@ -277,6 +277,9 @@ std::string TONE3000Processor::loadTone(const juce::String& toneJsonString,
   auto block = std::make_unique<ChainBlock>(blockId, parsed.type);
   setToneOnBlock(*block, parsed.toneId, parsed.toneJson, parsed.toneVar);
   block->activeModelId = parsed.firstModelId;
+  // Fresh blocks load at the machine-wide default A2 size; from here on the
+  // size is the block's own (setBlockSlimSize, presets, undo).
+  block->namSlimSize = namSlimSizeDefault.load();
   block->loaded = false;
   block->modelLoading = true;
   // The right default mix depends on the model itself (long IR = half wet),
@@ -364,9 +367,10 @@ std::string TONE3000Processor::duplicateChainBlock(const std::string& sourceBloc
   // The settings ride the same per-block tree the undo/state paths use, so
   // "everything the block remembers" stays defined in exactly one place
   // (serializeBlockSettings/applyBlockSettings: gains, mix, enabled,
-  // normalize, EQ). Tone identity and model bytes are copied directly: the
-  // clone re-loads its model cache-first, so it comes up without a network
-  // round trip and sounds identical the moment the engine lands.
+  // normalize, A2 size, EQ). Tone identity and model bytes are copied
+  // directly: the clone re-loads its model cache-first, so it comes up
+  // without a network round trip and sounds identical the moment the engine
+  // lands.
   const std::string newId = juce::Uuid().toString().toStdString();
   auto clone = std::make_unique<ChainBlock>(newId, source->type);
   applyBlockSettings(*clone, serializeBlockSettings(*source));
@@ -793,6 +797,7 @@ void TONE3000Processor::loadToneInBackground(const std::string& blockId, int fir
   const juce::String filename =
       modelName + (type == ChainBlockType::NAM ? ".nam" : ".wav");
 
+  double namSlimSize = 0.0;
   {
     juce::ScopedLock lock(chainMutex);
     ChainBlock* block = findBlockById(blockId);
@@ -803,9 +808,10 @@ void TONE3000Processor::loadToneInBackground(const std::string& blockId, int fir
     }
 
     block->modelCache[firstModelId] = modelData;
+    namSlimSize = block->namSlimSize;
   }
 
-  PreparedBlockModel prepared = prepareBlockModelOffThread(type, modelData, filename);
+  PreparedBlockModel prepared = prepareBlockModelOffThread(type, modelData, filename, namSlimSize);
   const bool applied = prepared.success;
 
   // A swapped tone's previous engine may still be audibly processing; let
@@ -850,6 +856,7 @@ void TONE3000Processor::switchModelInBackground(const std::string& blockId, int 
   std::vector<uint8_t> modelData;
   bool needsFetch = false;
   ChainBlockType blockTypeForPrepare = ChainBlockType::NAM;
+  double namSlimSize = 0.0;
 
   {
     juce::ScopedLock lock(chainMutex);
@@ -870,6 +877,7 @@ void TONE3000Processor::switchModelInBackground(const std::string& blockId, int 
     // in-flight tone swap the block keeps its previous type (that engine is
     // still processing) while this job builds the new tone's engine.
     blockTypeForPrepare = toneEngineType(block->toneVar, block->type);
+    namSlimSize = block->namSlimSize;
     auto cacheIt = block->modelCache.find(modelId);
 
     if (cacheIt != block->modelCache.end()) {
@@ -899,7 +907,7 @@ void TONE3000Processor::switchModelInBackground(const std::string& blockId, int 
       modelName + (blockTypeForPrepare == ChainBlockType::NAM ? ".nam" : ".wav");
 
   PreparedBlockModel prepared =
-      prepareBlockModelOffThread(blockTypeForPrepare, modelData, filename);
+      prepareBlockModelOffThread(blockTypeForPrepare, modelData, filename, namSlimSize);
   const bool applied = prepared.success;
 
   // The outgoing model keeps processing until this moment; fade it out on
@@ -970,6 +978,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
     bool hasInputDbu = false, hasOutputDbu = false;
     double inputDbu = 0.0, outputDbu = 0.0;
     bool enabled = true, normalize = true;
+    double slimSize = 0.0;
     float inputGain = 0.5f, outputGain = 0.5f, mix = 1.0f;
     juce::var eq;
     bool rtFailed = false;
@@ -1034,6 +1043,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
         }
         row.enabled = block->enabled;
         row.normalize = block->normalizeEnabled;
+        row.slimSize = block->namSlimSize;
         row.inputGain = block->inputGainNormalized;
         row.outputGain = block->outputGainNormalized;
         row.mix = block->mixNormalized;
@@ -1111,6 +1121,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
       juce::DynamicObject::Ptr params = new juce::DynamicObject();
       params->setProperty("enabled", row.enabled);
       params->setProperty("normalize", row.normalize);
+      params->setProperty("slimSize", row.slimSize);
       params->setProperty("inputGain", row.inputGain);
       params->setProperty("outputGain", row.outputGain);
       params->setProperty("mix", row.mix);
@@ -1167,10 +1178,9 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   // True in the standalone app; gates standalone-only settings.
   state->setProperty("standalone", isStandalone());
   state->setProperty("inputMode", inputModeToString(getInputMode()));
-  // These settings (namFullSize per-instance, multiCore machine-wide) ride
-  // this payload because they change together with a revision bump, like
-  // everything else Settings displays.
-  state->setProperty("namFullSize", namFullSize.load());
+  // Machine-wide settings ride this payload because they change together
+  // with a revision bump, like everything else Settings displays.
+  state->setProperty("namSlimSizeDefault", namSlimSizeDefault.load());
   state->setProperty("multiCore", multiCoreEnabled.load());
   // The EQ editor mirrors the biquad math client-side; block EQs run in the
   // chain domain, so the drawn curve must use the live chain rate (48 kHz x
@@ -1492,6 +1502,47 @@ bool TONE3000Processor::setBlockParam(const std::string& blockId, const juce::St
     deferredRevisionBump();
   else
     bumpChainRevision();
+  return true;
+}
+
+bool TONE3000Processor::setBlockSlimSize(const std::string& blockId, double slimSize) {
+  slimSize = juce::jlimit(0.0, 1.0, slimSize);
+
+  // Cheap early-out first: no fade (and no history entry) when nothing
+  // changes.
+  {
+    juce::ScopedLock lock(chainMutex);
+    const ChainBlock* block = findBlockById(blockId);
+    if (block == nullptr || block->type != ChainBlockType::NAM) {
+      DBG("setBlockSlimSize: not a NAM block: " << blockId);
+      return false;
+    }
+    if (block->namSlimSize == slimSize)
+      return true;
+  }
+
+  // Retiering swaps the running engine's weights discontinuously and can
+  // prewarm the new submodel while holding chainMutex, so mute-splice like
+  // a structural edit; the fade keeps the audio thread off the lock (see
+  // processBlock's try-lock) while the swap runs.
+  ChainEditFade editFade(*this);
+  juce::ScopedLock lock(chainMutex);
+
+  ChainBlock* block = findBlockById(blockId);
+  if (block == nullptr || block->type != ChainBlockType::NAM)
+    return false;
+  if (block->namSlimSize == slimSize)
+    return true;
+
+  pushChainHistory();
+  block->namSlimSize = slimSize;
+  // A still-loading block only records the size here: the in-flight prepare
+  // read the old value, and applyPreparedModelToChainBlock re-asserts the
+  // block's size when that engine lands.
+  if (block->namEngine != nullptr)
+    block->namEngine->setSlimmableSize(slimSize);
+
+  bumpChainRevision();
   return true;
 }
 

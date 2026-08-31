@@ -1,10 +1,10 @@
 #include "EditorWebViewSetup.h"
 
-// Windows and Linux implementations of forwardSpaceKeyToHost; the macOS one
+// Windows and Linux implementations of forwardKeyToHost; the macOS one
 // lives in WindowKeyEvents.mm. Same shape on every platform: hand keyboard
 // focus back to the host's top-level window (so follow-up presses and real
-// key repeats reach it without us), then deliver a synthesized Space
-// press/release to it.
+// key repeats reach it without us), then deliver a synthesized press/release
+// of the forwarded key to it.
 
 #if JUCE_WINDOWS
 
@@ -12,7 +12,7 @@
 
 namespace EditorWebViewSetup {
 
-void forwardSpaceKeyToHost(void* nativeHandle) {
+void forwardKeyToHost(void* nativeHandle, HostKey key) {
   HWND host = GetAncestor(static_cast<HWND>(nativeHandle), GA_ROOT);
   if (host == nullptr)
     return;
@@ -24,11 +24,12 @@ void forwardSpaceKeyToHost(void* nativeHandle) {
   // Posted, not sent: hosts pick their transport shortcut out of their
   // message loop (TranslateAccelerator/hotkey handling), which only sees
   // queued messages.
-  const auto scanCode = static_cast<LPARAM>(MapVirtualKeyW(VK_SPACE, MAPVK_VK_TO_VSC));
+  const UINT virtualKey = key == HostKey::enter ? VK_RETURN : VK_SPACE;
+  const auto scanCode = static_cast<LPARAM>(MapVirtualKeyW(virtualKey, MAPVK_VK_TO_VSC));
   const LPARAM down = 1 | (scanCode << 16);
   const LPARAM up = down | (LPARAM{1} << 30) | (LPARAM{1} << 31);
-  PostMessageW(host, WM_KEYDOWN, VK_SPACE, down);
-  PostMessageW(host, WM_KEYUP, VK_SPACE, up);
+  PostMessageW(host, WM_KEYDOWN, virtualKey, down);
+  PostMessageW(host, WM_KEYUP, virtualKey, up);
 }
 
 }  // namespace EditorWebViewSetup
@@ -63,9 +64,9 @@ namespace {
 
 namespace EditorWebViewSetup {
 
-void forwardSpaceKeyToHost(void* nativeHandle) {
+void forwardKeyToHost(void* nativeHandle, HostKey key) {
   // A private connection: the peer's Display is JUCE-internal, and one
-  // round-trip per Space press is nothing.
+  // round-trip per keypress is nothing.
   Display* display = XOpenDisplay(nullptr);
   if (display == nullptr)
     return;
@@ -77,18 +78,18 @@ void forwardSpaceKeyToHost(void* nativeHandle) {
   // Synthetic (send_event) key events; toolkits that ignore those drop the
   // press, but the focus handoff above already lets the next real press
   // through.
-  XKeyEvent key = {};
-  key.display = display;
-  key.window = host;
-  key.root = DefaultRootWindow(display);
-  key.same_screen = True;
-  key.keycode = XKeysymToKeycode(display, XK_space);
-  key.time = CurrentTime;
+  XKeyEvent event = {};
+  event.display = display;
+  event.window = host;
+  event.root = DefaultRootWindow(display);
+  event.same_screen = True;
+  event.keycode = XKeysymToKeycode(display, key == HostKey::enter ? XK_Return : XK_space);
+  event.time = CurrentTime;
 
-  key.type = KeyPress;
-  XSendEvent(display, host, True, KeyPressMask, reinterpret_cast<XEvent*>(&key));
-  key.type = KeyRelease;
-  XSendEvent(display, host, True, KeyReleaseMask, reinterpret_cast<XEvent*>(&key));
+  event.type = KeyPress;
+  XSendEvent(display, host, True, KeyPressMask, reinterpret_cast<XEvent*>(&event));
+  event.type = KeyRelease;
+  XSendEvent(display, host, True, KeyReleaseMask, reinterpret_cast<XEvent*>(&event));
 
   XCloseDisplay(display);  // flushes the queue
 }

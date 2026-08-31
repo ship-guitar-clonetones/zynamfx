@@ -501,7 +501,8 @@ int TONE3000Processor::chainDomainBlockSize() const noexcept {
 TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThread(
     ChainBlockType type,
     const std::vector<uint8_t>& modelData,
-    const juce::String& filename) {
+    const juce::String& filename,
+    double namSlimSize) {
   PreparedBlockModel out;
 
   if (modelData.empty()) {
@@ -570,9 +571,9 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
             " Hz; the chain runs at " + juce::String(chainSampleRate()) + " Hz regardless");
       }
 
-      // The instance's A2 tier (no-op for non-slimmable models); prepare()
+      // The block's A2 size (no-op for non-slimmable models); prepare()
       // applies it.
-      engine->setSlimmableSize(namSlimmableSizeValue());
+      engine->setSlimmableSize(namSlimSize);
       engine->prepare(domainBlockSize);
 
       out.namEngine = std::move(engine);
@@ -971,9 +972,9 @@ void TONE3000Processor::applyPreparedModelToChainBlock(ChainBlock& block, ChainB
     block.irIsLong = false;
     block.irTempFile = juce::File();
 
-    // Re-apply the instance's A2 tier in case it changed while this engine
-    // was downloading/preparing (no-op for non-slimmable models).
-    block.namEngine->setSlimmableSize(namSlimmableSizeValue());
+    // Re-assert the block's A2 size in case it changed while this engine
+    // was downloading/preparing (a no-op retier when it didn't).
+    block.namEngine->setSlimmableSize(block.namSlimSize);
 
     block.namNormalizationSmoother.reset(chainSampleRate(), 0.05f);
     block.namNormalizationSmoother.setCurrentAndTargetValue(1.0f);

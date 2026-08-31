@@ -41,11 +41,18 @@ function boolPref(key: string) {
 // Whether NAM block cards expose the (=) per-block normalization toggle.
 // Off by default: every block simply stays normalized (the block flag itself
 // defaults to on and lives in the chain state, not here).
-// (The NAM A2 size preference is NOT here: it changes DSP, so it lives
-// natively; see `namFullSize` on the chain state / `setNamFullSize`.)
 const blockNormalizeControl = boolPref('t3k.showBlockNormalizeControl');
 export const setBlockNormalizeControlEnabled = blockNormalizeControl.set;
 export const useBlockNormalizeControlEnabled = blockNormalizeControl.useValue;
+
+// Whether NAM block cards expose the LITE/FULL size toggle (off shows a
+// read-only chip instead, and only on blocks whose size differs from the
+// new-block default). A view preference only: the size itself is per-block
+// chain state (`params.slimSize`), and the default for new blocks lives
+// natively (`namSlimSizeDefault`).
+const blockSizeControl = boolPref('t3k.showBlockSizeControl');
+export const setBlockSizeControlEnabled = blockSizeControl.set;
+export const useBlockSizeControlEnabled = blockSizeControl.useValue;
 
 // Whether the preset browser shows each row's MIDI program-change number.
 // Off by default: most players don't program PCs, and the numbers are noise

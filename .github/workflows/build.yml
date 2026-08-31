@@ -13,6 +13,12 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN: nothing in this workflow writes back to the
+# repo (artifact upload and the sccache/actions cache use the runtime token,
+# not this one).
+permissions:
+  contents: read
+
 env:
   BUILD_TYPE: Release
 
@@ -22,7 +28,14 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     environment: builds
     env:
-      VITE_T3K_PUBLISHABLE_KEY: ${{ vars.VITE_T3K_PUBLISHABLE_KEY }}
+      # Publishable key (OAuth client_id). Kept as a secret rather than a
+      # variable so fork-triggered PR runs don't receive it: forks build
+      # keyless instead of baking our key into their artifacts.
+      VITE_T3K_PUBLISHABLE_KEY: ${{ secrets.VITE_T3K_PUBLISHABLE_KEY }}
+      # Startup update check (ui/src/t3k/config.ts). Sourced from the repo
+      # variable, not hardcoded, so forks (which don't inherit variables)
+      # fall back to the code default of off and never ping tone3000.com.
+      VITE_T3K_UPDATE_NOTICE: ${{ vars.VITE_T3K_UPDATE_NOTICE }}
       # Compiler cache (see "Setup sccache" step below); persists compiled
       # object results across runs via the GitHub Actions cache backend.
       SCCACHE_GHA_ENABLED: "true"

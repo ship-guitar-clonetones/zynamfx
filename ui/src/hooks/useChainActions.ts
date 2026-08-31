@@ -77,6 +77,9 @@ export interface ChainActions {
   refreshToneMetadata: (toneJson: string) => void;
   /** Fire-and-forget per-block param setter (see useChainState). */
   setBlockParam: (blockId: string, param: BlockParamName, value: number | boolean) => void;
+  /** The block's NAM A2 size (0 = lite, 1 = full); retiers the loaded
+      engine natively. Backs the header LITE/FULL toggle. */
+  setBlockSlimSize: (blockId: string, slimSize: number) => void;
   /** Fire-and-forget whole-band EQ setter (see useChainState). */
   setBlockEqBand: (blockId: string, bandIndex: number, band: EqBand) => void;
   /** EQ power/bypass: band settings persist, processing is skipped. */

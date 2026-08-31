@@ -28,7 +28,7 @@ import { useChainActions } from '../hooks/useChainActions';
 import { useParameter } from '../hooks/useParameter';
 import type { BlockParamName, ToneBlock } from '../types/chain';
 import { catalogModelCount, type Model, type Tone } from '../types/tone';
-import { isEqFlat } from '../types/chain';
+import { isEqFlat, isSlimSizeFull, SLIM_SIZE_FULL, SLIM_SIZE_LITE } from '../types/chain';
 import {
   CARD_WIDTH,
   CARD_HEIGHT,
@@ -43,7 +43,7 @@ import { formatLabel, gearLabel } from '../t3k/labels';
 import { AvatarImage } from './AvatarFallback';
 import { FormatBadge } from './FormatBadge';
 import { HELP, helpProps } from './helpText';
-import { useBlockNormalizeControlEnabled } from './uiPreferences';
+import { useBlockNormalizeControlEnabled, useBlockSizeControlEnabled } from './uiPreferences';
 import { useToast } from './Toast';
 import { ChromeIconButton, ChromeTextButton, chromeIcon } from './ChromeIconButton';
 import { T3K_API } from '../t3k/config';
@@ -150,6 +150,49 @@ const EqCurveIcon: React.FC = () => (
   </svg>
 );
 
+/** NAM A2 size chrome next to the power button. With the Settings "choose
+    per block" preference on, the LITE/FULL segmented toggle; off, a
+    read-only chip of the block's size styled like the toggle's unselected
+    side, so it reads as the same control, locked (its help text points at
+    the setting). The caller skips rendering entirely when there's nothing
+    to flag (chip mode with the block at the new-block default). */
+const BlockSizeControl: React.FC<{
+  full: boolean;
+  interactive: boolean;
+  onChange: (full: boolean) => void;
+}> = ({ full, interactive, onChange }) => {
+  if (!interactive) {
+    return (
+      <div
+        {...helpProps(HELP.blockSizeChip)}
+        style={{ ...segmentedGroupStyle(), cursor: 'default' }}
+      >
+        <span style={{ ...segmentedCellStyle(), cursor: 'default', color: MUTED }}>
+          <span className="cap-trim">{full ? 'FULL' : 'LITE'}</span>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div {...helpProps(HELP.blockSize)} style={segmentedGroupStyle()}>
+      {([false, true] as const).map((isFull) => (
+        <button
+          key={String(isFull)}
+          type="button"
+          onClick={() => onChange(isFull)}
+          style={{
+            ...segmentedCellStyle(),
+            color: full === isFull ? WHITE : MUTED,
+            transition: 'color 0.15s ease',
+          }}
+        >
+          <span className="cap-trim">{isFull ? 'FULL' : 'LITE'}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 interface ChainBlockProps {
   block: ToneBlock;
   /** Another enabled+loaded NAM after this block in its lane. With input
@@ -159,6 +202,9 @@ interface ChainBlockProps {
   namDownstream: boolean;
   /** Host sample rate, for the EQ curve math. */
   sampleRate: number;
+  /** Default NAM A2 size for new blocks (ChainState.namSlimSizeDefault);
+      the read-only size chip only shows when this block differs from it. */
+  namSlimSizeDefault: number;
   /** Return to the chain gallery (← BLOCK sits above the bordered card). */
   onBack: () => void;
   /** Info view fills the center column to the faceplate (Select Tone pattern). */
@@ -172,6 +218,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   block,
   namDownstream,
   sampleRate,
+  namSlimSizeDefault,
   onBack,
   onFillToFaceplate,
 }) => {
@@ -181,10 +228,14 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   // Optional (=) normalization toggle, revealed by Per-Block Normalization
   // in Plugin Settings.
   const showNormalizeControl = useBlockNormalizeControlEnabled();
+  // Whether the header's NAM size chrome is the LITE/FULL toggle or the
+  // read-only chip (the "choose per block" setting).
+  const sizeControlEnabled = useBlockSizeControlEnabled();
 
   // Optimistic local values for the controls; native converges via polling.
   const [enabled, setEnabled] = useState(params.enabled);
   const [normalizeOn, setNormalizeOn] = useState(params.normalize ?? true);
+  const [slimFull, setSlimFull] = useState(isSlimSizeFull(params.slimSize ?? SLIM_SIZE_LITE));
   const [inputGain, setInputGain] = useState(params.inputGain ?? 0.5);
   const [outputGain, setOutputGain] = useState(params.outputGain ?? 0.5);
   const [mix, setMix] = useState(params.mix ?? 1.0);
@@ -219,6 +270,10 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
   // window); follow the backend when it reports a new value.
   useEffect(() => setEnabled(params.enabled), [params.enabled]);
   useEffect(() => setNormalizeOn(params.normalize ?? true), [params.normalize]);
+  useEffect(
+    () => setSlimFull(isSlimSizeFull(params.slimSize ?? SLIM_SIZE_LITE)),
+    [params.slimSize]
+  );
   useEffect(() => {
     if (!knobDragRef.current) setInputGain(params.inputGain ?? 0.5);
   }, [params.inputGain]);
@@ -250,6 +305,14 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
       return !prev;
     });
   }, [setParam]);
+
+  const handleSetSlimFull = useCallback(
+    (full: boolean) => {
+      setSlimFull(full);
+      actions.setBlockSlimSize(blockId, full ? SLIM_SIZE_FULL : SLIM_SIZE_LITE);
+    },
+    [actions, blockId]
+  );
 
   const handleToggleEqEnabled = useCallback(() => {
     setEqOn((prev) => {
@@ -578,6 +641,17 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
               >
                 <Power />
               </ChromeIconButton>
+
+              {/* With per-block choice off, a block matching the new-block
+                default has nothing to say: the chip only appears on a
+                mismatch (e.g. a preset's FULL block under a lite default). */}
+              {isNam && (sizeControlEnabled || slimFull !== isSlimSizeFull(namSlimSizeDefault)) && (
+                <BlockSizeControl
+                  full={slimFull}
+                  interactive={sizeControlEnabled}
+                  onChange={handleSetSlimFull}
+                />
+              )}
 
               {/* Calibration indicator (not a button): white = the loaded model
                 carries calibration data, gray = it doesn't. Hidden entirely

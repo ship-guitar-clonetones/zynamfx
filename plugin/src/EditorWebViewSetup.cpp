@@ -300,12 +300,13 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             return juce::var(true);
           }))
       .withNativeFunction(
-          // Per-instance NAM A2 size (false = lite, true = full). Retiers
-          // every loaded NAM block immediately and saves with the DAW
-          // project (session state, not presets); the current value rides
-          // getChainState as `namFullSize`.
-          "setNamFullSize", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
-            editor->processor.setNamFullSize(coerceBool(args[0]));
+          // Machine-wide default NAM A2 size for newly added blocks, in
+          // NAM's slimmable-size domain (0 = lite, 1 = full). Loaded blocks
+          // keep their own size (see setBlockSlimSize); persists in the
+          // shared settings file, and the current value rides getChainState
+          // as `namSlimSizeDefault`.
+          "setNamSlimSizeDefault", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
+            editor->processor.setNamSlimSizeDefault(coerceDouble(args[0]));
             return juce::var(true);
           }))
       .withNativeFunction(
@@ -326,6 +327,15 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
           "setBlockParam", guarded(3, false, [editor](const juce::Array<juce::var>& args) {
             return juce::var(editor->processor.setBlockParam(
                 args[0].toString().toStdString(), args[1].toString(), coerceDouble(args[2])));
+          }))
+      .withNativeFunction(
+          // (blockId, slimSize 0..1): the block's NAM A2 size (0 = lite,
+          // 1 = full). Not a setBlockParam param because it retiers the
+          // block's loaded engine under the chain-edit fade; rides
+          // getChainState as params.slimSize.
+          "setBlockSlimSize", guarded(2, false, [editor](const juce::Array<juce::var>& args) {
+            return juce::var(editor->processor.setBlockSlimSize(
+                args[0].toString().toStdString(), coerceDouble(args[1])));
           }))
       .withNativeFunction(
           // (blockId, bandIndex, { type, freqHz, gainDb, q }). Whole-band
@@ -680,15 +690,17 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
           }))
 #endif
       .withNativeFunction(
-          // Hand a Space press the UI has no use for to the host DAW, whose
-          // play/stop shortcut it almost certainly is (see WindowKeyEvents.mm
-          // / .cpp). No-op in Standalone, where there is no transport to
-          // reach; the UI still suppresses the key so it can't beep or scroll.
-          "forwardSpaceToHost", guarded(0, false, [editor](const juce::Array<juce::var>&) {
+          // ("Space" | "Enter"): hand a transport keypress the UI has no use
+          // for to the host DAW, whose play/stop or return-to-start shortcut
+          // it almost certainly is (see WindowKeyEvents.mm / .cpp). No-op in
+          // Standalone, where there is no transport to reach; the UI still
+          // suppresses the key so it can't beep or scroll.
+          "forwardKeyToHost", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
             if (juce::JUCEApplicationBase::isStandaloneApp())
               return juce::var(false);
+            const HostKey key = args[0].toString() == "Enter" ? HostKey::enter : HostKey::space;
             if (auto* peer = editor->getPeer())
-              forwardSpaceKeyToHost(peer->getNativeHandle());
+              forwardKeyToHost(peer->getNativeHandle(), key);
             return juce::var(true);
           }))
       .withNativeFunction(

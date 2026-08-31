@@ -234,8 +234,11 @@ if [[ $HAVE_CLAP -eq 1 ]]; then
 fi
 
 if [[ $HAVE_PRESETS -eq 1 ]]; then
+  # The preinstall script clears the previous factory set so this install
+  # fully replaces it (pkg payloads overlay and never delete old files).
   pkgbuild \
     --root "$STAGE/presets" \
+    --scripts "$INSTALLER_DIR/macos/presets-scripts" \
     --identifier "com.tone3000.factorypresets" \
     --version "$VERSION" \
     --install-location "/" \

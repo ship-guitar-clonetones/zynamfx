@@ -87,6 +87,9 @@ case "$os" in
 esac
 if [[ -n "$factory_dest" ]] && compgen -G "${factory_src}/*.t3kpreset" > /dev/null; then
   mkdir -p "$factory_dest"
+  # Replace, don't overlay: presets dropped from (or renamed in) the repo set
+  # would otherwise linger from a previous install.
+  rm -f "$factory_dest"/*.t3kpreset
   cp "${factory_src}"/*.t3kpreset "$factory_dest/"
   echo "Installed factory presets to $factory_dest"
 fi

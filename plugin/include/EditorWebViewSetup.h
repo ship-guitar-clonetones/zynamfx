@@ -66,17 +66,21 @@ void applyBlackWebViewBackground(void* nsViewPtr);
 void setWebInspectorEnabled(void* nsViewPtr, bool enabled);
 #endif
 
+/** Transport key the UI hands back to the host (see forwardKeyToHost). */
+enum class HostKey { space, enter };
+
 /**
- * Re-dispatch a Space keypress to the host DAW.
+ * Re-dispatch a transport keypress to the host DAW.
  *
- * Backs the `forwardSpaceToHost` native function: the UI swallows Space it
- * has no use for and hands it here so the DAW's play/stop shortcut keeps
- * working while the plugin has keyboard focus. Hands keyboard focus back to
- * the host, then delivers synthesized Space key events to it. Takes the
- * editor's peer native handle. Best effort per host; implemented in
- * WindowKeyEvents.mm (macOS) and WindowKeyEvents.cpp (Windows/Linux).
+ * Backs the `forwardKeyToHost` native function: the UI swallows Space and
+ * Enter presses it has no use for and hands them here so the DAW's play/stop
+ * and return-to-start shortcuts keep working while the plugin has keyboard
+ * focus. Hands keyboard focus back to the host, then delivers synthesized
+ * key events to it. Takes the editor's peer native handle. Best effort per
+ * host; implemented in WindowKeyEvents.mm (macOS) and WindowKeyEvents.cpp
+ * (Windows/Linux).
  */
-void forwardSpaceKeyToHost(void* nativeHandle);
+void forwardKeyToHost(void* nativeHandle, HostKey key);
 
 /**
  * Main-UI WebView with a navigation allowlist.

@@ -26,6 +26,24 @@ void TONE3000Editor::parentHierarchyChanged() {
       if (self != nullptr)
         self->restoringSize = false;
     });
+
+#if JUCE_WINDOWS
+    // Native window resizes can leave white dead space around the UI: JUCE 9's
+    // default Direct2D backend validates WM_PAINT regions immediately but
+    // defers the actual draw to the next vblank, so a frame drag can validate
+    // regions that never get painted at the final size (JUCE forum: "Resizing
+    // is strangely broken on Windows"; the Jan 2026 isSizing() fix was
+    // superseded and 9.0.1 still defers). This window only paints a black
+    // backdrop behind the WebView2 child, which does its own rendering, so
+    // the synchronous software renderer costs nothing and cannot present
+    // stale bounds. Engine 0 = "Software Renderer" (GDI), 1 = "Direct2D";
+    // no-op when already selected, and JUCE re-applies the choice itself when
+    // the peer is recreated. On construction-time passes the window isn't on
+    // the desktop yet (no peer); the post-creation hierarchy-changed pass
+    // lands here again with the peer in place.
+    if (auto* peer = window->getPeer())
+      peer->setCurrentRenderingEngine(0);
+#endif
   }
 
 #if JUCE_MAC

@@ -8,13 +8,14 @@
 
 // Machine-wide user settings.
 // Shared PropertiesFile for preferences that belong to the machine, not the
-// session/preset (currently just multi-core processing). Same app-data root
-// as PresetManager: ~/Library/Application Support/TONE3000 on macOS,
-// %APPDATA%/TONE3000 on Windows, $XDG_CONFIG_HOME/TONE3000 (default
-// ~/.config/TONE3000) on Linux.
+// session/preset (multi-core processing, the default A2 size for new
+// blocks). Same app-data root as PresetManager: ~/Library/Application
+// Support/TONE3000 on macOS, %APPDATA%/TONE3000 on Windows,
+// $XDG_CONFIG_HOME/TONE3000 (default ~/.config/TONE3000) on Linux.
 namespace {
 
 constexpr auto kMultiCoreKey = "multiCore";
+constexpr auto kNamSlimSizeDefaultKey = "namSlimSizeDefault";
 constexpr auto kWebInspectorKey = "webInspector";
 
 // Magic prefix for the binary ValueTree state format (see getStateInformation).
@@ -57,6 +58,13 @@ bool TONE3000Processor::readPersistedMultiCoreEnabled() {
   return juce::PropertiesFile(userSettingsOptions()).getBoolValue(kMultiCoreKey, true);
 }
 
+double TONE3000Processor::readPersistedNamSlimSizeDefault() {
+  // 0.0 = lite, the shipped default (see ChainBlock::namSlimSize).
+  return juce::jlimit(
+      0.0, 1.0,
+      juce::PropertiesFile(userSettingsOptions()).getDoubleValue(kNamSlimSizeDefaultKey, 0.0));
+}
+
 bool TONE3000Processor::readPersistedWebInspectorEnabled() {
   // Debug builds already get the inspector from stock JUCE; default on so a
   // fresh debug install still has Inspect Element / Reload. Release stays off
@@ -96,27 +104,19 @@ void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {
                            (enabled ? "enabled" : "disabled"));
   bumpChainRevision();
 }
-void TONE3000Processor::setNamFullSize(bool full) {
-  if (namFullSize.load() == full)
+void TONE3000Processor::setNamSlimSizeDefault(double slimSize) {
+  slimSize = juce::jlimit(0.0, 1.0, slimSize);
+  if (namSlimSizeDefault.load() == slimSize)
     return;
 
-  namFullSize.store(full);
+  // No fade, no lock: loaded engines are untouched (each block owns its
+  // size); this only decides what loadTone stamps on the next new block.
+  namSlimSizeDefault.store(slimSize);
+  juce::PropertiesFile settings(userSettingsOptions());
+  settings.setValue(kNamSlimSizeDefaultKey, slimSize);
+  settings.saveIfNeeded();
 
-  // Retier every loaded NAM engine in place. Swapping weights inside playing
-  // engines is discontinuous, and the change spans blocks in both lanes, so
-  // mute-splice the whole chain like a structural edit. setSlimmableSize is
-  // a no-op for non-slimmable models, and in-flight loads re-apply the
-  // preference when they land (see applyPreparedModelToChainBlock).
-  ChainEditFade editFade(*this);
-  juce::ScopedLock lock(chainMutex);
-  const double size = namSlimmableSizeValue();
-  for (auto& l : lanes)
-    for (auto& block : l)
-      if (block->type == ChainBlockType::NAM && block->namEngine != nullptr)
-        block->namEngine->setSlimmableSize(size);
-
-  juce::Logger::writeToLog(juce::String("[Processor] NAM A2 size set to ") +
-                           (full ? "full" : "lite"));
+  juce::Logger::writeToLog("[Processor] Default NAM A2 size set to " + juce::String(slimSize));
   bumpChainRevision();
 }
 
@@ -127,6 +127,7 @@ juce::ValueTree TONE3000Processor::serializeBlockSettings(const ChainBlock& bloc
   blockState.setProperty("type", chainBlockTypeToString(block.type), nullptr);
   blockState.setProperty("enabled", block.enabled, nullptr);
   blockState.setProperty("normalize", block.normalizeEnabled, nullptr);
+  blockState.setProperty("slimSize", block.namSlimSize, nullptr);
   blockState.setProperty("inputGain", block.inputGainNormalized, nullptr);
   blockState.setProperty("outputGain", block.outputGainNormalized, nullptr);
   blockState.setProperty("mix", block.mixNormalized, nullptr);
@@ -147,6 +148,15 @@ void TONE3000Processor::applyBlockSettings(ChainBlock& block, const juce::ValueT
   block.inputGainNormalized = static_cast<float>(blockState.getProperty("inputGain", 0.5f));
   block.outputGainNormalized = static_cast<float>(blockState.getProperty("outputGain", 0.5f));
   block.mixNormalized = static_cast<float>(blockState.getProperty("mix", 1.0f));
+
+  // States from before per-block sizes restore as lite (0.0). An engine the
+  // restore keeps loaded (see reconcileChainFromTree) retiers in place: the
+  // NAM container fast-paths an unchanged tier, and every restore path runs
+  // under the chain-edit fade, so a real retier splices in silently.
+  block.namSlimSize =
+      juce::jlimit(0.0, 1.0, static_cast<double>(blockState.getProperty("slimSize", 0.0)));
+  if (block.namEngine != nullptr)
+    block.namEngine->setSlimmableSize(block.namSlimSize);
 
   if (block.type != ChainBlockType::INSERT) {
     // A missing Eq child restores as flat. Block EQs always run in the chain
@@ -190,12 +200,10 @@ void TONE3000Processor::getStateInformation(juce::MemoryBlock& destData) {
   state.appendChild(parameters.copyState(), nullptr);
 
   // Session-only settings. Presets deliberately don't carry these: input
-  // mode is I/O routing, editor scale is a workstation preference, the
-  // MIDI map describes the user's rig, not the tone, and the NAM A2 size
-  // is a per-instance CPU/quality budget (slim one background instance in a
-  // big session without touching the lead).
+  // mode is I/O routing, editor scale is a workstation preference, and the
+  // MIDI map describes the user's rig, not the tone. (Per-block NAM A2
+  // sizes ride the chain snapshot below, with presets and undo.)
   state.setProperty("inputMode", inputModeToString(getInputMode()), nullptr);
-  state.setProperty("namFullSize", namFullSize.load(), nullptr);
   state.setProperty("editorScale", editorScale.load(), nullptr);
   state.setProperty("editorExtraHeight", editorExtraHeight.load(), nullptr);
   state.appendChild(midiMapper.toValueTree(), nullptr);
@@ -264,15 +272,6 @@ void TONE3000Processor::setStateInformation(const void* data, int sizeInBytes) {
   // inherit the previous session's.
   midiMapper.restoreFromValueTree(state.getChildWithName("MidiMappings"));
 
-  // Per-instance NAM A2 size; older projects restore as lite (the default).
-  // Stored before the chain restore so the background model loads that it
-  // kicks off prepare at the restored tier; engines the reconcile keeps
-  // (loaded at the previous tier) are retiered under the lock below.
-  const bool restoredNamFullSize =
-      static_cast<bool>(state.getProperty("namFullSize", false));
-  const bool namTierChanged = namFullSize.load() != restoredNamFullSize;
-  namFullSize.store(restoredNamFullSize);
-
   // A project load is a reconciling restore: matching blocks keep their
   // loaded engines, everything else decodes its embedded model bytes and
   // loads in the background. No synchronous model prepare under the chain
@@ -290,16 +289,6 @@ void TONE3000Processor::setStateInformation(const void* data, int sizeInBytes) {
     juce::ScopedLock lock(chainMutex);
 
     retired = restoreChainSnapshot(snapshot);  // updates latency, bumps revision
-
-    // Blocks the reconcile kept still run engines from before this restore;
-    // bring them to the restored tier (no-op for non-slimmable models).
-    if (namTierChanged) {
-      const double size = namSlimmableSizeValue();
-      for (auto& l : lanes)
-        for (auto& block : l)
-          if (block->type == ChainBlockType::NAM && block->namEngine != nullptr)
-            block->namEngine->setSlimmableSize(size);
-    }
 
     pendingAddSide = ChainSide::Left;
     activePresetId = state.getProperty("activePresetId").toString();

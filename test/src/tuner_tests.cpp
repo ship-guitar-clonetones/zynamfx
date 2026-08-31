@@ -19,12 +19,28 @@ juce::var readingFor(TunerDetector& tuner, const std::vector<float>& samples) {
   return tuner.getReading();
 }
 
-std::vector<float> sine(double freq, double seconds, float amplitude) {
-  std::vector<float> out(static_cast<size_t>(kFs * seconds));
+std::vector<float> sine(double freq, double seconds, float amplitude, double fs = kFs) {
+  std::vector<float> out(static_cast<size_t>(fs * seconds));
   for (size_t i = 0; i < out.size(); ++i)
     out[i] = amplitude *
              static_cast<float>(std::sin(2.0 * juce::MathConstants<double>::pi * freq *
-                                         static_cast<double>(i) / kFs));
+                                         static_cast<double>(i) / fs));
+  return out;
+}
+
+// Bass-like spectrum: fundamental quieter than the 2nd harmonic, the way a
+// passive pickup renders low E. The detector must still report the true
+// fundamental, not the octave above.
+std::vector<float> weakFundamentalTone(double freq, double seconds) {
+  constexpr double kAmps[] = {0.08, 0.22, 0.12, 0.06};  // f, 2f, 3f, 4f
+  std::vector<float> out(static_cast<size_t>(kFs * seconds), 0.0f);
+  for (size_t i = 0; i < out.size(); ++i) {
+    double s = 0.0;
+    for (size_t h = 0; h < 4; ++h)
+      s += kAmps[h] * std::sin(2.0 * juce::MathConstants<double>::pi * freq *
+                               static_cast<double>(h + 1) * static_cast<double>(i) / kFs);
+    out[i] = static_cast<float>(s);
+  }
   return out;
 }
 
@@ -42,6 +58,48 @@ TEST(TunerDetectorTest, DetectsGuitarStringPitches) {
     EXPECT_NEAR(detected, freq, freq * 0.005) << "at " << freq << " Hz";
     EXPECT_GT(static_cast<double>(reading.getProperty("confidence", 0.0)), 0.5);
   }
+}
+
+TEST(TunerDetectorTest, DetectsBassStringPitches) {
+  TunerDetector tuner;
+  tuner.prepare(kFs);
+  tuner.setEnabled(true);
+
+  // 5-string low B, 4-string low E, A, and G fundamentals. All sit below or
+  // around the old 55 Hz search floor that made bass unusable.
+  for (const double freq : {30.87, 41.2, 55.0, 98.0}) {
+    const auto reading = readingFor(tuner, sine(freq, 1.0, 0.25f));
+    const double detected = reading.getProperty("frequency", 0.0);
+    EXPECT_NEAR(detected, freq, freq * 0.005) << "at " << freq << " Hz";
+    EXPECT_GT(static_cast<double>(reading.getProperty("confidence", 0.0)), 0.5);
+  }
+}
+
+TEST(TunerDetectorTest, BassWithWeakFundamentalAvoidsOctaveError) {
+  TunerDetector tuner;
+  tuner.prepare(kFs);
+  tuner.setEnabled(true);
+
+  const double freq = 41.2;  // bass low E
+  const auto reading = readingFor(tuner, weakFundamentalTone(freq, 1.0));
+  const double detected = reading.getProperty("frequency", 0.0);
+  EXPECT_NEAR(detected, freq, freq * 0.005);
+  EXPECT_GT(static_cast<double>(reading.getProperty("confidence", 0.0)), 0.5);
+}
+
+TEST(TunerDetectorTest, DetectsBassLowEAtHighSampleRates) {
+  // At 192 kHz a fixed ÷4 decimation would clamp the YIN lag range and lose
+  // everything below ~47 Hz; the adaptive factor keeps low E reachable.
+  constexpr double kHighFs = 192000.0;
+  TunerDetector tuner;
+  tuner.prepare(kHighFs);
+  tuner.setEnabled(true);
+
+  const double freq = 41.2;
+  const auto reading = readingFor(tuner, sine(freq, 1.0, 0.25f, kHighFs));
+  const double detected = reading.getProperty("frequency", 0.0);
+  EXPECT_NEAR(detected, freq, freq * 0.005);
+  EXPECT_GT(static_cast<double>(reading.getProperty("confidence", 0.0)), 0.5);
 }
 
 TEST(TunerDetectorTest, SilenceAndNoiseReportNoPitch) {

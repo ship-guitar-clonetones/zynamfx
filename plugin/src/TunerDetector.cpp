@@ -3,13 +3,20 @@
 
 TunerDetector::TunerDetector() {
   ring.resize(kRingSize, 0.0f);
-  rawWindow.resize(kWindowSize * kDecimation, 0.0f);
+  // Sized for the largest decimation up front so prepare() never
+  // reallocates under the message thread's analyze().
+  rawWindow.resize(kWindowSize * kMaxDecimation, 0.0f);
   window.resize(kWindowSize, 0.0f);
   yin.resize(kWindowSize / 2, 0.0f);
 }
 
 void TunerDetector::prepare(double newSampleRate) {
   sampleRate = newSampleRate > 0.0 ? newSampleRate : 48000.0;
+  // ÷4 at 44.1/48 kHz, ÷8 at 96 kHz, ÷16 at 192 kHz: the decimated rate
+  // stays near kTargetAnalysisRate so kMinFrequency always fits the YIN
+  // lag range (a fixed factor would lose bass low E above 96 kHz).
+  decimation = juce::jlimit(1, kMaxDecimation,
+                            juce::roundToInt(sampleRate / kTargetAnalysisRate));
   std::fill(ring.begin(), ring.end(), 0.0f);
   lastFrequency = 0.0;
   lastConfidence = 0.0;
@@ -40,7 +47,7 @@ juce::var TunerDetector::getReading() {
 }
 
 void TunerDetector::analyze() {
-  const int rawCount = kWindowSize * kDecimation;
+  const int rawCount = kWindowSize * decimation;
 
   // Copy the most recent rawCount samples out of the ring (newest last).
   const int endPos = writePos.load(std::memory_order_acquire);
@@ -49,14 +56,14 @@ void TunerDetector::analyze() {
     rawWindow[static_cast<size_t>(i)] = ring[static_cast<size_t>((start + i) & (kRingSize - 1))];
   }
 
-  // Decimate by averaging groups of kDecimation samples. The averaging acts
+  // Decimate by averaging groups of `decimation` samples. The averaging acts
   // as a crude low-pass, which is plenty for fundamentals below ~1.5 kHz.
   double sumSquares = 0.0;
   for (int i = 0; i < kWindowSize; ++i) {
     float acc = 0.0f;
-    for (int d = 0; d < kDecimation; ++d)
-      acc += rawWindow[static_cast<size_t>(i * kDecimation + d)];
-    const float s = acc / static_cast<float>(kDecimation);
+    for (int d = 0; d < decimation; ++d)
+      acc += rawWindow[static_cast<size_t>(i * decimation + d)];
+    const float s = acc / static_cast<float>(decimation);
     window[static_cast<size_t>(i)] = s;
     sumSquares += static_cast<double>(s) * static_cast<double>(s);
   }
@@ -70,7 +77,7 @@ void TunerDetector::analyze() {
     return;
   }
 
-  const double decimatedRate = sampleRate / kDecimation;
+  const double decimatedRate = sampleRate / decimation;
   const int tauMax =
       juce::jmin(static_cast<int>(decimatedRate / kMinFrequency), kWindowSize / 2 - 1);
   const int tauMin = juce::jmax(2, static_cast<int>(decimatedRate / kMaxFrequency));
