@@ -1,5 +1,5 @@
 name: Feature request
-description: A concrete change to the plugin, UI, or docs.
+description: A change you'd like to see in the plugin.
 title: "[Feature]: "
 labels: ["enhancement"]
 body:
@@ -43,13 +43,12 @@ body:
     attributes:
       label: Area
       options:
-        - DSP / chain
-        - Host / formats
-        - UI
-        - Presets / TONE3000 browse
+        - Sound / chain
+        - DAW / format
+        - Interface
+        - Presets / browsing tones
         - MIDI
-        - Installer / packaging
-        - Docs / tests
+        - Installer
         - Other
     validations:
       required: true
