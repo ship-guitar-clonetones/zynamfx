@@ -215,7 +215,10 @@ flowchart LR
   run and are summed to mono at the output (½(L+R), the host's own mono-fold
   law), with balance/solo/Ø live inside the sum, pans inert, and a MONO chip
   on the pan rail (see the stereo-image doc above).
-- **Tone stack**: one global Bass/Middle/Treble EQ after the DC blocker.
+- **Tone stack**: one global Bass/Middle/Treble EQ after the DC blocker,
+  voiced to match the reference
+  [NeuralAmpModelerPlugin](https://github.com/sdatkinson/NeuralAmpModelerPlugin)
+  tone stack (150 Hz / 425 Hz / 1.8 kHz, ±20 / ±15 / ±10 dB).
 - **Oversampling**: a Plugin Settings option runs the whole chain at 2x/4x/8x the
   48 kHz base rate: minimum-phase half-band filters (zero added latency),
   with NAM models phase-interleaved across N native-rate instances so
@@ -322,6 +325,9 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   Steven Atkinson: the NAM ecosystem and
   [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore),
   which powers all amp modeling here.
+- [NeuralAmpModelerPlugin](https://github.com/sdatkinson/NeuralAmpModelerPlugin):
+  the reference NAM plugin; the faceplate tone stack borrows its band voicing
+  and the DC blocker matches its behavior.
 - [AudioDSPTools](https://github.com/sdatkinson/AudioDSPTools): resampling
   around the 48 kHz chain boundary, with `ResamplingContainer` from
   [iPlug2](https://github.com/iPlug2/iPlug2).

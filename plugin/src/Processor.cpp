@@ -22,9 +22,11 @@ TONE3000Processor::TONE3000Processor()
                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       parameters(*this, nullptr, juce::Identifier("PARAMETERS"), createParameterLayout()),
-      bassFilter(juce::dsp::IIR::Coefficients<float>::makeLowShelf(48000, 100.0f, 1.0f, 1.0f)),
-      midFilter(juce::dsp::IIR::Coefficients<float>::makePeakFilter(48000, 1000.0f, 1.0f, 1.0f)),
-      trebleFilter(juce::dsp::IIR::Coefficients<float>::makeHighShelf(48000, 4000.0f, 1.0f, 1.0f)),
+      // Unity-gain seeds so the duplicators own valid coefficients from birth;
+      // prepareToPlay applies the real voicing via updateEqCoefficients().
+      bassFilter(juce::dsp::IIR::Coefficients<float>::makeLowShelf(48000, 150.0f, 0.707f, 1.0f)),
+      midFilter(juce::dsp::IIR::Coefficients<float>::makePeakFilter(48000, 425.0f, 0.7f, 1.0f)),
+      trebleFilter(juce::dsp::IIR::Coefficients<float>::makeHighShelf(48000, 1800.0f, 0.707f, 1.0f)),
       // 2 threads for background loading, +1 so a chain-edit-fade release
       // waiter (releaseChainEditFadeWhenLoadsSettle) never serializes the
       // very loads it is waiting on.
@@ -132,11 +134,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"inputLevel", 1}, "inputLevel", 0.0f, 1.0f, 0.5f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"toneBass", 2}, "toneBass", 0.01f, 10.0f, 5.0f));
+      juce::ParameterID{"toneBass", 2}, "toneBass", 0.0f, 10.0f, 5.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"toneMid", 3}, "toneMid", 0.01f, 10.0f, 5.0f));
+      juce::ParameterID{"toneMid", 3}, "toneMid", 0.0f, 10.0f, 5.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"toneTreble", 4}, "toneTreble", 0.01f, 10.0f, 5.0f));
+      juce::ParameterID{"toneTreble", 4}, "toneTreble", 0.0f, 10.0f, 5.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"outputLevel", 5}, "outputLevel", 0.0f, 1.0f, 0.5f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -768,13 +770,6 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     imageGainRtoR.setCurrentAndTargetValue(g.rToR);
   }
 
-  // Temporary unity filters for boot
-  *bassFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(
-      sampleRate, clampBelowNyquist(sampleRate, 100.0f), 1.0f, 1.0f);
-  *midFilter.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-      sampleRate, clampBelowNyquist(sampleRate, 1000.0f), 1.0f, 1.0f);
-  *trebleFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(
-      sampleRate, clampBelowNyquist(sampleRate, 4000.0f), 1.0f, 1.0f);
   // First-order high-pass at 5 Hz: removes DC offset from nonlinear NAM models
   // while staying audibly and phase-wise transparent down to the lowest bass
   // fundamentals (matches the reference NeuralAmpModelerPlugin behavior).
@@ -801,7 +796,8 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
   // unconditionally keeps the multi-core toggle a pure dispatch gate.
   rtWorkerPool.start(sampleRate, samplesPerBlock);
 
-  // Apply the actual tone knob gains to the tone stack filters.
+  // Tone stack coefficients at the real host rate (the construction-time
+  // seeds are unity at 48 kHz).
   updateEqCoefficients();
 }
 
@@ -844,21 +840,26 @@ bool TONE3000Processor::isBusesLayoutSupported(const BusesLayout& layouts) const
 // ######################
 // UPDATE EQ COEFFICIENTS
 // ######################
+// Voicing follows the reference NeuralAmpModelerPlugin tone stack
+// (BasicNamToneStack, https://github.com/sdatkinson/NeuralAmpModelerPlugin):
+// knobs run 0-10 with 5 flat, each band maps linearly to dB with its own
+// sweep (bass ±20 dB, mid ±15 dB, treble ±10 dB), and the mid bell widens
+// when boosting (Q 0.7 vs 1.5) so pushed mids don't turn honky.
 void TONE3000Processor::updateEqCoefficients() {
-  // Recalculate EQ filter coefficients based on current tone gains
   const double rate = getSampleRate();
-  auto bassCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowShelf(
-      rate, clampBelowNyquist(rate, 250.0f), 1.0f, cacheBassTone / 5.0f);
+  const float bassDb = 4.0f * (cacheBassTone - 5.0f);
+  const float midDb = 3.0f * (cacheMidTone - 5.0f);
+  const float trebleDb = 2.0f * (cacheTrebleTone - 5.0f);
 
-  auto midCoeffs = juce::dsp::IIR::Coefficients<float>::makePeakFilter(
-      rate, clampBelowNyquist(rate, 1000.0f), 1.0f, cacheMidTone / 5.0f);
-
-  auto trebleCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighShelf(
-      rate, clampBelowNyquist(rate, 4000.0f), 1.0f, cacheTrebleTone / 5.0f);
-
-  *bassFilter.state = *bassCoeffs;
-  *midFilter.state = *midCoeffs;
-  *trebleFilter.state = *trebleCoeffs;
+  *bassFilter.state = *juce::dsp::IIR::Coefficients<float>::makeLowShelf(
+      rate, clampBelowNyquist(rate, 150.0f), 0.707f,
+      juce::Decibels::decibelsToGain(bassDb));
+  *midFilter.state = *juce::dsp::IIR::Coefficients<float>::makePeakFilter(
+      rate, clampBelowNyquist(rate, 425.0f), midDb < 0.0f ? 1.5f : 0.7f,
+      juce::Decibels::decibelsToGain(midDb));
+  *trebleFilter.state = *juce::dsp::IIR::Coefficients<float>::makeHighShelf(
+      rate, clampBelowNyquist(rate, 1800.0f), 0.707f,
+      juce::Decibels::decibelsToGain(trebleDb));
 }
 
 // ######################

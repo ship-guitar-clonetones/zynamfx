@@ -57,8 +57,8 @@ export const balanceDbScale = linearScale(-12, 12, 'dB', 1);
 /** Gate threshold: normalized spans -100..0 dB. */
 export const gateDbScale = linearScale(-100, 0, 'dB', 0);
 
-/** Faceplate tone stack: parameter range 0.01..10, shown as 0..10. */
-export const toneScale = linearScale(0.01, 10, '', 1);
+/** Faceplate tone stack knobs: 0..10, 5 = flat. */
+export const toneScale = linearScale(0, 10, '', 1);
 
 /** Bipolar one-sided delay: center = 0 ms, ends reach ±maxMs. Display shows
     the magnitude plus the delayed side ("15.0 ms R"). */

@@ -147,9 +147,9 @@ export const HELP = {
   // Faceplate: gate, tone stack, stereo image (spread / align)
   gate: knobHelp('Gate', 'noise gate threshold, -100 to 0 dB.'),
   gatePower: 'Gate Power: noise gate on/off.',
-  toneBass: knobHelp('Bass', 'tone stack lows, 0-10.'),
-  toneMiddle: knobHelp('Middle', 'tone stack mids, 0-10.'),
-  toneTreble: knobHelp('Treble', 'tone stack highs, 0-10.'),
+  toneBass: knobHelp('Bass', 'tone stack lows, 0-10: ±20 dB shelf at 150 Hz.'),
+  toneMiddle: knobHelp('Middle', 'tone stack mids, 0-10: ±15 dB bell at 425 Hz.'),
+  toneTreble: knobHelp('Treble', 'tone stack highs, 0-10: ±10 dB shelf at 1.8 kHz.'),
   tonePower: 'Tone Stack Power: Bass/Middle/Treble on/off.',
   spreadOffset: knobHelp(
     'Offset',
