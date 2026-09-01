@@ -25,12 +25,12 @@ body:
     attributes:
       label: Kind
       options:
-        - Crash / hang
-        - Audio glitch, click, dropout, or wrong sound
-        - Host compatibility (won't load, wrong category, PDC, MIDI)
+        - Crash or hang
+        - Audio glitch or wrong sound
+        - Host compatibility
         - Plugin UI
-        - Build / compile / CI
-        - Installer / signing
+        - Build or CI
+        - Installer or signing
         - Other
     validations:
       required: true
@@ -131,8 +131,8 @@ body:
     attributes:
       label: Does it happen in Standalone?
       options:
-        - Yes
-        - No
+        - "Yes"
+        - "No"
         - Did not try
     validations:
       required: true
