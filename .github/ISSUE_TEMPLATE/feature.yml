@@ -1,0 +1,57 @@
+name: Feature request
+description: A concrete change to the plugin, UI, or docs.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Prefer the smallest, most obvious change. Don't add abstractions, options, or fallbacks for cases that can't happen yet.
+
+        Sign-in, catalog browse, and tone3000.com: [support@tone3000.com](mailto:support@tone3000.com), not here.
+
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Search
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or impossible today? A user-facing story beats an API sketch.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The smallest change that would fix it. Call out DSP, state format, or parameter changes; those are compatibility contracts.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: What you already tried, or a simpler version you would also accept.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - DSP / chain
+        - Host / formats (VST3, AU, AAX, CLAP, LV2)
+        - UI
+        - Presets / TONE3000 browse
+        - MIDI
+        - Installer / packaging
+        - Docs / tests
+        - Other
+    validations:
+      required: true

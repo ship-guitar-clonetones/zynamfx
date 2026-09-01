@@ -1,0 +1,155 @@
+name: Bug report
+description: Crash, audio glitch, host issue, UI bug, or a build that fails.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Host, format, and sample rate matter more here than a stack trace alone.
+
+        **Not this repo:** TONE3000 sign-in and catalog browse go to [support@tone3000.com](mailto:support@tone3000.com). NAM inference bugs go to [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore); the trainer is [neural-amp-modeler](https://github.com/sdatkinson/neural-amp-modeler).
+
+        Built from source? `./script/test-dsp.sh` and `./script/validate-plugin.sh` (pluginval at strictness 10 for VST3/AU) are the first things we will ask about.
+
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Search
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - Crash / hang
+        - Audio glitch, click, dropout, or wrong sound
+        - Host compatibility (won't load, wrong category, PDC, MIDI)
+        - Plugin UI
+        - Build / compile / CI
+        - Installer / signing
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the plugin in …
+        2. Load this chain / preset …
+        3. Change …
+        4. Hear / see …
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: Settings footer, or the repo-root VERSION file if you built from source. GitHub release tag is fine too (for example v0.0.2-beta).
+      placeholder: v0.0.2-beta
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: How did you get the plugin?
+      options:
+        - GitHub release installer
+        - Built from source
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: macOS 15.6, Windows 11 24H2, Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: dropdown
+    id: format
+    attributes:
+      label: Plugin format
+      description: The format that shows the bug. Pick every one you tried.
+      multiple: true
+      options:
+        - VST3
+        - AU
+        - AAX
+        - CLAP
+        - LV2
+        - Standalone
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: DAW name and version. Use Standalone if you only tried the app.
+      placeholder: Pro Tools 2025.6, Reaper 7.22, Logic 11.1, Standalone
+    validations:
+      required: true
+
+  - type: input
+    id: audio-setup
+    attributes:
+      label: Sample rate and buffer
+      description: Host sample rate and block size. Oversampling and multi-core settings if the bug is audio.
+      placeholder: 48 kHz, 64 samples, oversampling off, multi-core on
+
+  - type: dropdown
+    id: standalone
+    attributes:
+      label: Does it happen in Standalone?
+      options:
+        - Yes
+        - No
+        - Did not try
+    validations:
+      required: true
+
+  - type: textarea
+    id: tests
+    attributes:
+      label: Local tests (source builds)
+      description: Paste the commands you ran and whether they passed. Skip if you installed a release.
+      placeholder: |
+        ./script/test-dsp.sh
+        ./script/validate-plugin.sh VST3
+        cd ui && npm run lint && npm run build
+      render: shell
+
+  - type: textarea
+    id: extras
+    attributes:
+      label: Logs, crash reports, screenshots
+      description: Drag files onto this field. Console output from a Debug standalone run (`TONE3000.app/Contents/MacOS/TONE3000` on macOS) is especially useful.

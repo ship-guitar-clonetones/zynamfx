@@ -6,11 +6,10 @@
 
 name: Build Plugin
 
+# Dispatch only. A signed three-platform run (notarization, PACE, Azure)
+# is too expensive to fire on every PR. Restrict the `builds` environment
+# to required reviewers if you want an admin gate before a runner starts.
 on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
 
 # Least-privilege GITHUB_TOKEN: nothing in this workflow writes back to the
@@ -28,13 +27,12 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     environment: builds
     env:
-      # Publishable key (OAuth client_id). Kept as a secret rather than a
-      # variable so fork-triggered PR runs don't receive it: forks build
-      # keyless instead of baking our key into their artifacts.
+      # Publishable key (OAuth client_id). A secret, not a variable, so it
+      # is never exposed through repo variables.
       VITE_T3K_PUBLISHABLE_KEY: ${{ secrets.VITE_T3K_PUBLISHABLE_KEY }}
       # Startup update check (ui/src/t3k/config.ts). Sourced from the repo
-      # variable, not hardcoded, so forks (which don't inherit variables)
-      # fall back to the code default of off and never ping tone3000.com.
+      # variable, not hardcoded, so a clone without that variable falls
+      # back to the code default of off and never pings tone3000.com.
       VITE_T3K_UPDATE_NOTICE: ${{ vars.VITE_T3K_UPDATE_NOTICE }}
       # Compiler cache (see "Setup sccache" step below); persists compiled
       # object results across runs via the GitHub Actions cache backend.
@@ -288,8 +286,8 @@ jobs:
             "build/plugin/TONE3000_artefacts/${{ env.BUILD_TYPE }}"
 
       # macOS: import Developer ID certs into a temp keychain.
-      # Bails out gracefully if signing secrets are not configured (e.g. PRs
-      # from forks). In that case create-pkg.sh falls back to ad-hoc signing.
+      # Bails out gracefully if signing secrets are not configured. In that
+      # case create-pkg.sh falls back to ad-hoc signing.
       #
       # Note: APPLE_APP_PASSWORD is reused as the .p12 import password because
       # the .p12 files were exported using the same value.
@@ -351,9 +349,9 @@ jobs:
       # Developer ID signature in one pass (so create-pkg.sh skips re-signing
       # this bundle; see sign_bundle there). The Eden tools are not
       # redistributable and are fetched from a private URL. Bails out
-      # gracefully when the PACE secrets are not configured (e.g. PRs from
-      # forks); the AAX is then ad-hoc signed like the other formats and only
-      # loads in Pro Tools Developer builds.
+      # gracefully when the PACE secrets are not configured; the AAX is then
+      # ad-hoc signed like the other formats and only loads in Pro Tools
+      # Developer builds.
       - name: Sign AAX with PACE (macOS)
         if: matrix.os == 'macos'
         env:
@@ -411,8 +409,8 @@ jobs:
       # Windows signing uses Azure Artifact Signing (the Windows analog of
       # Developer ID + notarization: Microsoft-managed cert, key held by the
       # service, RFC 3161 timestamp). Bails out gracefully if the Azure
-      # secrets are not configured (e.g. PRs from forks); the artifacts are
-      # then unsigned, like the macOS ad-hoc fallback.
+      # secrets are not configured; the artifacts are then unsigned, like
+      # the macOS ad-hoc fallback.
       - name: Check Windows signing config
         id: winsign
         if: matrix.os == 'windows'

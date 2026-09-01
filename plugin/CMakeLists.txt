@@ -117,6 +117,9 @@ juce_add_plugin(${PROJECT_NAME}
     COMPANY_NAME TONE3000
     PLUGIN_NAME ${PLUGIN_NAME}
     IS_SYNTH FALSE
+    # Pro Tools insert folders. Unset is None ("Other"). Harmonic is where
+    # amp sims live; Effect is the generic folder. OR so it shows in both.
+    AAX_CATEGORY AAX_ePlugInCategory_Harmonic|AAX_ePlugInCategory_Effect
     # MIDI in feeds the MidiMapper (CC/note → parameter mapping with Learn);
     # hosts route their MIDI to us, standalone merges enabled MIDI inputs.
     NEEDS_MIDI_INPUT TRUE
