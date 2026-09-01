@@ -5,6 +5,11 @@ A JUCE-based audio plugin (VST3, AU, CLAP, LV2, Standalone) that loads
 from [TONE3000](https://www.tone3000.com). No manual file downloads: browse
 the catalog, sign in, and add tones directly into your signal chain.
 
+[Download the plugin](https://www.tone3000.com/plugin/download) for a
+pre-built installer, or see the
+[Plugin Guide](https://www.tone3000.com/guides/tone3000-plugin) for how to
+install, load tones, and use it.
+
 - **Load NAM and IR from TONE3000.** Click **+** to browse the catalog in the
   plugin (OAuth 2.0 + PKCE via the
   [TONE3000 Select flow](https://www.tone3000.com/api#select)). Pick a tone
@@ -164,25 +169,25 @@ The full path in processing order (`TONE3000Processor::processBlock` in
 
 ```mermaid
 flowchart LR
-    IN([In]) --> IM["Input Mode&nbsp;*<br/>(stereo / L / R)"]
+    IN([In]) --> IM["Input Mode *\n(stereo / L / R)"]
     IM --> IG["Input Level"]
-    IG --> GATE["Noise Gate&nbsp;*"]
+    IG --> GATE["Noise Gate *"]
     GATE --> RS(("⇅ 48k"))
-    RS --> OS(("×N ↑&nbsp;*"))
+    RS --> OS(("×N ↑ *"))
     subgraph CHAINS["Tone chains, 48 kHz × oversampling factor"]
         direction LR
-        CL["Left chain<br/>(NAM / IR blocks)"]
-        CR["Right chain<br/>(stereo mode only)"]
+        CL["Left chain\n(NAM / IR blocks)"]
+        CR["Right chain\n(stereo mode only)"]
     end
     OS --> CL
     OS --> CR
-    CL --> OS2(("×N ↓&nbsp;*"))
+    CL --> OS2(("×N ↓ *"))
     CR --> OS2
     OS2 --> RS2(("⇅ 48k"))
-    RS2 --> IMAGE["Spread&nbsp;* (mono) /<br/>Align&nbsp;* (stereo)"]
-    IMAGE --> PAN["Balance + Pan&nbsp;*<br/>(per-chain trim, then<br/>constant-power blend)"]
-    PAN --> DCB["DC Blocker<br/>(~5 Hz HPF)"]
-    DCB --> TS["Tone Stack&nbsp;*"]
+    RS2 --> IMAGE["Spread * (mono) /\nAlign * (stereo)"]
+    IMAGE --> PAN["Balance + Pan *\n(per-chain trim, then\nconstant-power blend)"]
+    PAN --> DCB["DC Blocker\n(~5 Hz HPF)"]
+    DCB --> TS["Tone Stack *"]
     TS --> OG["Output Level"]
     OG --> OUT([Out])
 ```
@@ -241,13 +246,13 @@ Inside every tone block:
 
 ```mermaid
 flowchart LR
-    BIN([block in]) --> BIG["In Gain<br/>±24 dB"]
+    BIN([block in]) --> BIG["In Gain\n±24 dB"]
     BIN -. dry .-> MIX
-    BIG --> PEQ["6-band EQ&nbsp;*<br/>(PRE position)"]
-    PEQ --> MODEL["NAM model / IR<br/>(+ calibration or<br/>loudness normalize)"]
-    MODEL --> BOG["Out Gain<br/>±24 dB"]
+    BIG --> PEQ["6-band EQ *\n(PRE position)"]
+    PEQ --> MODEL["NAM model / IR\n(+ calibration or\nloudness normalize)"]
+    MODEL --> BOG["Out Gain\n±24 dB"]
     BOG --> MIX["Dry/Wet Mix"]
-    MIX --> BEQ["6-band EQ&nbsp;*<br/>(POST position)"]
+    MIX --> BEQ["6-band EQ *\n(POST position)"]
     BEQ --> BOUT([block out])
 ```
 
@@ -353,6 +358,10 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
 ## Links
 
 - [TONE3000](https://www.tone3000.com): NAM captures and IRs.
+- [Download the plugin](https://www.tone3000.com/plugin/download): pre-built
+  installers for Mac, Windows, and Linux.
+- [Plugin Guide](https://www.tone3000.com/guides/tone3000-plugin): how to
+  install, load tones, and use the plugin.
 - [TONE3000 API](https://www.tone3000.com/api): full API reference, including
   the Select flow.
 - [TONE3000 API examples](https://github.com/tone-3000/api): reference
