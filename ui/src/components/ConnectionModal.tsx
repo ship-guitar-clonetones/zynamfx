@@ -15,13 +15,17 @@ interface ConnectionModalProps {
  * Connection gate modal, two variants (see useConnectionGate):
  *
  * - offline: a network-dependent action was attempted while the OS reports
- *   no connection at all (`navigator.onLine === false`).
- * - insecure: the internet is up but the HTTPS probe to TONE3000 failed,
- *   usually a wrong system clock, so we offer a jump to the OS date & time
- *   settings where the native side provides one.
+ *   no connection at all (`navigator.onLine === false`). The action is
+ *   queued and "Try again" re-runs it.
+ * - insecure: a background probe confirmed (twice) that HTTPS to TONE3000
+ *   fails while the OS reports a connection (usually a wrong system clock),
+ *   so we offer a jump to the OS date & time settings where the native side
+ *   provides one. Purely diagnostic: the triggering action already ran and
+ *   failed on its own recovery paths.
  *
  * Same full-window scrim + button language as OAuthOverlay so the error
- * surfaces read as one system.
+ * surfaces read as one system. Rendered after OAuthOverlay at the same
+ * z-index, so the diagnosis stacks above a stranded OAuth page.
  */
 export const ConnectionModal: React.FC<ConnectionModalProps> = ({
   problem,
@@ -64,9 +68,9 @@ export const ConnectionModal: React.FC<ConnectionModalProps> = ({
       <div style={{ fontSize: '14rem', fontWeight: 400, opacity: 0.95, maxWidth: '400rem' }}>
         {offline
           ? 'No internet connection. Connect to browse and load tones from TONE3000.'
-          : "Couldn't establish a secure connection to TONE3000. This usually means the " +
-            "computer's date & time are wrong; a firewall, VPN, or security software can " +
-            'also cause it.'}
+          : "Couldn't make a secure connection to TONE3000. If other sites work on this " +
+            'computer, the usual cause is a wrong date & time; a firewall, VPN, or ' +
+            'security software can also block the plugin.'}
       </div>
       <div style={{ display: 'flex', gap: '12rem' }}>
         <button type="button" onClick={onRetry} style={filledPillButtonStyle}>
