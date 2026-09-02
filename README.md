@@ -31,17 +31,52 @@ NAM processing comes from **NeuralAmpModelerCore** (in-tree), resampling from
 ## Prerequisites
 
 - [CMake](https://cmake.org/download/) 3.22+ and Git
-- Node.js and npm (the React UI is built before the plugin)
-- **JUCE** is fetched automatically by CMake; no manual install
+- Node.js and npm (the React UI is built after CMake has fetched JUCE)
+- **JUCE** is fetched automatically by CMake into `libs/`; no manual install
 - **Windows only:** [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
-  runtime (`script/install-webview2.ps1` installs it)
+  runtime (`script/install-webview2.ps1` installs it). That is the native
+  browser the plugin UI runs in on Windows, not the TypeScript package
+  used to compile the UI.
 
 ## Quick start
 
-### 1. Build the UI
+### 1. Get submodules
 
-The plugin embeds the built React UI as binary data, so build it first on
-every platform:
+```sh
+git submodule update --init --recursive
+```
+
+### 2. Configure CMake
+
+CMake downloads JUCE into `libs/` on first configure. The UI's
+`@juce-framework/webview` package is a `file:` dependency on that tree, so
+this step has to happen **before** `npm install`. Configure uses a
+placeholder for the embedded UI until you build it in the next step.
+
+The default build includes the GUI targets (Standalone, VST3, AU, AAX, LV2,
+CLAP). Add `-DHEADLESS=ON` for headless/embedded builds; switch individual
+formats off with `-DBUILD_AAX=OFF`, `-DBUILD_LV2=OFF`, `-DBUILD_CLAP=OFF`.
+CLAP support comes from
+[clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions),
+fetched at configure time.
+
+```sh
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release   # or Debug
+```
+
+**Linux:** use the project's toolchain file:
+
+```sh
+cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/linux-toolchain.cmake
+```
+
+If you switch CMake presets later, remove the `build` directory and
+reconfigure.
+
+### 3. Build the UI
+
+The plugin embeds the built React UI as binary data:
 
 ```sh
 cd ui
@@ -49,6 +84,11 @@ npm install
 npm run build
 cd ..
 ```
+
+If `npm install` warns that esbuild's install script is not approved
+(`npm warn install-scripts ... esbuild`), run
+`npm install-scripts approve esbuild` and then `npm install` again. Vite
+needs that postinstall to download the esbuild binary.
 
 #### TONE3000 publishable key and redirect URIs
 
@@ -75,37 +115,16 @@ main UI, so the redirect URI is just the page React already loads from:
 Localhost origins are auto-allowed during development, so only the JUCE
 entries need to be registered for release builds.
 
-### 2. Get submodules
+### 4. Build the plugin
+
+Re-run the same `cmake -B build ...` command from step 2 so CMake picks up
+`plugin/webview/`, then compile:
 
 ```sh
-git submodule update --init --recursive
-```
-
-### 3. Configure and build
-
-The default build includes the GUI targets (Standalone, VST3, AU, AAX, LV2,
-CLAP). Add `-DHEADLESS=ON` for headless/embedded builds; switch individual
-formats off with `-DBUILD_AAX=OFF`, `-DBUILD_LV2=OFF`, `-DBUILD_CLAP=OFF`.
-CLAP support comes from
-[clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions),
-fetched at configure time.
-
-```sh
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release   # or Debug
 cmake --build build
 ```
 
-**Linux:** use the project's toolchain file:
-
-```sh
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_TOOLCHAIN_FILE=cmake/linux-toolchain.cmake
-```
-
-If you switch CMake presets later, remove the `build` directory and
-reconfigure.
-
-### 4. Run it
+### 5. Run it
 
 **Standalone:**
 

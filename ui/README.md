@@ -6,6 +6,12 @@ serves it in a native WebView (WebView2 on Windows, WebKit elsewhere).
 
 ## Development
 
+`@juce-framework/webview` is a `file:` dependency on the JUCE tree under
+`../libs/juce`. That directory is created by CMake configure, so from the
+repo root run `cmake -B build -S .` **before** `npm install` (Linux: also
+pass `-DCMAKE_TOOLCHAIN_FILE=cmake/linux-toolchain.cmake`). See the root
+README Quick start.
+
 ```sh
 npm install
 npm run dev        # Vite dev server at http://localhost:5173
