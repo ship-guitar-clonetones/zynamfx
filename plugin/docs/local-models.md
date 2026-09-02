@@ -1,15 +1,17 @@
-# Local models: drag-and-drop loading
+# Local models: drop / picker loading
 
-Dropping a `.nam` file, an IR `.wav`, or a folder of them on an insert slot
-loads it as a local block, no browser or account involved. The design goal
-is that local files are a second-class *entry point*, not a second-class
-block: after the drop they ride the exact catalog pipeline (background load,
-in-memory model cache, undo, duplication, presets, DAW state), and the code
-branches on "local" in only a handful of places.
+A local `.nam` file, an IR `.wav`, or a folder of them loads as a local
+block, no browser or account involved: dropped on a tile, or picked via the
+tile context menus' **Load File / Load Folder** (a native OS file dialog).
+The design goal is that local files are a second-class *entry point*, not a
+second-class block: once in, they ride the exact catalog pipeline
+(background load, in-memory model cache, undo, duplication, presets, DAW
+state), and the code branches on "local" in only a handful of places.
 
-Entry points: `handleDropFile` in `ui/src/hooks/useToneLoadFlow.ts` and
-`loadLocalTone` in `plugin/src/ProcessorModelLoader.cpp`. Behavior is pinned
-by `test/src/local_load_tests.cpp`.
+Entry points: `handleDropFile` in `ui/src/hooks/useToneLoadFlow.ts` →
+`loadLocalTone` in `plugin/src/ProcessorModelLoader.cpp` (drops), and the
+tiles' menus → `pickLocalToneFile` on the editor → `loadLocalTonePath`
+(picker). Behavior is pinned by `test/src/local_load_tests.cpp`.
 
 ## The drop
 
@@ -27,6 +29,25 @@ JSON: `id: 0`, `local: true`, and each model's `model_url` pointing at its
 stash copy with a `file://` URL. From there `loadTone` takes over, and
 `fetchModelFromUrl` resolves `file://` URLs from disk instead of the
 network.
+
+## The picker
+
+Right-clicking a tile offers **Load File** / **Load Folder**: a native
+`juce::FileChooser` on the editor (`pickLocalToneFile`), whose pick feeds
+`loadLocalTonePath`, the path-based sibling of `loadLocalTone` that reads
+bytes straight from disk (no base64 bridge trip) and then converges on the
+same validate/stash/load pipeline. The folder rules the UI implements for
+drops (majority extension, 300-file / 50 MB caps, natural name order, title
+from the folder name) live natively in `loadLocalTonePath` for this flow.
+An insert slot adds and a tone tile swaps in place, the same targeting as a
+drop.
+
+The picker isn't sugar: it's the local-load route that works everywhere.
+Linux never delivers OS file drags to the embedded WebKitGTK view (XDnD
+dies at the embedded `GtkPlug`, below the DOM, so no drop event ever fires;
+[issue #22](https://github.com/tone-3000/tone3000-plugin/issues/22)), so on
+that platform the menu is how local files get in at all. It also covers
+users who never think to drag-drop, and works signed out.
 
 ## One stored model list, one exception
 

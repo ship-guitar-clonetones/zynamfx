@@ -235,6 +235,55 @@ void TONE3000Editor::loadMainUrlIfNeeded() {
   mainWebView->goToURL(mainUrl);
 }
 
+void TONE3000Editor::pickLocalToneFile(
+    bool pickFolder, const juce::String& targetBlockId,
+    juce::WebBrowserComponent::NativeFunctionCompletion completion) {
+  auto cancelled = [] {
+    juce::DynamicObject::Ptr result = new juce::DynamicObject();
+    result->setProperty("cancelled", true);
+    return juce::var(result.get());
+  };
+
+  // One dialog at a time: a second request (double right-click) resolves as
+  // cancelled instead of stacking choosers.
+  if (localFileChooser != nullptr) {
+    completion(cancelled());
+    return;
+  }
+
+  localFileChooser = std::make_unique<juce::FileChooser>(
+      pickFolder ? "Load Folder" : "Load File", juce::File{},
+      pickFolder ? juce::String("*") : juce::String("*.nam;*.wav"));
+
+  const int flags = juce::FileBrowserComponent::openMode |
+                    (pickFolder ? juce::FileBrowserComponent::canSelectDirectories
+                                : juce::FileBrowserComponent::canSelectFiles);
+
+  // The dialog can outlive user patience but not the editor: destroying the
+  // editor destroys the chooser (dialog dismissed, callback never fires, and
+  // the dying webview's pending promise is moot). The SafePointer covers any
+  // platform that still delivers the callback mid-teardown.
+  juce::Component::SafePointer<TONE3000Editor> self(this);
+  localFileChooser->launchAsync(
+      flags, [self, cancelled, target = targetBlockId.toStdString(),
+              completion = std::move(completion)](const juce::FileChooser& chooser) {
+        if (self == nullptr)
+          return;
+        // Release the chooser once its callback unwinds (it is the caller).
+        juce::MessageManager::callAsync([self] {
+          if (self != nullptr)
+            self->localFileChooser.reset();
+        });
+
+        const auto results = chooser.getResults();
+        if (results.isEmpty()) {
+          completion(cancelled());
+          return;
+        }
+        completion(self->processor.loadLocalTonePath(results.getReference(0), target));
+      });
+}
+
 void TONE3000Editor::resized() {
   // Real pixels only, no transform. The webview handles devicePixelRatio
   // itself, and the page fits its design box to the actual viewport

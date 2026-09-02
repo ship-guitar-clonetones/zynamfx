@@ -204,10 +204,12 @@ export const HELP = {
 
   // Chain gallery
   addTile:
-    'Add Tone: browse TONE3000 for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste · drag: move.',
+    'Add Tone: browse TONE3000 for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.',
   closeToneBrowser: 'Close: back to the chain.',
   copyBlock: 'Copy: copy this block (tone, model and all settings).',
   pasteBlock: 'Paste: add a copy of the copied block in this slot.',
+  loadFileTile: 'Load File: pick a local .nam or IR .wav file to load here. No account needed.',
+  loadFolderTile: 'Load Folder: pick a folder of .nam or .wav files; loads as one multi-model block.',
   blockPower: 'Power: bypass this block.',
   retryLoad: 'Retry: re-download this model.',
   swapTone: 'Swap: replace this tone, keeping its slot.',
@@ -277,7 +279,7 @@ export const HELP = {
 
 /** Gallery tile: leads with the tone's own name. */
 export const toneTileHelp = (title: string) =>
-  `${title}. Click: open · drag: reorder · ${alt('drag')}: duplicate · right-click: copy.`;
+  `${title}. Click: open · drag: reorder · ${alt('drag')}: duplicate · right-click: copy / load file.`;
 
 /** Curve-type selector buttons in the EQ editor. */
 export const bandTypeHelp = (label: string) => `${label}: band curve shape.`;

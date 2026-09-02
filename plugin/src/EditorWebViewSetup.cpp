@@ -192,6 +192,23 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             return editor->processor.loadLocalTone(args[0].toString(), args[1], targetInsertId);
           }))
       .withNativeFunction(
+          // (pickFolder, targetBlockId?): the tile menus' Load File / Load
+          // Folder actions. Opens the native OS picker, then loads the pick
+          // through the same pipeline as a drop, from its path (no base64
+          // round-trip). Not `guarded`: the completion resolves later, from
+          // the chooser callback. Resolves with { blockId } / { error } like
+          // loadLocalTone, or { cancelled: true } when dismissed. Exists
+          // because drops can't be the only way in: Linux never delivers OS
+          // file drags to the webview (see pickLocalToneFile in Editor.h).
+          "pickLocalToneFile",
+          [editor](const juce::Array<juce::var>& args,
+                   juce::WebBrowserComponent::NativeFunctionCompletion completion) {
+            const bool pickFolder = args.size() >= 1 && coerceBool(args[0]);
+            const juce::String targetBlockId =
+                args.size() >= 2 ? args[1].toString() : juce::String();
+            editor->pickLocalToneFile(pickFolder, targetBlockId, std::move(completion));
+          })
+      .withNativeFunction(
           // Replace the tone of an existing block (Swap action). Keeps the
           // block's chain position and user params.
           "swapTone", guarded(2, false, [editor](const juce::Array<juce::var>& args) {

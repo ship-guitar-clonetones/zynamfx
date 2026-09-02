@@ -143,23 +143,26 @@ bool wavMissingRiffPadByte(const void* data, size_t size) {
   return declared + 8 == static_cast<juce::uint64>(size) + 1;
 }
 
-// One dropped file: validate the bytes and stash a content-addressed copy.
-// Validation happens here, at drop time, instead of letting a bad file
+// Caps for local file loads, mirroring the web UI's drop limits
+// (useToneLoadFlow.ts): the same rules must hold whether the bytes arrive
+// as base64 over the bridge (drops) or straight from disk (the tile menus'
+// Load File / Load Folder pickers).
+constexpr juce::int64 kMaxLocalFileBytes = 50 * 1024 * 1024;
+constexpr int kMaxFolderModels = 300;
+
+// One local file's bytes: validate and stash a content-addressed copy.
+// Validation happens here, at load time, instead of letting a bad file
 // reach the background loader: its failure surfaces as a retry badge, which
 // is the wrong affordance for a file that can never load. Returns the model
 // object { id, name, model_url } for the synthetic tone, or void with
 // `error` set to a user-facing message.
-juce::var stashLocalFile(const juce::String& filename, const juce::String& base64Data,
-                         juce::String& error) {
+juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream& decoded,
+                          juce::String& error) {
   auto fail = [&](const juce::String& message) {
     juce::Logger::writeToLog("[LocalLoad] " + filename + ": " + message);
     error = message;
     return juce::var();
   };
-
-  juce::MemoryOutputStream decoded;
-  if (!juce::Base64::convertFromBase64(decoded, base64Data) || decoded.getDataSize() == 0)
-    return fail("Couldn't read the dropped file");
 
   const juce::String extension = filename.fromLastOccurrenceOf(".", false, false).toLowerCase();
   const bool isNam = extension == "nam";
@@ -214,6 +217,41 @@ juce::var stashLocalFile(const juce::String& filename, const juce::String& base6
   model->setProperty("name", filename.upToLastOccurrenceOf(".", false, false));
   model->setProperty("model_url", juce::URL(stash).toString(false));
   return juce::var(model.get());
+}
+
+// A dropped file as shipped by the webview: { name, data } with base64
+// bytes (the DOM never exposes file paths, so drops ride the bridge as
+// base64; see useToneLoadFlow.ts).
+juce::var stashLocalFile(const juce::String& filename, const juce::String& base64Data,
+                         juce::String& error) {
+  juce::MemoryOutputStream decoded;
+  if (!juce::Base64::convertFromBase64(decoded, base64Data) || decoded.getDataSize() == 0) {
+    juce::Logger::writeToLog("[LocalLoad] " + filename + ": Couldn't read the dropped file");
+    error = "Couldn't read the dropped file";
+    return {};
+  }
+  return stashLocalBytes(filename, decoded, error);
+}
+
+// A file native already has on disk (the tile menus' file picker flow;
+// no base64 round-trip).
+juce::var stashLocalFileFromDisk(const juce::File& file, juce::String& error) {
+  juce::MemoryOutputStream bytes;
+  juce::FileInputStream in(file);
+  if (!in.openedOk() || bytes.writeFromInputStream(in, -1) <= 0) {
+    juce::Logger::writeToLog("[LocalLoad] " + file.getFullPathName() + ": Couldn't read the file");
+    error = "Couldn't read the file";
+    return {};
+  }
+  return stashLocalBytes(file.getFileName(), bytes, error);
+}
+
+// Shared user-facing error result for the local-load entry points.
+juce::var localToneError(const juce::String& title, const juce::String& message) {
+  juce::Logger::writeToLog("[LocalLoad] " + title + ": " + message);
+  juce::DynamicObject::Ptr err = new juce::DynamicObject();
+  err->setProperty("error", message);
+  return juce::var(err.get());
 }
 
 }  // namespace
@@ -278,16 +316,9 @@ float TONE3000Processor::computeIrNormalizationGain(const juce::File& irFile,
 
 juce::var TONE3000Processor::loadLocalTone(const juce::String& title, const juce::var& files,
                                            const std::string& targetInsertId) {
-  auto fail = [&title](const juce::String& message) {
-    juce::Logger::writeToLog("[LocalLoad] " + title + ": " + message);
-    juce::DynamicObject::Ptr err = new juce::DynamicObject();
-    err->setProperty("error", message);
-    return juce::var(err.get());
-  };
-
   const auto* fileArray = files.getArray();
   if (fileArray == nullptr || fileArray->isEmpty())
-    return fail("Nothing to load");
+    return localToneError(title, "Nothing to load");
 
   // A folder with some bad files still loads the good ones; only when
   // nothing survives does the first file's error surface (which for a
@@ -302,9 +333,86 @@ juce::var TONE3000Processor::loadLocalTone(const juce::String& title, const juce
         firstError = error;
       continue;
     }
+    models.add(model);
+  }
 
-    // Identical bytes under two names would collide on the content-derived
-    // id (cache key, picker selection); the first name wins.
+  return finishLocalToneLoad(title, models, firstError, fileArray->size(), targetInsertId);
+}
+
+juce::var TONE3000Processor::loadLocalTonePath(const juce::File& source,
+                                               const std::string& targetInsertId) {
+  if (source.isDirectory()) {
+    // Folder rules mirror the UI's folder drop (useToneLoadFlow.ts): every
+    // .nam/.wav under the folder (subfolders included), the majority
+    // extension decides NAM vs IR, everything else is ignored. Extension
+    // matching is by lowercased name, not findChildFiles wildcards, which
+    // are case-sensitive on Linux.
+    const juce::String title = source.getFileName();
+    juce::Array<juce::File> nams, wavs;
+    for (const auto& file : source.findChildFiles(juce::File::findFiles, true)) {
+      const juce::String extension = file.getFileExtension().toLowerCase();
+      if (extension == ".nam")
+        nams.add(file);
+      else if (extension == ".wav")
+        wavs.add(file);
+    }
+    juce::Array<juce::File>& picked = nams.size() >= wavs.size() ? nams : wavs;
+
+    if (picked.isEmpty())
+      return localToneError(title, "No .nam or .wav files in the folder");
+    if (picked.size() > kMaxFolderModels)
+      return localToneError(title,
+                            "Folder has too many files (max " + juce::String(kMaxFolderModels) +
+                                ")");
+    for (const auto& file : picked)
+      if (file.getSize() > kMaxLocalFileBytes)
+        return localToneError(title, "A file is too large");
+
+    // Listing order is filesystem-dependent; natural name order keeps the
+    // model list stable ("amp 2" before "amp 10"), like the UI's drop path.
+    std::sort(picked.begin(), picked.end(), [](const juce::File& a, const juce::File& b) {
+      return a.getFileName().compareNatural(b.getFileName()) < 0;
+    });
+
+    juce::Array<juce::var> models;
+    juce::String firstError;
+    for (const auto& file : picked) {
+      juce::String error;
+      const juce::var model = stashLocalFileFromDisk(file, error);
+      if (!model.isObject()) {
+        if (firstError.isEmpty())
+          firstError = error;
+        continue;
+      }
+      models.add(model);
+    }
+
+    return finishLocalToneLoad(title, models, firstError, picked.size(), targetInsertId);
+  }
+
+  const juce::String title = source.getFileNameWithoutExtension();
+  const juce::String extension = source.getFileExtension().toLowerCase();
+  if (extension != ".nam" && extension != ".wav")
+    return localToneError(title, "Only .nam and .wav files are supported");
+  if (source.getSize() > kMaxLocalFileBytes)
+    return localToneError(title, "File is too large");
+
+  juce::String error;
+  const juce::var model = stashLocalFileFromDisk(source, error);
+  if (!model.isObject())
+    return localToneError(title, error);
+
+  return finishLocalToneLoad(title, {model}, {}, 1, targetInsertId);
+}
+
+juce::var TONE3000Processor::finishLocalToneLoad(const juce::String& title,
+                                                 const juce::Array<juce::var>& stashedModels,
+                                                 const juce::String& firstError, int fileCount,
+                                                 const std::string& targetInsertId) {
+  // Identical bytes under two names would collide on the content-derived
+  // id (cache key, picker selection); the first name wins.
+  juce::Array<juce::var> models;
+  for (const auto& model : stashedModels) {
     const int modelId = model["id"];
     const bool duplicate =
         std::any_of(models.begin(), models.end(),
@@ -314,10 +422,10 @@ juce::var TONE3000Processor::loadLocalTone(const juce::String& title, const juce
   }
 
   if (models.isEmpty())
-    return fail(firstError.isNotEmpty() ? firstError : "No loadable files");
+    return localToneError(title, firstError.isNotEmpty() ? firstError : "No loadable files");
 
-  // Every model in a local tone shares one format (the UI keeps only the
-  // folder's majority extension); the first stash URL names it.
+  // Every model in a local tone shares one format (folder loads keep only
+  // the majority extension); the first stash URL names it.
   const bool isNam = models.getReference(0)["model_url"].toString().endsWithIgnoreCase(".nam");
 
   juce::DynamicObject::Ptr tone = new juce::DynamicObject();
@@ -329,13 +437,13 @@ juce::var TONE3000Processor::loadLocalTone(const juce::String& title, const juce
 
   const juce::String toneJson = juce::JSON::toString(juce::var(tone.get()));
 
-  // A drop on an existing tone tile replaces in place (same block id +
-  // params). Insert-slot ids (and missing/stale ids) still go through
+  // A load targeting an existing tone tile replaces in place (same block id
+  // + params). Insert-slot ids (and missing/stale ids) still go through
   // loadTone and consume/create a slot.
   if (!targetInsertId.empty() && swapTone(targetInsertId, toneJson)) {
     juce::Logger::writeToLog("[LocalLoad] Swapped '" + title + "' into block " +
                              juce::String(targetInsertId) + " (" + juce::String(models.size()) +
-                             " of " + juce::String(fileArray->size()) + " file(s))");
+                             " of " + juce::String(fileCount) + " file(s))");
     juce::DynamicObject::Ptr ok = new juce::DynamicObject();
     ok->setProperty("blockId", juce::String(targetInsertId));
     return juce::var(ok.get());
@@ -343,11 +451,11 @@ juce::var TONE3000Processor::loadLocalTone(const juce::String& title, const juce
 
   const std::string blockId = loadTone(toneJson, targetInsertId);
   if (blockId.empty())
-    return fail("Couldn't add the block");
+    return localToneError(title, "Couldn't add the block");
 
   juce::Logger::writeToLog("[LocalLoad] Loaded '" + title + "' into block " +
                            juce::String(blockId) + " (" + juce::String(models.size()) + " of " +
-                           juce::String(fileArray->size()) + " file(s))");
+                           juce::String(fileCount) + " file(s))");
   juce::DynamicObject::Ptr ok = new juce::DynamicObject();
   ok->setProperty("blockId", juce::String(blockId));
   return juce::var(ok.get());

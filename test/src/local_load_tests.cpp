@@ -1,12 +1,13 @@
-// Drag-and-drop local file loading (loadLocalTone): drop-time validation
-// (NAM files must be A2), and that accepted files ride the normal load
-// pipeline as `local` blocks: background load from the content-addressed
-// stash (no network), IR mix defaults by kernel length, folder drops as one
-// multi-model tone whose full model list survives switches.
+// Local file loading (loadLocalTone for drops, loadLocalTonePath for the
+// tile menus' file pickers): load-time validation (NAM files must be A2),
+// and that accepted files ride the normal load pipeline as `local` blocks:
+// background load from the content-addressed stash (no network), IR mix
+// defaults by kernel length, folder loads as one multi-model tone whose
+// full model list survives switches.
 //
-// Note: loadLocalTone writes its stash into the real app-data LocalModels
-// folder. The names are content hashes, so repeated runs reuse the same few
-// small files (and the week-based GC clears them eventually).
+// Note: both entry points write their stash into the real app-data
+// LocalModels folder. The names are content hashes, so repeated runs reuse
+// the same few small files (and the week-based GC clears them eventually).
 
 #include "chain_test_helpers.h"
 
@@ -164,4 +165,89 @@ TEST(LocalLoadTest, RejectsBadFilesAndSkipsThemInFolders) {
   EXPECT_TRUE(res["error"].isVoid()) << res["error"].toString().toStdString();
   ASSERT_TRUE(waitForChainLoaded(proc));
   EXPECT_EQ(firstToneBlock(proc)["tone"]["models"].size(), 1);
+}
+
+// loadLocalTonePath: the tile menus' Load File / Load Folder pickers. Same
+// pipeline as loadLocalTone but fed from disk paths (native FileChooser
+// results); the folder rules (majority extension, natural order, title from
+// the folder name) live natively here instead of in the web UI.
+
+TEST(LocalLoadTest, PathLoadsSingleFileAndSwapsInPlace) {
+  TONE3000Processor proc;
+  const juce::var res = proc.loadLocalTonePath(testFile("a2-amp-test.nam"));
+  EXPECT_TRUE(res["error"].isVoid()) << res["error"].toString().toStdString();
+  ASSERT_TRUE(res["blockId"].toString().isNotEmpty());
+  ASSERT_TRUE(waitForChainLoaded(proc));
+
+  juce::var block = firstToneBlock(proc);
+  EXPECT_TRUE(static_cast<bool>(block["tone"]["local"]));
+  EXPECT_EQ(block["tone"]["format"].toString(), juce::String("nam"));
+  EXPECT_EQ(block["tone"]["title"].toString(), juce::String("a2-amp-test"));
+
+  // Targeting an existing tone block replaces in place, like a drop on a tile.
+  const juce::String blockId = res["blockId"].toString();
+  const juce::var swapped =
+      proc.loadLocalTonePath(testFile("cab-ir-test.wav"), blockId.toStdString());
+  EXPECT_EQ(swapped["blockId"].toString(), blockId);
+  ASSERT_TRUE(waitForChainLoaded(proc));
+  block = firstToneBlock(proc);
+  EXPECT_EQ(block["blockId"].toString(), blockId);
+  EXPECT_EQ(block["tone"]["format"].toString(), juce::String("ir"));
+  EXPECT_EQ(block["tone"]["title"].toString(), juce::String("cab-ir-test"));
+}
+
+TEST(LocalLoadTest, PathLoadsFolderMajorityExtensionInNaturalOrder) {
+  // Scratch folder: three distinct .nam files whose natural order differs
+  // from lexicographic ("amp 10" sorts before "amp 2" there), one of them in
+  // a subfolder (recursion), plus a minority .wav and a stray .txt (ignored).
+  const juce::File dir =
+      juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("t3k-pack-test");
+  dir.deleteRecursively();
+  ASSERT_TRUE(dir.getChildFile("More").createDirectory());
+  ASSERT_TRUE(testFile("a2-amp-test.nam").copyFileTo(dir.getChildFile("amp 2.nam")));
+  ASSERT_TRUE(testFile("a2-amp-cab-test.nam").copyFileTo(dir.getChildFile("amp 10.nam")));
+  ASSERT_TRUE(
+      testFile("a2-am-test-2.nam").copyFileTo(dir.getChildFile("More").getChildFile("amp 1.nam")));
+  ASSERT_TRUE(testFile("cab-ir-test.wav").copyFileTo(dir.getChildFile("cab.wav")));
+  ASSERT_TRUE(dir.getChildFile("notes.txt").replaceWithText("hi"));
+
+  TONE3000Processor proc;
+  const juce::var res = proc.loadLocalTonePath(dir);
+  EXPECT_TRUE(res["error"].isVoid()) << res["error"].toString().toStdString();
+  ASSERT_TRUE(waitForChainLoaded(proc));
+
+  const juce::var block = firstToneBlock(proc);
+  EXPECT_EQ(block["tone"]["title"].toString(), juce::String("t3k-pack-test"));
+  EXPECT_EQ(block["tone"]["format"].toString(), juce::String("nam"));
+  ASSERT_EQ(block["tone"]["models"].size(), 3)
+      << "models: " << juce::JSON::toString(block["tone"]["models"]).toStdString();
+  EXPECT_EQ(block["tone"]["models"][0]["name"].toString(), juce::String("amp 1"));
+  EXPECT_EQ(block["tone"]["models"][1]["name"].toString(), juce::String("amp 2"));
+  EXPECT_EQ(block["tone"]["models"][2]["name"].toString(), juce::String("amp 10"));
+
+  dir.deleteRecursively();
+}
+
+TEST(LocalLoadTest, PathRejectsBadInputs) {
+  TONE3000Processor proc;
+
+  juce::var res = proc.loadLocalTonePath(juce::File("/nonexistent-t3k/missing.nam"));
+  EXPECT_EQ(res["error"].toString(), juce::String("Couldn't read the file"));
+
+  const juce::File dir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("t3k-pack-reject-test");
+  dir.deleteRecursively();
+  ASSERT_TRUE(dir.createDirectory().wasOk());
+  ASSERT_TRUE(dir.getChildFile("notes.txt").replaceWithText("hi"));
+
+  res = proc.loadLocalTonePath(dir.getChildFile("notes.txt"));
+  EXPECT_EQ(res["error"].toString(), juce::String("Only .nam and .wav files are supported"));
+
+  // A folder whose only contents are unsupported types has nothing to load.
+  res = proc.loadLocalTonePath(dir);
+  EXPECT_EQ(res["error"].toString(), juce::String("No .nam or .wav files in the folder"));
+
+  // Rejected loads must not leave a block behind.
+  EXPECT_TRUE(firstToneBlock(proc).isVoid());
+  dir.deleteRecursively();
 }
