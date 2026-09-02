@@ -12,6 +12,40 @@
         padding: 0;
       }
     </style>
+    <script>
+      // Boot watchdog. Classic script, ES5-only syntax: it must parse on any
+      // WebKit, because its job is reporting when main.js cannot.
+      //
+      // A module script that fails to parse or load errors on its <script>
+      // element, not window.onerror, so a failed boot would otherwise leave
+      // a black window and an empty log. Capture resource errors here, and
+      // if the bundle hasn't flagged itself booted (window.__T3K_UI_BOOTED,
+      // set by main.tsx) shortly after load, log one line of feature probes:
+      // the native shim forwards console output to the on-disk log, so a
+      // black-window report says exactly what this engine is missing.
+      (function () {
+        window.addEventListener('error', function (e) {
+          var t = e && e.target;
+          if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+            console.error('[boot] resource failed to load: ' + (t.src || t.href));
+          }
+        }, true);
+        function probe(src) {
+          try { eval(src); return 'yes'; } catch (err) { return 'no'; }
+        }
+        setTimeout(function () {
+          if (window.__T3K_UI_BOOTED) return;
+          console.error(
+            '[boot] UI did not boot within 4s. WebKit probes:' +
+            ' optional-chaining=' + probe('null?.x') +
+            ' class-fields=' + probe('(class{x=1})') +
+            ' static-blocks=' + probe('(class{static{}})') +
+            ' AbortSignal.timeout=' + (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? 'yes' : 'no') +
+            ' UA=' + navigator.userAgent
+          );
+        }, 4000);
+      })();
+    </script>
   </head>
   <body style="background-color: #000000;">
     <div id="root"></div>
