@@ -11,6 +11,7 @@ import { GearIcon, ToneImage } from './GearIcon';
 import { BusyOverlay, LoadingDots } from './LoadingDots';
 import { HELP, helpProps } from './helpText';
 import { EdgeFade, EDGE_FADE_WIDTH } from './GalleryLane';
+import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll';
 import { CARD_WIDTH } from './chainLayout';
 import { T3kMark } from './T3kMark';
 import {
@@ -198,45 +199,49 @@ const GearFilterPill: React.FC<{
 const GearFilterRow: React.FC<{ active: string | null; onChange: (id: string | null) => void }> = ({
   active,
   onChange,
-}) => (
-  <div
-    style={{
-      position: 'relative',
-      marginLeft: `-${EDGE_FADE_WIDTH}rem`,
-      marginRight: `-${EDGE_FADE_WIDTH}rem`,
-    }}
-  >
+}) => {
+  const wheelScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
+  return (
     <div
-      role="radiogroup"
-      aria-label="Filter by gear type"
-      className="hide-scrollbar"
       style={{
-        display: 'flex',
-        gap: '10rem',
-        overflowX: 'auto',
-        // overflow-x:auto also clips vertically at the scrollport, and at
-        // fractional UI scales the pill height can round a subpixel taller
-        // than the row, shaving the bottom border. The vertical padding
-        // gives the pills breathing room inside the scrollport; the negative
-        // margins cancel it outside so the surrounding layout is unchanged.
-        padding: `2rem ${EDGE_FADE_WIDTH}rem`,
-        margin: '-2rem 0',
+        position: 'relative',
+        marginLeft: `-${EDGE_FADE_WIDTH}rem`,
+        marginRight: `-${EDGE_FADE_WIDTH}rem`,
       }}
     >
-      {GEAR_FILTERS.map((g) => (
-        <GearFilterPill
-          key={g.id}
-          id={g.id}
-          label={g.label}
-          active={active === g.id}
-          onClick={() => onChange(active === g.id ? null : g.id)}
-        />
-      ))}
+      <div
+        ref={wheelScrollRef}
+        role="radiogroup"
+        aria-label="Filter by gear type"
+        className="hide-scrollbar"
+        style={{
+          display: 'flex',
+          gap: '10rem',
+          overflowX: 'auto',
+          // overflow-x:auto also clips vertically at the scrollport, and at
+          // fractional UI scales the pill height can round a subpixel taller
+          // than the row, shaving the bottom border. The vertical padding
+          // gives the pills breathing room inside the scrollport; the negative
+          // margins cancel it outside so the surrounding layout is unchanged.
+          padding: `2rem ${EDGE_FADE_WIDTH}rem`,
+          margin: '-2rem 0',
+        }}
+      >
+        {GEAR_FILTERS.map((g) => (
+          <GearFilterPill
+            key={g.id}
+            id={g.id}
+            label={g.label}
+            active={active === g.id}
+            onClick={() => onChange(active === g.id ? null : g.id)}
+          />
+        ))}
+      </div>
+      <EdgeFade side="left" />
+      <EdgeFade side="right" />
     </div>
-    <EdgeFade side="left" />
-    <EdgeFade side="right" />
-  </div>
-);
+  );
+};
 
 /** Centered sign-in prompt: shown in place of a gated stream's content while
     signed out, and as a discovery footer under the (public) Trending feed.
