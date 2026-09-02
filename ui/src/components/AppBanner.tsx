@@ -189,7 +189,9 @@ const BANNER_RULES: BannerRule[] = [
       state.deviceOpen && state.sampleRate > 0 && Math.round(state.sampleRate) !== 48000,
     content: (state) => (
       <>
-        <b>Running at {(state.sampleRate / 1000).toFixed(state.sampleRate % 1000 === 0 ? 0 : 1)} kHz.</b>{' '}
+        <b>
+          Running at {(state.sampleRate / 1000).toFixed(state.sampleRate % 1000 === 0 ? 0 : 1)} kHz.
+        </b>{' '}
         TONE3000 runs lightest at 48 kHz. Any rate works fine, this one just uses a bit more CPU.
       </>
     ),

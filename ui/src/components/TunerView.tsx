@@ -1,7 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X as XIcon } from './icons';
 import { useNativeFunction } from '../hooks/useFunction';
-import { BRAND_BLUE, BRAND_RED, BRAND_YELLOW, FONT_MONO, GRAY, SURFACE_RAISED, WHITE } from './theme';
+import {
+  BRAND_BLUE,
+  BRAND_RED,
+  BRAND_YELLOW,
+  FONT_MONO,
+  GRAY,
+  SURFACE_RAISED,
+  WHITE,
+} from './theme';
 
 interface TunerReading {
   frequency: number;
@@ -16,14 +24,7 @@ const IN_TUNE_CENTS = 5;
 const MAX_CENTS = 50;
 
 // Bar colors from the center outward (blue → yellow → red), per screenshot.
-const SIDE_COLORS = [
-  BRAND_BLUE,
-  BRAND_YELLOW,
-  BRAND_YELLOW,
-  BRAND_RED,
-  BRAND_RED,
-  BRAND_RED,
-];
+const SIDE_COLORS = [BRAND_BLUE, BRAND_YELLOW, BRAND_YELLOW, BRAND_RED, BRAND_RED, BRAND_RED];
 const POLL_MS = 50;
 
 // Tapered panel geometry from the idle-state SVG (50×181 with the short

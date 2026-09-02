@@ -92,10 +92,18 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ notice, onRemindLate
           <X size={16} />
         </button>
 
-        <div style={{ fontSize: '14rem', fontWeight: 400 }}>Update available: v{notice.version}</div>
+        <div style={{ fontSize: '14rem', fontWeight: 400 }}>
+          Update available: v{notice.version}
+        </div>
 
         <div
-          style={{ fontSize: '13rem', fontWeight: 400, lineHeight: 1.5, color: MUTED, maxWidth: '340rem' }}
+          style={{
+            fontSize: '13rem',
+            fontWeight: 400,
+            lineHeight: 1.5,
+            color: MUTED,
+            maxWidth: '340rem',
+          }}
           dangerouslySetInnerHTML={{ __html: messageHtml }}
         />
 

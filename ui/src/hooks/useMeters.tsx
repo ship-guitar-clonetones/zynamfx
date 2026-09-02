@@ -174,8 +174,7 @@ class MeterStore {
    * No extra native calls; `cpu` already rides getMeterLevels.
    */
   private applyCpu(raw: number | undefined) {
-    const sample =
-      typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, raw) : 0;
+    const sample = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, raw) : 0;
     if (!this.cpuSeeded) {
       this.cpuEma = sample;
       this.cpuSeeded = true;

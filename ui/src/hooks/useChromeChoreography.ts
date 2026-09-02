@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DESIGN_WIDTH, DESIGN_HEIGHT } from './useUiScale';
+import { DESIGN_HEIGHT, getUiScale, setUiDesignHeight } from './useUiScale';
 import { BANNER_HEIGHT, type AppBannerSpec } from '../components/AppBanner';
 import { HINT_HEIGHT } from '../components/HintBar';
 
@@ -90,22 +90,20 @@ export function useChromeChoreography(
   }, [bannerPresent, phase]);
 
   // waiting -> entering once the window has actually grown, so the slide
-  // plays into space that exists. The expected height mirrors the native
-  // aspect lock: viewport = design box * the width-derived scale.
+  // plays into space that exists: viewport >= the banner-inclusive design
+  // box at the current scale.
   useEffect(() => {
     if (phase !== 'waiting') return;
     const target = DESIGN_HEIGHT + BANNER_HEIGHT + hintExtra;
     const check = () => {
-      const el = document.documentElement;
-      const scale = Math.max(1, el.clientWidth / DESIGN_WIDTH);
       // 2px tolerance for setSize/scale rounding.
-      if (el.clientHeight >= target * scale - 2) setPhase('entering');
+      if (document.documentElement.clientHeight >= target * getUiScale() - 2) setPhase('entering');
     };
     check();
     const observer = new ResizeObserver(check);
     observer.observe(document.documentElement);
     // A host may refuse or delay the resize; slide anyway after a beat (the
-    // webview scrolls in that case).
+    // UI scale then shrinks to fit the taller box, see setUiDesignHeight).
     const timeout = window.setTimeout(() => setPhase('entering'), 400);
     return () => {
       observer.disconnect();
@@ -117,19 +115,31 @@ export function useChromeChoreography(
   useEffect(() => {
     if (phase !== 'entering' && phase !== 'leaving') return;
     const timeout = window.setTimeout(
-      () => setPhase((current) => (current === 'entering' ? 'shown' : current === 'leaving' ? 'hidden' : current)),
+      () =>
+        setPhase((current) =>
+          current === 'entering' ? 'shown' : current === 'leaving' ? 'hidden' : current
+        ),
       BANNER_ANIM_MS + 40
     );
     return () => window.clearTimeout(timeout);
   }, [phase]);
 
   const bannerSlotHeight = phase === 'entering' || phase === 'shown' ? BANNER_HEIGHT : 0;
+  const rootExtraHeight = bannerSlotHeight + hintExtra;
+
+  // Publish the box height the UI scale must fit (before paint, same commit
+  // as the strip mount/unmount). setUiDesignHeight sequences a *taller* box
+  // against the in-flight window resize itself, so no phases are needed here.
+  useLayoutEffect(() => {
+    setUiDesignHeight(DESIGN_HEIGHT + rootExtraHeight);
+  }, [rootExtraHeight]);
+
   return {
     // While 'shown', spec changes (rule swaps) render directly; during exit
     // the cached spec keeps the content alive under the reverse slide.
     renderedBanner: phase === 'hidden' ? null : (banner ?? lastBannerRef.current),
     bannerSlotHeight,
     animating: phase === 'entering' || phase === 'leaving',
-    rootExtraHeight: bannerSlotHeight + hintExtra,
+    rootExtraHeight,
   };
 }

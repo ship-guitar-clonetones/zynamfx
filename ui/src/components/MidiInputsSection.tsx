@@ -70,7 +70,9 @@ export const MidiInputsSection: React.FC<{ device: AudioDevice }> = ({ device })
                   textAlign: 'left',
                   color: 'inherit',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)')}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)')
+                }
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 <ChoiceIndicator selected={input.enabled} square />
@@ -89,7 +91,9 @@ export const MidiInputsSection: React.FC<{ device: AudioDevice }> = ({ device })
                   {input.name}
                 </span>
                 {input.enabled && (
-                  <span style={{ fontSize: '11rem', fontWeight: 400, color: SUBTLE, flexShrink: 0 }}>
+                  <span
+                    style={{ fontSize: '11rem', fontWeight: 400, color: SUBTLE, flexShrink: 0 }}
+                  >
                     enabled
                   </span>
                 )}

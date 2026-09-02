@@ -131,7 +131,18 @@ const SectionKnob: React.FC<{
   powerHelp: string;
   onPower: () => void;
   onDragStateChange?: (dragging: boolean) => void;
-}> = ({ label, value, onChange, scale, defaultValue, help, on, powerHelp, onPower, onDragStateChange }) => (
+}> = ({
+  label,
+  value,
+  onChange,
+  scale,
+  defaultValue,
+  help,
+  on,
+  powerHelp,
+  onPower,
+  onDragStateChange,
+}) => (
   <div
     style={{
       width: rem(SECTION_WIDTH),

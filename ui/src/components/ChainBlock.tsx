@@ -384,8 +384,7 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
     [actions]
   );
 
-  const favorited =
-    favoriteOverride?.on ?? infoTone?.is_favorite ?? tone.is_favorite === true;
+  const favorited = favoriteOverride?.on ?? infoTone?.is_favorite ?? tone.is_favorite === true;
   const favoritesCount =
     favoriteOverride?.count ?? infoTone?.favorites_count ?? tone.favorites_count ?? 0;
 
@@ -991,13 +990,12 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                               value={favoritesCount}
                               favorited={favorited}
                               onToggle={
-                                actions.authenticated ? () => void handleToggleFavorite() : undefined
+                                actions.authenticated
+                                  ? () => void handleToggleFavorite()
+                                  : undefined
                               }
                             />
-                            <CountStat
-                              icon={<FolderClosed size={16} />}
-                              value={modelsTotal ?? 0}
-                            />
+                            <CountStat icon={<FolderClosed size={16} />} value={modelsTotal ?? 0} />
                           </div>
                         )}
 
@@ -1021,7 +1019,10 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                             <span style={{ fontSize: '14rem', color: GRAY, fontWeight: 400 }}>
                               {tone.user.username}
                               {tone.published_at && (
-                                <span style={{ color: MUTED }}> · {timeAgoShort(tone.published_at)}</span>
+                                <span style={{ color: MUTED }}>
+                                  {' '}
+                                  · {timeAgoShort(tone.published_at)}
+                                </span>
                               )}
                             </span>
                           </div>

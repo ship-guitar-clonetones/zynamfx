@@ -23,11 +23,7 @@ function readCurrent<T extends ParameterType>(param: Parameter<T>): ParameterVal
 export function useParameter<T extends ParameterType>(
   identifier: string,
   type: T
-): [
-  ParameterValueType[T],
-  (value: ParameterValueType[T]) => void,
-  (dragging: boolean) => void,
-] {
+): [ParameterValueType[T], (value: ParameterValueType[T]) => void, (dragging: boolean) => void] {
   const backend = useAudioBackend();
   const param = backend.getParameterState(identifier, type) as Parameter<T>;
   const [value, setValue] = useState<ParameterValueType[T]>(() => readCurrent(param));

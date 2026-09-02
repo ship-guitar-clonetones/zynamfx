@@ -112,7 +112,10 @@ const AdvertButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     "already aligned" floor no delay correction was applied. polarityFlipped
     reports a chain Ø toggled alongside. Two decimals: the probe measures to
     sub-sample precision. */
-const alignDoneMessage = ({ matchedMs = 0, polarityFlipped = false }: AutoMeasureResult): string => {
+const alignDoneMessage = ({
+  matchedMs = 0,
+  polarityFlipped = false,
+}: AutoMeasureResult): string => {
   const delay =
     Math.abs(matchedMs) < 0.05
       ? null

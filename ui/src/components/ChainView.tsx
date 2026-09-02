@@ -254,8 +254,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
     // Land after the hovered tile when the dragged tile's center has passed
     // the hovered tile's center.
     const dragged = manager.dragOperation.shape?.current.center;
-    const landAfter =
-      dragged != null && target.shape != null && dragged.x > target.shape.center.x;
+    const landAfter = dragged != null && target.shape != null && dragged.x > target.shape.center.x;
 
     setLanes((prev) => {
       const fromItems = prev[from].filter((i) => i.blockId !== activeId);
