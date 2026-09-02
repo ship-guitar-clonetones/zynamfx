@@ -5,9 +5,10 @@
 }
 
 /* Design-space scaling: 1rem = 1 design px x the UI scale. useUiScale keeps
-   this at `scale`px (viewportWidth / 1024, min 1); the static 1px here makes
-   the pre-hydration first paint correct at 1x. Every length in the app is
-   authored in rem. */
+   this at `scale`px (the 1024-wide design box fitted to the viewport,
+   letterboxed; can go below 1x when the viewport is smaller than the box);
+   the static 1px here makes the pre-hydration first paint correct at 1x.
+   Every length in the app is authored in rem. */
 html {
   font-size: 1px;
 }

@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Bookmark, Download, FolderClosed, Search as SearchIcon } from './icons';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bookmark,
+  Download,
+  FolderClosed,
+  Search as SearchIcon,
+} from './icons';
 import type { T3KClient } from '../t3k/tone3000-client';
 import { catalogModelCount, type Tone } from '../types/tone';
 import { formatCount } from '../t3k/formatCount';
@@ -863,7 +870,9 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
           )}
 
           {/* Tone grid / empty state / sign-in prompt */}
-          <div style={{ marginTop: '24rem', marginBottom: showPaginator ? '16rem' : 0 }}>{body}</div>
+          <div style={{ marginTop: '24rem', marginBottom: showPaginator ? '16rem' : 0 }}>
+            {body}
+          </div>
 
           {showPaginator && (
             <div

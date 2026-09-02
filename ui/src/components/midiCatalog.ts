@@ -67,18 +67,24 @@ export const MAPPABLE_TARGETS: MappableTarget[] = [
   { id: 'chainSoloRight', name: 'Solo R', group: 'Stereo', kind: 'toggle' },
   { id: 'chainInvertLeft', name: 'Invert L', group: 'Stereo', kind: 'toggle' },
   { id: 'chainInvertRight', name: 'Invert R', group: 'Stereo', kind: 'toggle' },
-  ...Array.from({ length: BLOCK_POWER_TARGETS }, (_, i): MappableTarget => ({
-    id: `block${i + 1}Power`,
-    name: `Block ${i + 1} Power`,
-    group: 'Chain',
-    kind: 'toggle',
-  })),
-  ...Array.from({ length: BLOCK_POWER_TARGETS }, (_, i): MappableTarget => ({
-    id: `rightBlock${i + 1}Power`,
-    name: `Block ${i + 1} Power`,
-    group: 'Chain R',
-    kind: 'toggle',
-  })),
+  ...Array.from(
+    { length: BLOCK_POWER_TARGETS },
+    (_, i): MappableTarget => ({
+      id: `block${i + 1}Power`,
+      name: `Block ${i + 1} Power`,
+      group: 'Chain',
+      kind: 'toggle',
+    })
+  ),
+  ...Array.from(
+    { length: BLOCK_POWER_TARGETS },
+    (_, i): MappableTarget => ({
+      id: `rightBlock${i + 1}Power`,
+      name: `Block ${i + 1} Power`,
+      group: 'Chain R',
+      kind: 'toggle',
+    })
+  ),
 ];
 
 export const targetById = new Map(MAPPABLE_TARGETS.map((t) => [t.id, t]));

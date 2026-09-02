@@ -1,14 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/react/sortable';
-import {
-  ArrowLeftRight,
-  ClipboardPaste,
-  Copy,
-  PlusCircle,
-  Power,
-  Trash2,
-  Upload,
-} from './icons';
+import { ArrowLeftRight, ClipboardPaste, Copy, PlusCircle, Power, Trash2, Upload } from './icons';
 import { BlockEnergyBorder, BlockLed } from './BlockLed';
 import { ToneImage } from './GearIcon';
 import { LoadingDots } from './LoadingDots';

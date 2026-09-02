@@ -619,7 +619,12 @@ export const PresetBar: React.FC<PresetBarProps> = ({
                 )}
                 {filtered.length === 0 && (
                   <div
-                    style={{ color: MUTED, fontSize: '13rem', fontWeight: 400, padding: '12rem 4rem' }}
+                    style={{
+                      color: MUTED,
+                      fontSize: '13rem',
+                      fontWeight: 400,
+                      padding: '12rem 4rem',
+                    }}
                   >
                     {presets.length === 0
                       ? 'No presets yet. Save one to get started.'

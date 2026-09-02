@@ -285,9 +285,7 @@ const InputChannelPicker: React.FC<{
             ))}
           </div>
           {mode === 'stereo' && (
-            <p style={captionStyle}>
-              Pick any two. Selecting a third swaps out your oldest pick.
-            </p>
+            <p style={captionStyle}>Pick any two. Selecting a third swaps out your oldest pick.</p>
           )}
         </>
       )}
@@ -367,9 +365,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
 
   return (
     <>
-      <style>
-        {`@keyframes t3kTestPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }`}
-      </style>
+      <style>{`@keyframes t3kTestPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }`}</style>
       {/* OS mic gate: the one form error whose fix lives outside the app, so
           (unlike the other inline mirrors) it keeps its action button. */}
       {state.micPermission === 'denied' && (
@@ -525,7 +521,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
 
         {/* Stereo output pair, only for multi-out interfaces. */}
         {state.outputPairs.length > 1 && (
-          <FieldRow flush label="Output Channels" help="This interface has more than one output pair.">
+          <FieldRow
+            flush
+            label="Output Channels"
+            help="This interface has more than one output pair."
+          >
             <SelectField
               value={String(Math.max(state.activeOutputPair, 0))}
               options={state.outputPairs.map((label, i) => ({ value: String(i), label }))}
@@ -589,13 +589,23 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
             <div style={{ display: 'flex', gap: '8rem' }}>
               <button
                 onClick={() => apply(actions.openControlPanel)}
-                style={{ ...outlinedFieldStyle, padding: '12rem 16rem', cursor: 'pointer', flex: 1 }}
+                style={{
+                  ...outlinedFieldStyle,
+                  padding: '12rem 16rem',
+                  cursor: 'pointer',
+                  flex: 1,
+                }}
               >
                 Open Control Panel
               </button>
               <button
                 onClick={() => apply(actions.restartDevice)}
-                style={{ ...outlinedFieldStyle, padding: '12rem 16rem', cursor: 'pointer', flex: 1 }}
+                style={{
+                  ...outlinedFieldStyle,
+                  padding: '12rem 16rem',
+                  cursor: 'pointer',
+                  flex: 1,
+                }}
               >
                 Reset Device
               </button>

@@ -313,9 +313,7 @@ export const MidiMapSettings: React.FC<{
   // A learn armed for a not-yet-mapped target renders as a pending row at
   // the end of the list; re-learn on an existing row takes over that row.
   const pendingLearn =
-    learnTargetId && !state.mappings.some((m) => m.targetId === learnTargetId)
-      ? learnTargetId
-      : '';
+    learnTargetId && !state.mappings.some((m) => m.targetId === learnTargetId) ? learnTargetId : '';
 
   return (
     <>
@@ -387,9 +385,9 @@ export const MidiMapSettings: React.FC<{
           </div>
         )}
         <p style={captionStyle}>
-          Map Previous / Next Preset to step through presets from CC or note buttons. Program
-          change messages also switch presets directly; each preset shows its PC number in the
-          preset browser.
+          Map Previous / Next Preset to step through presets from CC or note buttons. Program change
+          messages also switch presets directly; each preset shows its PC number in the preset
+          browser.
         </p>
       </div>
 

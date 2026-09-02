@@ -158,8 +158,7 @@ export const DbMeter: React.FC<DbMeterProps> = ({
         // A tighter-than-default gap shrinks the slot; give the savings back
         // as margin on the label side so the meter's overall footprint (and
         // thus the dots' position over the knob) is gap-independent.
-        [labelsPosition === 'left' ? 'marginLeft' : 'marginRight']:
-          `${LABEL_GAP - labelGap}rem`,
+        [labelsPosition === 'left' ? 'marginLeft' : 'marginRight']: `${LABEL_GAP - labelGap}rem`,
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'flex-end',

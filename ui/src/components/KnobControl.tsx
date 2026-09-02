@@ -451,7 +451,9 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         }}
       >
         {editing ? (
-          <span style={{ width: rem(size), flexShrink: 0, display: 'inline-block' }}>{editInput}</span>
+          <span style={{ width: rem(size), flexShrink: 0, display: 'inline-block' }}>
+            {editInput}
+          </span>
         ) : (
           labelText
         )}

@@ -298,15 +298,10 @@ export const Settings: React.FC<SettingsProps> = ({
         onChange={setHintsEnabled}
       />
 
-      <div
-        style={{ marginBottom: `${SECTION_GAP}rem` }}
-        role="radiogroup"
-        aria-label="NAM A2 Size"
-      >
+      <div style={{ marginBottom: `${SECTION_GAP}rem` }} role="radiogroup" aria-label="NAM A2 Size">
         <span style={sectionLabelStyle}>NAM A2 Size</span>
         <p style={descriptionStyle}>
-          Default size for new NAM blocks. Existing blocks keep their own, so
-          presets load as saved.
+          Default size for new NAM blocks. Existing blocks keep their own, so presets load as saved.
         </p>
         <div
           style={{
@@ -332,8 +327,8 @@ export const Settings: React.FC<SettingsProps> = ({
         label="Per-Block NAM Size"
         description={
           <>
-            Adds a <LiteFullTogglePreview /> toggle to every NAM block. When
-            off, a block only shows its size if it differs from your default.
+            Adds a <LiteFullTogglePreview /> toggle to every NAM block. When off, a block only shows
+            its size if it differs from your default.
           </>
         }
         value={blockSizeControlEnabled}
@@ -354,8 +349,7 @@ export const Settings: React.FC<SettingsProps> = ({
           >
             <Info size={20} style={{ flexShrink: 0, color: WHITE }} aria-hidden />
             <span>
-              Look for <LiteFullTogglePreview /> next to each block&apos;s
-              power button.
+              Look for <LiteFullTogglePreview /> next to each block&apos;s power button.
             </span>
           </p>
         )}

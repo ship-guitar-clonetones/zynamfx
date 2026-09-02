@@ -147,8 +147,8 @@ void TONE3000Editor::updateResizeConstraints() {
 void TONE3000Editor::setExtraContentHeight(int pixels, int persistentPixels) {
   // setSize() reaches the host as a resize request through the plugin
   // wrapper (resizeView in VST3), so this works in DAWs too; a host that
-  // refuses keeps the old size and the webview scrolls. Standalone resizes
-  // its own window directly.
+  // refuses keeps the old size and the web UI shrinks to fit instead (see
+  // useUiScale in the web UI). Standalone resizes its own window directly.
   // The UI reports design-space pixels; the window change is scaled.
   // Generous ceiling: banner (~44) + hint bar (~36) with headroom to spare.
   const int clamped = juce::jlimit(0, 160, pixels);
@@ -237,7 +237,8 @@ void TONE3000Editor::loadMainUrlIfNeeded() {
 
 void TONE3000Editor::resized() {
   // Real pixels only, no transform. The webview handles devicePixelRatio
-  // itself, and the page applies its own CSS zoom from the viewport width.
+  // itself, and the page fits its design box to the actual viewport
+  // (letterboxed; see useUiScale in the web UI).
   if (mainWebView != nullptr)
     mainWebView->setBounds(getLocalBounds());
   // Skip persisting while we're correcting our own size rather than

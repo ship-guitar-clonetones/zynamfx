@@ -198,7 +198,8 @@ export const HELP = {
   presetDelete: 'Delete: remove this preset.',
   presetReorder: 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',
   presetDrag: 'Drag: move this preset within its section.',
-  presetPcToggle: 'MIDI PC: show each preset\u2019s program change number. Prev/Next and PC follow the list order.',
+  presetPcToggle:
+    'MIDI PC: show each preset\u2019s program change number. Prev/Next and PC follow the list order.',
   presetPc: 'PC: the MIDI program change number that loads this preset.',
 
   // Chain gallery
@@ -214,7 +215,8 @@ export const HELP = {
   panLeft: knobHelp('Pan L', 'Left chain, hard left ↔ center.'),
   panRight: knobHelp('Pan R', 'Right chain, center ↔ hard right.'),
   panLink: 'Link Pans: mirror both pan knobs.',
-  monoSum: 'Mono output: both chains summed to one channel. Bal/S/Ø still shape the blend; pans are off.',
+  monoSum:
+    'Mono output: both chains summed to one channel. Bal/S/Ø still shape the blend; pans are off.',
   panMonoSum: 'Pan: unavailable, the output is mono. The chains are summed instead (see MONO).',
   soloLeft: 'Solo L: hear the Left chain alone.',
   soloRight: 'Solo R: hear the Right chain alone.',

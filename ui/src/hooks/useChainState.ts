@@ -209,8 +209,7 @@ export function useChainState() {
         run('setNamSlimSizeDefault', () => native.setNamSlimSizeDefault(slimSize)),
       /** Multi-core processing (machine-wide). Pure scheduling: applies
           instantly and persists on disk. */
-      setMultiCore: (enabled: boolean) =>
-        run('setMultiCore', () => native.setMultiCore(enabled)),
+      setMultiCore: (enabled: boolean) => run('setMultiCore', () => native.setMultiCore(enabled)),
       setActiveSide: (side: ChainSide) =>
         run('setActiveEditChain', () => native.setActiveEditChain(side)),
       /** Swap the Left and Right chains wholesale (stereo only). Undoable. */

@@ -44,8 +44,12 @@ private:
 
   // Design-space size of the plugin UI. The window is this times the user's
   // scale factor: resizable (aspect-locked) from 1x up to kMaxScale. The web
-  // UI observes its actual viewport width and applies a matching CSS zoom
-  // (see useUiScale in the web UI), so native only manages the window box.
+  // UI fits its design box to the actual viewport it gets, letterboxed (see
+  // useUiScale in the web UI), so native only manages the window box. The
+  // fit also covers viewports the native floor can't guarantee: WebView2
+  // rasterizes at the OS scale inside hosts that aren't per-monitor DPI
+  // aware (Pro Tools <= 12 on Windows), and some WMs break the aspect lock
+  // (GNOME/Wayland).
   // The window can additionally grow by the chrome-strip height (see
   // setExtraContentHeight).
   static constexpr int kWidth = 1024;
