@@ -167,7 +167,6 @@ struct ChainBlock {
   // default mix. Long = reverb-like: no pad (diffuse kernels sit at ≈ dry
   // level at unit energy), 50% default mix. Shipped to the UI as `irLong`.
   bool irIsLong{false};
-  juce::File irTempFile;
   juce::LinearSmoothedValue<float> irNormalizationSmoother;
   float irNormalizationGainLinear{1.0f};
 

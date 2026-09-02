@@ -21,6 +21,7 @@ target_sources(DspTests PRIVATE
     src/clipboard_tests.cpp
     src/dsp_tests.cpp
     src/duplicate_tests.cpp
+    src/ir_temp_file_tests.cpp
     src/local_load_tests.cpp
     src/midi_map_tests.cpp
     src/multicore_tests.cpp

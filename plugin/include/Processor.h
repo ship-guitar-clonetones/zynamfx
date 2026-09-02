@@ -97,6 +97,15 @@ public:
   // Age out local-model stash files unused for a week (runs once per
   // process, off-thread). Called from the constructor.
   static void cleanLocalModelStash();
+  // Sweep "*_ir.wav" files leaked into the OS temp dir by older builds (the
+  // IR loader wrote one per engine build and never deleted it; it now cleans
+  // up after itself). Runs once per process, off-thread. Called from the
+  // constructor.
+  static void cleanLeakedIrTempFiles();
+  // The sweep itself: deletes "*_ir.wav" files in `tempDir` untouched for
+  // over an hour (the age guard protects a concurrent instance's in-flight
+  // file). Returns how many files it deleted.
+  static int sweepLeakedIrTempFiles(const juce::File& tempDir);
   // Replace the tone of an existing block in place. Keeps the block's chain
   // position and user params (enabled/gains/mix); the new tone's first model
   // is queued for background loading.
@@ -437,7 +446,6 @@ private:
     int irNumChannels = 1;
     int irLengthBaseSamples = 0;  // base-rate kernel length (tail reporting)
     bool irIsLong = false;        // short/long classification (see ChainBlock.h)
-    juce::File irTempFile;
     float irNormalizationGainLinear = 1.0f;
   };
 

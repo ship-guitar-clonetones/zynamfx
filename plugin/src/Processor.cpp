@@ -49,9 +49,10 @@ TONE3000Processor::TONE3000Processor()
 
   resolveParamRefs();
 
-  // Age out unused drop-loaded model stash files (no-op after the process's
-  // first instance).
+  // Age out unused drop-loaded model stash files and sweep IR temp files
+  // leaked by older builds (both no-ops after the process's first instance).
   cleanLocalModelStash();
+  cleanLeakedIrTempFiles();
 
   // Oversampling settings apply through a message-thread bounce (see
   // applyOversamplingSettings); the relays can fire from any thread.
