@@ -173,12 +173,13 @@ export const Plugin: React.FC = () => {
   );
 
   // First line of defence for network-dependent actions: an instant
-  // `navigator.onLine` check (no probe, no latency at click time) plus the
-  // cached result of the startup TLS probe, which stops OAuth from navigating
-  // the webview into an unrecoverable page when HTTPS is broken (wrong system
-  // clock, intercepting proxy). A connected-but-dead network still gets
-  // through and lands on the recovery paths (failed-navigation recovery,
-  // stream retry, block retry).
+  // `navigator.onLine` check (no probe, no latency at click time). Actions
+  // are never blocked beyond that: a throttled background probe verifies
+  // HTTPS to TONE3000 on the side and, only after a confirming re-probe,
+  // explains a broken-TLS environment (wrong system clock, intercepting
+  // proxy) that would otherwise strand OAuth on a dead page. Failures still
+  // land on the recovery paths (failed-navigation recovery, stream retry,
+  // block retry).
   const connectionGate = useConnectionGate();
   const { requireConnection } = connectionGate;
 
@@ -584,7 +585,8 @@ export const Plugin: React.FC = () => {
         />
 
         {/* Connection gate for internet-dependent actions (add / swap /
-          login / select) and the startup TLS probe result. */}
+          login / select). Offline gates instantly; TLS problems surface from
+          a non-blocking background probe, only after confirmation. */}
         <ConnectionModal
           problem={connectionGate.problem}
           onRetry={connectionGate.retry}
