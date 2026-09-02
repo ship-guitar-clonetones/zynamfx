@@ -25,6 +25,7 @@ import {
   gapCenterX,
 } from './GalleryLane';
 import { useChainActions } from '../hooks/useChainActions';
+import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll';
 import { FONT_MONO, WHITE } from './theme';
 import type { ChainBranch, ChainItem, ChainSide, ToneBlock } from '../types/chain';
 import { isInsertSlot } from '../types/chain';
@@ -117,6 +118,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
   returnToGallery = 0,
 }) => {
   const actions = useChainActions();
+  const wheelScrollRef = useHorizontalWheelScroll<HTMLDivElement>();
   // Persisted so the detail takeover survives this component unmounting: a
   // swap from the detail view opens the tone browser (which replaces the whole
   // chain view, and may bounce through the tone3000.com OAuth redirect). The
@@ -467,6 +469,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
             </span>
           )}
           <div
+            ref={wheelScrollRef}
             className="hide-scrollbar"
             style={{
               flex: 1,
