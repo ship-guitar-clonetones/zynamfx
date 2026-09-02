@@ -131,16 +131,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // The second ParameterID argument is the AU version hint. AU (Logic /
   // GarageBand) keys parameter identity on it, so once released: never reuse
   // or renumber a hint, and give every new parameter a fresh one.
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"inputLevel", 1}, "inputLevel", 0.0f, 1.0f, 0.5f));
+
+  // Normalized 0..1 knob params get an explicit 1e-4 interval. The
+  // (min, max, default) AudioParameterFloat constructor silently bakes a
+  // 0.01 interval into the range, and the webview slider relay snaps every
+  // UI-set value to that grid: 0.48 dB steps on the ±24 dB knobs, which
+  // mangled typed values (-4.0 landed on -3.8; GitHub issue #16). 1e-4
+  // matches the UI's own text-entry/fine-drag rounding (KnobControl rounds
+  // to 4 decimals), so the snap never moves a value the UI can produce.
+  const auto normParam = [](const char* id, int versionHint, float defaultValue) {
+    return std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID{id, versionHint}, id,
+        juce::NormalisableRange<float>(0.0f, 1.0f, 0.0001f), defaultValue);
+  };
+
+  layout.add(normParam("inputLevel", 1, 0.5f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"toneBass", 2}, "toneBass", 0.0f, 10.0f, 5.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"toneMid", 3}, "toneMid", 0.0f, 10.0f, 5.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"toneTreble", 4}, "toneTreble", 0.0f, 10.0f, 5.0f));
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"outputLevel", 5}, "outputLevel", 0.0f, 1.0f, 0.5f));
+  layout.add(normParam("outputLevel", 5, 0.5f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"gateThreshold", 6}, "gateThreshold", -100.0f, 0.0f, -80.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -163,8 +175,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // hard-panned stays correct at any pan position. In mono+spread it tilts
   // the dry/lag sides L/R. Only active in stereo mode or mono+spread; the UI
   // hides the knob otherwise.
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"outputBalance", 12}, "outputBalance", 0.0f, 1.0f, 0.5f));
+  layout.add(normParam("outputBalance", 12, 0.5f));
 
   // Spread (mono chain mode; see Spread.h and plugin/docs/stereo-image.md).
   // Offset is bipolar: 0.5 = center = 0 ms; below center lags the left
@@ -174,18 +185,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // wobble) so powering spread on is audible immediately.
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"spreadEnabled", 13}, "spreadEnabled", false));
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"spreadOffset", 14}, "spreadOffset", 0.0f, 1.0f, 0.8125f));
+  layout.add(normParam("spreadOffset", 14, 0.8125f));
   // Spread advanced-panel deck. All switches default on: the deck is
   // spread's core sound, the panel just exposes its sections. The crossover
   // cutoff rides the shared log map (deckCrossoverHz: 32.5..520 Hz,
   // 0.5 = 130 Hz).
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"spreadWobble", 15}, "spreadWobble", 0.0f, 1.0f, 0.25f));
+  layout.add(normParam("spreadWobble", 15, 0.25f));
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"spreadWobbleEnabled", 16}, "spreadWobbleEnabled", true));
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"spreadCrossover", 17}, "spreadCrossover", 0.0f, 1.0f, 0.5f));
+  layout.add(normParam("spreadCrossover", 17, 0.5f));
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"spreadCrossoverEnabled", 18}, "spreadCrossoverEnabled", true));
   layout.add(std::make_unique<juce::AudioParameterBool>(
@@ -197,17 +205,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // default. Off by default; the UI shows an advert pill until powered on.
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"alignEnabled", 20}, "alignEnabled", false));
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"alignOffset", 21}, "alignOffset", 0.0f, 1.0f, 0.5f));
+  layout.add(normParam("alignOffset", 21, 0.5f));
   // Align advanced-panel deck: the same sections and knob spans as the
   // spread deck, but every switch defaults OFF, so align stays purely
   // corrective until the deck is asked for.
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"alignWobble", 22}, "alignWobble", 0.0f, 1.0f, 0.25f));
+  layout.add(normParam("alignWobble", 22, 0.25f));
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"alignWobbleEnabled", 23}, "alignWobbleEnabled", false));
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"alignCrossover", 24}, "alignCrossover", 0.0f, 1.0f, 0.5f));
+  layout.add(normParam("alignCrossover", 24, 0.5f));
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"alignCrossoverEnabled", 25}, "alignCrossoverEnabled", false));
   layout.add(std::make_unique<juce::AudioParameterBool>(
@@ -219,10 +224,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // any absolute position and skips the mix entirely at the hard-panned
   // default. chainPanLinked is a UI behavior flag (mirrored knob moves),
   // persisted as a parameter so sessions and presets restore it.
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"chainPanLeft", 27}, "chainPanLeft", 0.0f, 1.0f, 0.0f));
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"chainPanRight", 28}, "chainPanRight", 0.0f, 1.0f, 1.0f));
+  layout.add(normParam("chainPanLeft", 27, 0.0f));
+  layout.add(normParam("chainPanRight", 28, 1.0f));
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"chainPanLinked", 29}, "chainPanLinked", true));
 
