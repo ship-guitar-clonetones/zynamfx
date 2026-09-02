@@ -57,8 +57,9 @@ remounts and exchanges the code, then hands the access token to native via
 `setAccessToken` so C++ downloads can send `Authorization: Bearer` headers.
 Session logic lives in `src/hooks/useToneSession.ts`, and the add/swap tone
 flows in `src/hooks/useToneLoadFlow.ts`. The same hook handles local files
-dropped on an insert slot (`.nam` / IR `.wav`, or a folder of them), which
-load natively with no browser or auth; see
+dropped on a tile (`.nam` / IR `.wav`, or a folder of them); the tile menus'
+Load File / Load Folder rows load the same files through a native picker
+instead. Both routes load natively with no browser or auth; see
 [`plugin/docs/local-models.md`](../plugin/docs/local-models.md).
 
 ## Layout

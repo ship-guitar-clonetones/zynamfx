@@ -94,6 +94,15 @@ public:
   // message.
   juce::var loadLocalTone(const juce::String& title, const juce::var& files,
                           const std::string& targetInsertId = {});
+  // Path-based sibling of loadLocalTone for files native already has on
+  // disk: the tile menus' Load File / Load Folder pickers (the webview
+  // drop path can't hand over paths, so it ships base64 instead). A
+  // directory loads as one multi-model tone by the same rules as a folder
+  // drop in the UI: majority extension picks NAM vs IR, capped at 300
+  // files / 50 MB each, models in natural name order, title from the
+  // folder name. A single file must be .nam or .wav; title is the file
+  // name. Same return contract as loadLocalTone.
+  juce::var loadLocalTonePath(const juce::File& source, const std::string& targetInsertId = {});
   // Age out local-model stash files unused for a week (runs once per
   // process, off-thread). Called from the constructor.
   static void cleanLocalModelStash();
@@ -410,6 +419,13 @@ private:
   // honest for local models: recreates a missing stash copy from the cached
   // bytes and re-stamps an existing one's mtime (the GC's liveness signal).
   void refreshLocalStashCopy(const juce::String& modelUrl, const std::vector<uint8_t>& bytes);
+  // Shared tail of loadLocalTone / loadLocalTonePath: dedupe the stashed
+  // models by content id, synthesize the local tone JSON, and route it
+  // through swapTone (existing tone tile) or loadTone (insert slot).
+  juce::var finishLocalToneLoad(const juce::String& title,
+                                const juce::Array<juce::var>& stashedModels,
+                                const juce::String& firstError, int fileCount,
+                                const std::string& targetInsertId);
 
   /** Largest frame count the chain stage can see per boundary callback at the
       base rate: the host max block size converted to 48 kHz frames (and never

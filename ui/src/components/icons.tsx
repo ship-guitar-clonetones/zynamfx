@@ -18,6 +18,7 @@ import {
   Download as LDownload,
   Equal as LEqual,
   ExternalLink as LExternalLink,
+  File as LFile,
   FolderClosed as LFolderClosed,
   Gauge as LGauge,
   GripVertical as LGripVertical,
@@ -83,6 +84,7 @@ export const Copy = scaled(LCopy, 'Copy');
 export const Download = scaled(LDownload, 'Download');
 export const Equal = scaled(LEqual, 'Equal');
 export const ExternalLink = scaled(LExternalLink, 'ExternalLink');
+export const File = scaled(LFile, 'File');
 export const FolderClosed = scaled(LFolderClosed, 'FolderClosed');
 export const Gauge = scaled(LGauge, 'Gauge');
 export const GripVertical = scaled(LGripVertical, 'GripVertical');

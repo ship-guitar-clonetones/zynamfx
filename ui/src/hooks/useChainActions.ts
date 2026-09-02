@@ -20,6 +20,12 @@ export interface ChainActions {
       existing tone tile swaps in place. Resolves to a user-facing error
       message, or null on success. */
   loadLocalFile: (targetBlockId: string, item: DataTransferItem) => Promise<string | null>;
+  /** Menu-driven sibling of loadLocalFile: native opens its OS file picker
+      and loads the pick (a .nam/.wav file, or a folder of them) from its
+      path. Same targeting rules; the reliable route on Linux, where OS file
+      drags never reach the embedded webview. Resolves to a user-facing
+      error message, or null on success or when the dialog is cancelled. */
+  pickLocalFile: (targetBlockId: string, kind: 'file' | 'folder') => Promise<string | null>;
   removeBlock: (blockId: string) => void;
   /** Launch the Select flow to replace this block's tone in place. */
   swapBlock: (blockId: string) => void;

@@ -95,6 +95,11 @@ export const Plugin: React.FC = () => {
   const setTunerEnabled = useNativeFunction<boolean>('setTunerEnabled');
   const copyToClipboard = useNativeFunction<boolean>('copyToClipboard');
   const setExtraContentHeight = useNativeFunction<boolean>('setExtraContentHeight');
+  const pickLocalToneFile = useNativeFunction<{
+    blockId?: string;
+    error?: string;
+    cancelled?: boolean;
+  }>('pickLocalToneFile');
 
   const openSettings = useCallback((tab: SettingsTab) => {
     settingsTabRef.current = tab;
@@ -309,6 +314,21 @@ export const Plugin: React.FC = () => {
     [actions, ensureNativeAuth, t3kClient]
   );
 
+  // Menu-driven local load (the tiles' Load File / Load Folder): native owns
+  // the whole flow (OS picker, validation, stash, load) and resolves when the
+  // dialog closes. This is the route that works on Linux, where OS file drags
+  // never reach the embedded webview and handleDropFile can't fire. Resync
+  // after: the load lands outside useChainState's mutation wrapper.
+  const handlePickLocalFile = useCallback(
+    async (targetBlockId: string, kind: 'file' | 'folder') => {
+      const res = await pickLocalToneFile(kind === 'folder', targetBlockId);
+      await refresh();
+      if (res?.blockId || res?.cancelled) return null;
+      return res?.error ?? "Couldn't load the file";
+    },
+    [pickLocalToneFile, refresh]
+  );
+
   // Non-blocking update check (enabled via VITE_T3K_UPDATE_NOTICE); also
   // resolves the running build's version for the Settings footer.
   const { notice: updateNotice, update, localVersion, remindLater } = useUpdateNotice(t3kClient);
@@ -325,6 +345,7 @@ export const Plugin: React.FC = () => {
     () => ({
       addModel: loadFlow.handleAddModel,
       loadLocalFile: loadFlow.handleDropFile,
+      pickLocalFile: handlePickLocalFile,
       removeBlock: actions.removeBlock,
       swapBlock: loadFlow.handleSwapBlock,
       shareBlock: handleShareBlock,
@@ -355,6 +376,7 @@ export const Plugin: React.FC = () => {
       actions,
       authenticated,
       handleLogin,
+      handlePickLocalFile,
       handleRetryLoad,
       handleShareBlock,
       handleSwitchModel,

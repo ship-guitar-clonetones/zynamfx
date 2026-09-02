@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/react/sortable';
-import { ArrowLeftRight, ClipboardPaste, Copy, PlusCircle, Power, Trash2, Upload } from './icons';
+import {
+  ArrowLeftRight,
+  ClipboardPaste,
+  Copy,
+  File,
+  FolderClosed,
+  PlusCircle,
+  Power,
+  Trash2,
+  Upload,
+} from './icons';
 import { BlockEnergyBorder, BlockLed } from './BlockLed';
 import { ToneImage } from './GearIcon';
 import { LoadingDots } from './LoadingDots';
@@ -11,7 +21,8 @@ import { HELP, helpProps, toneTileHelp } from './helpText';
 import type { ChainSide, ToneBlock } from '../types/chain';
 import { ChromeIconButton } from './ChromeIconButton';
 import { TileMenu } from './TileMenu';
-import type { TileMenuAnchor } from './TileMenu';
+import type { TileMenuAnchor, TileMenuItem } from './TileMenu';
+import type { ChainActions } from '../hooks/useChainActions';
 import { useToast } from './Toast';
 import { GRAY, ICON_SIZE, SURFACE, SURFACE_RAISED } from './theme';
 
@@ -93,6 +104,36 @@ const useTileMenu = () => {
     [menuAnchor, closeMenu]
   );
   return { menuAnchor, openMenu, closeMenu, shouldIgnoreClick };
+};
+
+/** The tile menus' native-picker rows (Load File / Load Folder). Local
+    loading must not depend on drag-and-drop alone: Linux never delivers OS
+    file drags to the embedded webview, so there these rows are the only way
+    local files get in. An insert slot adds; a tone tile swaps in place
+    (same targeting as a drop). */
+const localLoadMenuItems = (
+  targetBlockId: string,
+  actions: ChainActions,
+  toast: ReturnType<typeof useToast>
+): TileMenuItem[] => {
+  const pick = async (kind: 'file' | 'folder') => {
+    const error = await actions.pickLocalFile(targetBlockId, kind);
+    if (error) toast.show(error);
+  };
+  return [
+    {
+      label: 'Load File',
+      icon: <File size={16} />,
+      help: HELP.loadFileTile,
+      onSelect: () => void pick('file'),
+    },
+    {
+      label: 'Load Folder',
+      icon: <FolderClosed size={16} />,
+      help: HELP.loadFolderTile,
+      onSelect: () => void pick('folder'),
+    },
+  ];
 };
 
 /** Interactive wiring for a tile's chrome. */
@@ -397,6 +438,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
                 help: HELP.copyBlock,
                 onSelect: () => actions.copyBlock(blockId),
               },
+              ...localLoadMenuItems(blockId, actions, toast),
             ]}
           />
         )}
@@ -547,6 +589,7 @@ export const AddTile: React.FC<AddTileProps> = ({
               disabled: onPaste == null,
               onSelect: () => onPaste?.(),
             },
+            ...localLoadMenuItems(id, actions, toast),
           ]}
         />
       )}

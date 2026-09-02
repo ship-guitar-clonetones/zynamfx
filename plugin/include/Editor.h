@@ -95,6 +95,17 @@ private:
   bool mainUrlLoaded = false;
   void loadMainUrlIfNeeded();
 
+  // Native OS file/folder picker behind the tile menus' Load File / Load
+  // Folder actions, the one local-load entry point that works everywhere:
+  // Linux's embedded WebKitGTK never receives OS file drags, so the HTML5
+  // drop path is dead there (GitHub issue #22). Async: `completion` resolves
+  // with loadLocalTonePath's { blockId } / { error } result, or
+  // { cancelled: true } when the dialog is dismissed. The chooser lives on
+  // the editor so destroying the editor tears the dialog down with it.
+  void pickLocalToneFile(bool pickFolder, const juce::String& targetBlockId,
+                         juce::WebBrowserComponent::NativeFunctionCompletion completion);
+  std::unique_ptr<juce::FileChooser> localFileChooser;
+
   // Chain-change push: a lightweight native timer watches the processor's
   // revision counter (an atomic read, far cheaper than the webview polling
   // across the bridge) and emits a `chainChanged` event when it moves. The
