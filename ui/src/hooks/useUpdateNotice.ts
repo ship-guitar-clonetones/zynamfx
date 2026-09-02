@@ -110,13 +110,25 @@ export function useUpdateNotice(client: T3KClient): {
         if (typeof id === 'string') deviceId = id;
       }
 
-      const res = await client.fetchPluginVersion({
-        signal: AbortSignal.timeout(5000),
-        // The response is CDN-cached server-side; never let a stale local
-        // webview cache hide a new release for days.
-        cache: 'no-cache',
-        headers: deviceId ? { 'X-Device-Id': deviceId } : undefined,
-      });
+      // AbortController + setTimeout instead of `AbortSignal.timeout()`: the
+      // system WebKit before Safari 16 (any macOS 10.15 install) lacks the
+      // latter, and the machines running old WebKit are exactly the ones
+      // that most need to hear about updates (same rationale as
+      // probeSecureConnection in useConnectionGate).
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      let res: Response;
+      try {
+        res = await client.fetchPluginVersion({
+          signal: controller.signal,
+          // The response is CDN-cached server-side; never let a stale local
+          // webview cache hide a new release for days.
+          cache: 'no-cache',
+          headers: deviceId ? { 'X-Device-Id': deviceId } : undefined,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
       if (!res.ok) return;
 
       const body: unknown = await res.json();

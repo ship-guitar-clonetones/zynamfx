@@ -255,9 +255,9 @@ RES="$INSTALLER_DIR/Resources"
   echo '<installer-gui-script minSpecVersion="2">'
   echo "  <title>TONE3000 ${VERSION}</title>"
   # hostArchitectures: without arm64 listed, Installer.app on Apple Silicon
-  # evaluates the distribution under Rosetta 2 and prompts to install it
-  # (issue #37). productbuild only injects this default when it synthesizes
-  # the XML itself; a hand-written --distribution file must declare it.
+  # evaluates the distribution under Rosetta 2 and prompts to install it.
+  # productbuild only injects this default when it synthesizes the XML
+  # itself; a hand-written --distribution file must declare it.
   echo '  <options customize="always" allow-external-scripts="no" rootVolumeOnly="false" hostArchitectures="arm64,x86_64" />'
   echo '  <domains enable_localSystem="true" />'
 

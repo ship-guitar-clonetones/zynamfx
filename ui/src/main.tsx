@@ -8,6 +8,11 @@ import '@fontsource/roboto-mono/400.css';
 import '@fontsource/roboto-mono/700.css';
 import './index.css';
 
+// Reaching this line means the bundle parsed and executed: tell the boot
+// watchdog in index.html, which otherwise logs boot diagnostics to the
+// native log after 4s (see the inline script there).
+window.__T3K_UI_BOOTED = true;
+
 // A file dropped anywhere on the plugin would make the webview navigate away
 // from the UI. Swallow drags globally; components that want drops can handle
 // them before the event bubbles here.

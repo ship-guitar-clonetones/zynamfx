@@ -21,6 +21,11 @@ The dev server is useful for layout and TONE3000 browsing work, but anything
 that calls into the plugin (parameters, chain state, meters) needs the real
 JUCE backend, so the usual loop is `npm run build` followed by a plugin build.
 
+The bundle must stay runnable on old system WebKits (macOS 10.15 is Safari
+13-15 era, Linux WebKitGTK varies by distro), so `vite.config.ts` pins
+`build.target` low; don't raise it casually. If the UI ever fails to boot,
+the watchdog in `index.html` writes the reason to the plugin's native log.
+
 ## How it talks to the plugin
 
 `@juce-framework/webview` (from the JUCE tree in `../libs`) provides three
