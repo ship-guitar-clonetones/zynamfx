@@ -141,6 +141,12 @@ juce_add_plugin(${PROJECT_NAME}
     # Bluetooth MIDI pairing dialog touches CoreBluetooth.
     BLUETOOTH_PERMISSION_ENABLED TRUE
     BLUETOOTH_PERMISSION_TEXT "TONE3000 uses Bluetooth to find and pair Bluetooth MIDI controllers."
+    # Publish the launch floor in Info.plist too. The Mach-O slices already
+    # carry their minimums (10.15 Intel, 11.0 arm64), but Launch Services and
+    # Finder's Get Info read LSMinimumSystemVersion, and without it the app
+    # looks installable on any macOS. One value for the universal binary: the
+    # Intel floor, since every arm64 Mac runs 11.0 or later anyway.
+    PLIST_TO_MERGE "<plist version=\"1.0\"><dict><key>LSMinimumSystemVersion</key><string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string></dict></plist>"
     ICON_BIG "${_app_icon}"
 )
 
