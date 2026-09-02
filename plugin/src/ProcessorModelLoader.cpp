@@ -372,6 +372,38 @@ void TONE3000Processor::cleanLocalModelStash() {
   });
 }
 
+void TONE3000Processor::cleanLeakedIrTempFiles() {
+  // Runs once per process, off the constructor's thread (it does directory
+  // IO), same pattern as cleanLocalModelStash.
+  static std::once_flag once;
+  std::call_once(once, [] {
+    juce::Thread::launch([] {
+      const int removed =
+          sweepLeakedIrTempFiles(juce::File::getSpecialLocation(juce::File::tempDirectory));
+      if (removed > 0)
+        juce::Logger::writeToLog("[ModelLoader] Swept " + juce::String(removed) +
+                                 " leaked IR temp file(s)");
+    });
+  });
+}
+
+int TONE3000Processor::sweepLeakedIrTempFiles(const juce::File& tempDir) {
+  // Builds through v0.0.2 wrote one "<uuid>_ir.wav" per IR engine build into
+  // the OS temp dir and never deleted it (github issue #25: hundreds of MB
+  // after a session of preset browsing). The loader now scopes its temp file
+  // to the engine build (see prepareBlockModelOffThread), so anything
+  // matching the pattern is that legacy bloat or a crash leftover. Nothing
+  // ever reads these files after the build, so deleting them is safe even
+  // under a running older build; the hour of grace covers the only live
+  // window, a concurrent instance mid-build, whose file is seconds old.
+  const juce::Time cutoff = juce::Time::getCurrentTime() - juce::RelativeTime::hours(1);
+  int removed = 0;
+  for (const auto& file : tempDir.findChildFiles(juce::File::findFiles, false, "*_ir.wav"))
+    if (file.getLastModificationTime() < cutoff && file.deleteFile())
+      ++removed;
+  return removed;
+}
+
 void TONE3000Processor::refreshLocalStashCopy(const juce::String& modelUrl,
                                               const std::vector<uint8_t>& bytes) {
   const juce::URL url(modelUrl);
@@ -585,11 +617,17 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
       out.success = true;
     } else {
       // IRs go through the JUCE convolution/format-reader API, which wants a
-      // file. Use a UUID-only leaf name (plus the right extension) so the
-      // model's display name (which may contain characters that are illegal
-      // in file names) never ends up in the path.
-      juce::File tempFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
-                                .getChildFile(juce::Uuid().toString() + "_ir.wav");
+      // file. The TemporaryFile's random leaf name (plus the right extension)
+      // keeps the model's display name (which may contain characters that are
+      // illegal in file names) out of the path, and its destructor deletes
+      // the file on every exit path (success, early return, exception).
+      // Nothing needs the file after this scope: loadImpulseResponse copies
+      // the bytes into memory when prepare() drains the convolver's queue,
+      // and later re-prepares rebuild from that copy, never from the file.
+      // (Files leaked here by older builds are swept at startup, see
+      // cleanLeakedIrTempFiles.)
+      const juce::TemporaryFile scopedIrFile("_ir.wav");
+      const juce::File& tempFile = scopedIrFile.getFile();
 
       if (!tempFile.replaceWithData(modelData.data(), modelData.size())) {
         juce::Logger::writeToLog("[ModelLoader] Failed to create temporary IR file: " +
@@ -612,7 +650,6 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
 
       if (!reader) {
         juce::Logger::writeToLog("[ModelLoader] Failed to read IR file: " + filename);
-        tempFile.deleteFile();
         return out;
       }
 
@@ -709,7 +746,6 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
       out.irNumChannels = irNumChannels;
       out.irLengthBaseSamples = irLengthBaseSamples;
       out.irIsLong = irLengthBaseSamples > kShortIrMaxBaseSamples;
-      out.irTempFile = tempFile;
       out.irNormalizationGainLinear = computeIrNormalizationGain(tempFile, maxIrFileSamples);
 
       juce::Logger::writeToLog(
@@ -970,7 +1006,6 @@ void TONE3000Processor::applyPreparedModelToChainBlock(ChainBlock& block, ChainB
     block.irNumChannels = 1;
     block.irLengthBaseSamples = 0;
     block.irIsLong = false;
-    block.irTempFile = juce::File();
 
     // Re-assert the block's A2 size in case it changed while this engine
     // was downloading/preparing (a no-op retier when it didn't).
@@ -989,8 +1024,6 @@ void TONE3000Processor::applyPreparedModelToChainBlock(ChainBlock& block, ChainB
     block.irNumChannels = prepared.irNumChannels;
     block.irLengthBaseSamples = prepared.irLengthBaseSamples;
     block.irIsLong = prepared.irIsLong;
-    block.irTempFile = prepared.irTempFile;
-    prepared.irTempFile = juce::File();
 
     // The base-rate island around the convolvers: blocks added mid-session
     // were never seen by prepareChain, so (re)prepare it here with the same
