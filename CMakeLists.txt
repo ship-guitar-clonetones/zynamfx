@@ -24,6 +24,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 
 # C is required since JUCE 9 (lunasvg and other C dependencies).
 project(TONE3000 VERSION ${T3K_VERSION} LANGUAGES C CXX)
+add_compile_options(-fsigned-char)
 
 set(CMAKE_CXX_STANDARD 20)
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs)
