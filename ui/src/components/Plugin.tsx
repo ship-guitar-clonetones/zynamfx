@@ -433,7 +433,13 @@ export const Plugin: React.FC = () => {
         // and the flex middle below absorbs whatever the design height does
         // not use. Everywhere else this is the design-space height exactly as
         // before.
-        height: IS_IOS ? '100dvh' : `${DESIGN_HEIGHT + chrome.rootExtraHeight}rem`,
+        //
+        // `100%`, not `100dvh`: in this WKWebView the viewport units report
+        // the screen (1024) while the layout box is 999, so a dvh root
+        // overflowed the document by 25 px and made every screen scroll
+        // vertically. `100%` resolves against #root, which index.css pins to
+        // the real box under `html.t3k-ios`.
+        height: IS_IOS ? '100%' : `${DESIGN_HEIGHT + chrome.rootExtraHeight}rem`,
         // Home indicator. Measured on an iPad Pro 12.9 (6th gen): this
         // WKWebView reports every safe-area inset as 0px and is already
         // 25 pt shorter than the screen, i.e. the container is inset and

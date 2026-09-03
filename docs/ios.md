@@ -208,6 +208,28 @@ complete (see Known gaps).
 - **`env(safe-area-inset-*)` is 0 on all sides** here: the WKWebView is
   already inset (1366x999 in a 1024 pt screen), so the faceplate clears the
   home indicator without the page doing anything.
+- **`100vh` is not the viewport, and the document scrolled because of it.**
+  The owner reported an unwanted vertical scroll that hurt navigation. It was
+  real and it was global. This WKWebView lays out in a 1366x999 box, but
+  `100vh`, `100dvh`, `innerHeight` and `visualViewport.height` all report 1024,
+  the screen height: measured in the running app,
+  `documentElement.clientHeight` was 999 against a `scrollHeight` of 1024. So
+  `#root { height: 100vh }` built a root 25 px taller than the box holding it,
+  html and body kept `overflow: visible`, and the whole document became
+  scrollable by exactly that 25 px, on every screen: a vertical swipe anywhere
+  shifted the entire UI, header and faceplate included. `overscroll-behavior:
+  none` did not stop it and could not, because it only suppresses rubber-band
+  on a scroll with nowhere to go and this scroll had somewhere to go. The fix
+  is `height: 100%` (which chains from the initial containing block, i.e. the
+  999 the engine actually laid out) plus `overflow: hidden` on html and body,
+  so a document scroll is impossible rather than merely unnecessary. Inner
+  containers keep their own scrollers and the swipe gestures are window-level
+  touch listeners, so neither is affected. Verified on the Simulator with a
+  vertical swipe on the chain, BLOCK, SELECT TONE with results, Settings and
+  the Tuner: `scrollHeight` now equals `clientHeight` at 999, zero document
+  scroll events fired on any screen, the Select Tone and Settings lists still
+  scroll on their own, and swipe down still dismisses the Tuner.
+
 - **The app data container's UUID rotates on every reinstall and every app
   update.** Any absolute path the plugin persisted then names a directory
   that no longer exists, and the only path it persists is a local model's

@@ -266,6 +266,40 @@ input[type='range'].accent-blue::-moz-range-thumb {
 }
 
 /* ---------------------------------------------------------------------------
+   iOS: the document itself never scrolls.
+
+   `100vh` is not the viewport here. This WKWebView lays out in a 1366x999
+   box while `100vh` / `100dvh` / `innerHeight` / `visualViewport.height` all
+   report 1024, the screen height: measured on the iPad Pro 12.9 Simulator,
+   documentElement.clientHeight was 999 against a scrollHeight of 1024. So
+   `#root { height: 100vh }` built a root 25 px taller than the box that holds
+   it, html and body kept `overflow: visible`, and the whole document became
+   scrollable by exactly that 25 px. Every screen inherited it: a vertical
+   swipe anywhere shifted the entire UI, header and faceplate included.
+
+   `overscroll-behavior: none` above did not stop it, and could not: it
+   suppresses rubber-band on a scroll that has nowhere to go, and this scroll
+   had somewhere to go.
+
+   `height: 100%` chains from the initial containing block, i.e. the 999 the
+   engine actually laid out, so the root ends flush with the viewport, and
+   `overflow: hidden` on both html and body makes a document scroll
+   impossible rather than merely unnecessary. Inner containers (the Select
+   Tone results, Settings, the preset list, the lane) keep their own
+   scrollers and are untouched, and the swipe gestures are window-level touch
+   listeners (see useTouchGestures), so nothing here reaches them.
+--------------------------------------------------------------------------- */
+html.t3k-ios,
+html.t3k-ios body {
+  height: 100%;
+  overflow: hidden;
+}
+
+html.t3k-ios #root {
+  height: 100%;
+}
+
+/* ---------------------------------------------------------------------------
    iOS touch floor (P7 item 4). The class is set on <html> only in the iOS
    app (see useUiScale), so every rule below is inert in every other build.
 
