@@ -36,10 +36,24 @@ if (IS_IOS && typeof document !== 'undefined') document.documentElement.classLis
 
 /** Largest scale at which a 1024 x designHeight box fits the viewport. The
  * floor covers 0-sized viewports during boot/teardown: pointer math divides
- * by the scale, so it must never be 0. */
+ * by the scale, so it must never be 0.
+ *
+ * On iOS the height term is dropped and the box is fitted to the width alone.
+ * Letterboxing is the right answer on desktop, where the window is aspect
+ * locked and any mismatch is a transient the user is actively dragging
+ * through. On an iPad the mismatch is permanent and large: fitting 1024x578
+ * into 1366x1024 leaves a fifth of the screen as a dead black band below the
+ * UI, forever. Fitting to the width instead makes the design box as wide as
+ * the screen and lets the root box grow to the real viewport height (see
+ * Plugin.tsx), so the flex middle - the signal chain lane - absorbs the slack
+ * and the tiles get bigger instead of the screen getting emptier. Every length
+ * in the UI is still one rem per design px, so nothing is stretched or
+ * distorted; there is simply more room between the header and the faceplate. */
 const fitScale = (designHeight: number): number => {
   const el = document.documentElement;
-  return Math.max(0.05, Math.min(el.clientWidth / DESIGN_WIDTH, el.clientHeight / designHeight));
+  const widthFit = el.clientWidth / DESIGN_WIDTH;
+  if (IS_IOS) return Math.max(0.05, widthFit);
+  return Math.max(0.05, Math.min(widthFit, el.clientHeight / designHeight));
 };
 
 /** Current UI scale (real viewport px per design px): the design box fitted

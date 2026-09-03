@@ -10,7 +10,7 @@ import { useConnectionGate } from '../hooks/useConnectionGate';
 import { useToneSession } from '../hooks/useToneSession';
 import { useToneLoadFlow } from '../hooks/useToneLoadFlow';
 import { useUpdateNotice } from '../hooks/useUpdateNotice';
-import { useUiScale, DESIGN_WIDTH, DESIGN_HEIGHT } from '../hooks/useUiScale';
+import { useUiScale, DESIGN_WIDTH, DESIGN_HEIGHT, IS_IOS } from '../hooks/useUiScale';
 import { shouldRestoreToneBrowser } from '../hooks/useT3kSelect';
 import { CHAIN_SCROLL_STORAGE_KEY, ChainView, DETAIL_BLOCK_STORAGE_KEY } from './ChainView';
 import { Faceplate, PLATE_HEIGHT } from './Faceplate';
@@ -400,7 +400,22 @@ export const Plugin: React.FC = () => {
         // The window grows by the chrome-strip height (see useChromeChoreography),
         // so the 578px core UI between them keeps its full space.
         // (Figma's 600 includes a 22px mock OS title bar outside JUCE setSize.)
-        height: `${DESIGN_HEIGHT + chrome.rootExtraHeight}rem`,
+        // iOS: the window is the screen and the scale is fitted to the width
+        // alone (see useUiScale), so the box takes the real viewport height
+        // and the flex middle below absorbs whatever the design height does
+        // not use. Everywhere else this is the design-space height exactly as
+        // before.
+        height: IS_IOS ? '100dvh' : `${DESIGN_HEIGHT + chrome.rootExtraHeight}rem`,
+        // Home indicator. Measured on an iPad Pro 12.9 (6th gen): this
+        // WKWebView reports every safe-area inset as 0px and is already
+        // 25 pt shorter than the screen, i.e. the container is inset and
+        // there is nothing left for the page to avoid. The declaration is
+        // therefore a no-op today and is here so it stays correct if the
+        // webview is ever made full-bleed (viewport-fit=cover) or the app
+        // runs on a device that does report an inset. box-sizing is
+        // border-box, so any real inset shortens the box and the flex middle
+        // absorbs it: the faceplate and the hint bar move up together.
+        paddingBottom: IS_IOS ? 'env(safe-area-inset-bottom, 0px)' : undefined,
         // While the banner slides, the root and the banner wrapper animate
         // height with the same curve, so the flex middle (root minus fixed
         // strips) stays exactly constant and nothing inside moves.

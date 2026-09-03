@@ -264,3 +264,76 @@ input[type='range'].accent-blue::-moz-range-thumb {
 .hide-scrollbar::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
 }
+
+/* ---------------------------------------------------------------------------
+   iOS touch floor (P7 item 4). The class is set on <html> only in the iOS
+   app (see useUiScale), so every rule below is inert in every other build.
+
+   Apple's 44 pt minimum applies to the *hit* area, not the glyph, so rather
+   than redraw the chrome bigger on one platform each control gets an
+   invisible expander centred on itself. `max(100%, 44px)` never shrinks a
+   control that is already larger, and the expander is out of flow, so no
+   layout anywhere changes: only what a finger can land on.
+
+   `px`, not `rem`, is deliberate: the page is served at initial-scale=1, so
+   one CSS px is one point, while a rem is one design px and would have to be
+   divided by the live UI scale to mean anything here.
+
+   Where the design packs controls closer than 44 pt the expanders overlap.
+   That is the accepted trade in every native toolkit that does this: a tap in
+   the gap picks the nearer of two controls instead of missing both. A control
+   that paints later still wins the overlap, so a small button inside a larger
+   one keeps its own taps.
+--------------------------------------------------------------------------- */
+html.t3k-ios button,
+html.t3k-ios [role='button'],
+html.t3k-ios [role='switch'],
+html.t3k-ios [role='tab'],
+html.t3k-ios [role='radio'],
+html.t3k-ios a[href],
+html.t3k-ios .knob {
+  position: relative;
+}
+
+html.t3k-ios button::after,
+html.t3k-ios [role='button']::after,
+html.t3k-ios [role='switch']::after,
+html.t3k-ios [role='tab']::after,
+html.t3k-ios [role='radio']::after,
+html.t3k-ios a[href]::after,
+html.t3k-ios .knob::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  /* Nothing to see: this is a hit area, not a highlight. */
+  pointer-events: auto;
+}
+
+/* dnd-kit stamps role="button" on a draggable surface that is not already a
+   <button> (a chain tile), which pulled it into the rule above. The expander
+   is a *pseudo-element of the tile*, so it paints over the tile's own chrome
+   and takes every tap: the block would not open and power / ... / swap /
+   trash were dead, while press-and-hold, which only needs pointer events on
+   the tile, still worked. A tile is 249 px, far past 44, so the expander was
+   never adding reach there anyway. Scoped by the pair of attributes so a
+   drag handle that really is a <button> (the preset rows' grip, 14 px) keeps
+   its expander: dnd-kit adds `role` only when the activator is not a button,
+   and `aria-roledescription` on every activator. */
+html.t3k-ios [role='button'][aria-roledescription='draggable']::after {
+  content: none;
+}
+
+/* Text fields cannot carry a pseudo-element, so the field itself has to grow,
+   which does change layout. It is therefore opt-in: standalone rows (preset
+   name, save name, preset search, MIDI CC) take the class, while the inline
+   editors that live inside a fixed chrome slot (a knob's label slot, an EQ
+   band chip) deliberately do not - there a 44 px box would spill out of the
+   slot it is centred in. Those are reached by a double tap on a control that
+   already meets the floor. */
+html.t3k-ios .t3k-touch-field {
+  min-height: 44px;
+}
