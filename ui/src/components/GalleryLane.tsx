@@ -250,56 +250,67 @@ export const GalleryLane: React.FC<{
   branchInteractive = false,
   onSetBranch,
   onClearBranch,
-}) => (
-  <div style={{ position: 'relative', width: 'max-content' }}>
-    <GhostRail slots={items.length} tileSize={tileSize} />
-    {stereo && (branchInteractive || branch != null) && (
-      <BranchRail
-        items={items}
-        tileSize={tileSize}
-        side={side}
-        branch={branch}
-        interactive={branchInteractive}
-        onSetBranch={onSetBranch ?? (() => {})}
-        onClearBranch={onClearBranch ?? (() => {})}
-      />
-    )}
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: `${TILE_GAP}rem`,
-        position: 'relative',
-        zIndex: 2,
-      }}
-    >
-      {items.map((item, index) =>
-        isInsertSlot(item) ? (
-          <AddTile
-            key={item.blockId}
-            id={item.blockId}
-            index={index}
-            group={side}
-            size={tileSize}
-            routing={addTileRouting(index, items.length)}
-            onClick={() => onAdd(item.blockId)}
-            onPaste={onPasteBlock != null ? () => onPasteBlock(index) : null}
-          />
-        ) : (
-          <GalleryBlock
-            key={item.blockId}
-            block={item}
-            index={index}
-            group={side}
-            size={tileSize}
-            onOpen={onOpen}
-          />
-        )
+}) => {
+  // The lane's order, as ids. Memoized on the order itself so GalleryBlock's
+  // memo still holds: a re-render that does not move anything hands every
+  // tile the same array reference.
+  const laneIds = React.useMemo(() => items.map((i) => i.blockId), [items]);
+  return (
+    <div style={{ position: 'relative', width: 'max-content' }}>
+      <GhostRail slots={items.length} tileSize={tileSize} />
+      {stereo && (branchInteractive || branch != null) && (
+        <BranchRail
+          items={items}
+          tileSize={tileSize}
+          side={side}
+          branch={branch}
+          interactive={branchInteractive}
+          onSetBranch={onSetBranch ?? (() => {})}
+          onClearBranch={onClearBranch ?? (() => {})}
+        />
       )}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: `${TILE_GAP}rem`,
+          position: 'relative',
+          zIndex: 2,
+        }}
+      >
+        {items.map((item, index) =>
+          isInsertSlot(item) ? (
+            <AddTile
+              key={item.blockId}
+              id={item.blockId}
+              index={index}
+              group={side}
+              size={tileSize}
+              routing={addTileRouting(index, items.length)}
+              onClick={() => onAdd(item.blockId)}
+              onPaste={onPasteBlock != null ? () => onPasteBlock(index) : null}
+            />
+          ) : (
+            <GalleryBlock
+              key={item.blockId}
+              block={item}
+              index={index}
+              group={side}
+              size={tileSize}
+              onOpen={onOpen}
+              // Keyboard- and menu-driven reorder needs the whole lane order,
+              // which only this component knows. Passing the ids (not a
+              // callback closing over them) keeps GalleryBlock's memo intact:
+              // the array identity changes exactly when the lane order does.
+              laneIds={laneIds}
+            />
+          )
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /** Per-lane solo + polarity as one segmented [S|Ø] under the pan label.
     Grey idle, house-armed yellow while engaged. Solo ("S") auditions its

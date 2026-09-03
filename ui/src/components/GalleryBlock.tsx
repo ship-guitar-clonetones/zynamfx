@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/react/sortable';
 import {
+  ArrowLeft,
   ArrowLeftRight,
+  ArrowRight,
   ClipboardPaste,
   Copy,
+  Ellipsis,
   File,
   FolderClosed,
   PlusCircle,
@@ -25,6 +28,7 @@ import type { TileMenuAnchor, TileMenuItem } from './TileMenu';
 import type { ChainActions } from '../hooks/useChainActions';
 import { useToast } from './Toast';
 import { GRAY, ICON_SIZE, SURFACE, SURFACE_RAISED } from './theme';
+import { IS_IOS } from '../hooks/useUiScale';
 
 /**
  * Gallery view of a chain block: a square tone image with quick actions
@@ -86,6 +90,19 @@ const useTileMenu = () => {
     setMenuAnchor({ clientX: e.clientX, clientY: e.clientY });
   }, []);
   const closeMenu = useCallback(() => setMenuAnchor(null), []);
+
+  /** Open the same sheet from a visible control rather than a gesture.
+      HIG: "Always make context menu items available in the main interface,
+      too" - a hidden long press must never be the only route. Anchored to the
+      button's own bottom-left so the sheet hangs off the chrome that opened
+      it, instead of at a pointer position the user never sees on touch. */
+  const openMenuAtElement = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    suppressClickRef.current = true;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenuAnchor({ clientX: rect.left, clientY: rect.bottom });
+  }, []);
   /** True when a tile click should be ignored (followed a contextmenu, is a
       modifier-click, or the menu is already open, in which case it closes). */
   const shouldIgnoreClick = useCallback(
@@ -103,7 +120,7 @@ const useTileMenu = () => {
     },
     [menuAnchor, closeMenu]
   );
-  return { menuAnchor, openMenu, closeMenu, shouldIgnoreClick };
+  return { menuAnchor, openMenu, openMenuAtElement, closeMenu, shouldIgnoreClick };
 };
 
 /** The tile menus' native-picker rows (Load File / Load Folder). Local
@@ -159,7 +176,11 @@ const TileSurface: React.FC<{
   /** OS file drag is hovering this tile (upload icon + dashed green border). */
   dropArmed: boolean;
   actions: TileActions;
-}> = ({ block, size, enabled, dragging, dropArmed, actions }) => {
+  /** Opens the tile's action sheet from the visible "..." chrome button.
+      Only supplied on touch platforms; desktop reaches the same sheet with a
+      right-click and shows no extra button. */
+  onMore?: (e: React.MouseEvent) => void;
+}> = ({ block, size, enabled, dragging, dropArmed, actions, onMore }) => {
   const { blockId, tone } = block;
 
   // A model download/prepare is in flight: `modelLoading` covers switches
@@ -302,6 +323,11 @@ const TileSurface: React.FC<{
               <Power size={ICON_SIZE} />
             </ChromeIconButton>
             <div style={{ display: 'flex', gap: '16rem' }}>
+              {onMore && (
+                <ChromeIconButton help={HELP.tileMenu} onClick={onMore} onMouseDown={preventFocus}>
+                  <Ellipsis size={ICON_SIZE} />
+                </ChromeIconButton>
+              )}
               <ChromeIconButton
                 help={HELP.swapTone}
                 onClick={actions.onSwap}
@@ -340,6 +366,9 @@ interface GalleryBlockProps {
   index: number;
   /** The lane this tile sorts in. */
   group: ChainSide;
+  /** The lane's full order, as ids. Backs the menu's Move left / Move right,
+      the visible alternative to the drag gesture (HIG: never only a gesture). */
+  laneIds: string[];
   /** Tile edge, px. */
   size: number;
   /** Open the detail takeover for this block. */
@@ -351,11 +380,12 @@ interface GalleryBlockProps {
     the ChainActions context, so there are no per-render callback props to
     defeat the memo. */
 export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
-  ({ block, index, group, size, onOpen }) => {
+  ({ block, index, group, size, onOpen, laneIds }) => {
     const { blockId, params } = block;
     const actions = useChainActions();
     const toast = useToast();
-    const { menuAnchor, openMenu, closeMenu, shouldIgnoreClick } = useTileMenu();
+    const { menuAnchor, openMenu, openMenuAtElement, closeMenu, shouldIgnoreClick } =
+      useTileMenu();
 
     // Optimistic power state; native converges via the chainChanged resync
     // (same pattern as the detail card).
@@ -365,6 +395,19 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
     const [dropArmed, setDropArmed] = useState(false);
 
     const { ref, isDragging } = useSortable({ id: blockId, index, group });
+
+    /** Swap this tile with its neighbour, committing the whole lane order the
+        same way a drop does so undo covers it. */
+    const moveBy = useCallback(
+      (delta: -1 | 1) => {
+        const to = index + delta;
+        if (to < 0 || to >= laneIds.length) return;
+        const next = [...laneIds];
+        [next[index], next[to]] = [next[to], next[index]];
+        actions.reorderBlocks(next);
+      },
+      [actions, index, laneIds]
+    );
 
     const handleTogglePower = useCallback(
       (e: React.MouseEvent) => {
@@ -405,6 +448,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
         }}
       >
         <TileSurface
+          onMore={IS_IOS ? openMenuAtElement : undefined}
           block={block}
           size={size}
           enabled={enabled}
@@ -438,7 +482,45 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
                 help: HELP.copyBlock,
                 onSelect: () => actions.copyBlock(blockId),
               },
+              // Visible alternative to the drag gesture, per the HIG rule
+              // that a gesture is never the only route. Hidden at the ends of
+              // the lane rather than dimmed, like every other unavailable row
+              // on touch. Reordering rides the same reorderBlocks action the
+              // drag commits, so it lands in undo history identically.
+              ...(IS_IOS
+                ? ([
+                    {
+                      label: 'Move left',
+                      icon: <ArrowLeft size={16} />,
+                      help: HELP.moveBlockLeft,
+                      disabled: index <= 0,
+                      onSelect: () => moveBy(-1),
+                    },
+                    {
+                      label: 'Move right',
+                      icon: <ArrowRight size={16} />,
+                      help: HELP.moveBlockRight,
+                      disabled: index >= laneIds.length - 1,
+                      onSelect: () => moveBy(1),
+                    },
+                  ] as TileMenuItem[])
+                : []),
               ...localLoadMenuItems(blockId, actions, toast),
+              // Destructive row last and red, per the HIG's context-menu
+              // shape. Touch only: on desktop the trash button in the tile
+              // chrome is always a hover away, and adding a row here would
+              // change a menu every existing user knows.
+              ...(IS_IOS
+                ? [
+                    {
+                      label: 'Remove',
+                      icon: <Trash2 size={16} />,
+                      help: HELP.removeBlock,
+                      destructive: true,
+                      onSelect: () => actions.removeBlock(blockId),
+                    },
+                  ]
+                : []),
             ]}
           />
         )}

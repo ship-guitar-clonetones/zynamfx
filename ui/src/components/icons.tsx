@@ -16,6 +16,7 @@ import {
   ClipboardPaste as LClipboardPaste,
   Copy as LCopy,
   Download as LDownload,
+  Ellipsis as LEllipsis,
   Equal as LEqual,
   ExternalLink as LExternalLink,
   File as LFile,
@@ -82,6 +83,7 @@ export const Circle = scaled(LCircle, 'Circle');
 export const ClipboardPaste = scaled(LClipboardPaste, 'ClipboardPaste');
 export const Copy = scaled(LCopy, 'Copy');
 export const Download = scaled(LDownload, 'Download');
+export const Ellipsis = scaled(LEllipsis, 'Ellipsis');
 export const Equal = scaled(LEqual, 'Equal');
 export const ExternalLink = scaled(LExternalLink, 'ExternalLink');
 export const File = scaled(LFile, 'File');
