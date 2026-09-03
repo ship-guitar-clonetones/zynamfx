@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getUiScale, rem } from '../hooks/useUiScale';
+import { getUiScale, IS_IOS, rem } from '../hooks/useUiScale';
 import { DragDropProvider } from '@dnd-kit/react';
 import { isSortable } from '@dnd-kit/react/sortable';
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from '@dnd-kit/dom';
@@ -24,6 +24,9 @@ import {
   EDGE_FADE_WIDTH,
   gapCenterX,
 } from './GalleryLane';
+// Lives with the tile it applies to, where the touch long-press menu reads it
+// too; importing it from here would cycle (ChainView -> GalleryLane -> GalleryBlock).
+import { GALLERY_DRAG_DISTANCE_PX } from './GalleryBlock';
 import { useChainActions } from '../hooks/useChainActions';
 import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll';
 import { FONT_MONO, WHITE } from './theme';
@@ -84,21 +87,34 @@ interface ChainViewProps {
   returnToGallery?: number;
 }
 
-/** Design-px of travel before a drag engages, so tap/click stays a click.
-    Scaled to real px per gesture so the feel tracks the rendered tile size. */
-const GALLERY_DRAG_DISTANCE_PX = 6;
-
 const sensors: Sensors = [
   // Distance-only activation (the stock constraints add a 200ms hold trigger,
   // which would turn a slow click-to-open into a drag). The sensor's default
   // guard already keeps buttons and other interactive chrome from starting
   // drags, so power/swap/trash stay clicks.
   PointerSensor.configure({
-    activationConstraints: () => [
-      new PointerActivationConstraints.Distance({
-        value: GALLERY_DRAG_DISTANCE_PX * getUiScale(),
-      }),
-    ],
+    activationConstraints: (event) => {
+      // Touch: the iOS Home screen gesture. A hold lifts the tile, and only
+      // then does moving reorder it, which leaves a plain swipe free to scroll
+      // the lane (the tile face opts back into panning on iOS; see
+      // TileSurface). This is dnd-kit's own touch default, restored: the
+      // override below is written for pointer devices and would otherwise
+      // apply to touch as well.
+      //
+      // Note for the upstream reviewer: desktop deliberately drags straight
+      // off the tile face, which is right for a mouse, where there is no
+      // competing scroll gesture on the element itself. Apple's HIG asks for
+      // the opposite on iPad, so the two platforms genuinely want different
+      // rules here rather than one shared one.
+      if (IS_IOS && event.pointerType === 'touch')
+        return [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })];
+
+      return [
+        new PointerActivationConstraints.Distance({
+          value: GALLERY_DRAG_DISTANCE_PX * getUiScale(),
+        }),
+      ];
+    },
   }),
   // Stock keyboard sorting: Space or Enter on a focused tile picks it up,
   // arrows snap it one slot per press (the sortable's SortableKeyboardPlugin
