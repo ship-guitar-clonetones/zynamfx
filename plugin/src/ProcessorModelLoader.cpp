@@ -246,6 +246,31 @@ juce::var stashLocalFileFromDisk(const juce::File& file, juce::String& error) {
   return stashLocalBytes(file.getFileName(), bytes, error);
 }
 
+#if JUCE_IOS
+// A file the OS document picker handed us as a security-scoped URL.
+//
+// iOS is the reason this exists. Everything the picker returns from the Files
+// app lives outside the app sandbox (an iCloud / file-provider container), and
+// the app is only allowed to touch it through the security scope JUCE's
+// FileChooser opened and stored as a bookmark. Reading the raw path with a
+// FileInputStream, which is what stashLocalFileFromDisk does and what every
+// desktop build correctly does, is refused by the sandbox and surfaces as
+// "Couldn't read the file". juce::URL::createInputStream goes through the
+// bookmark and the scope, so it reads the same bytes the user actually picked.
+juce::var stashLocalFileFromUrl(const juce::URL& url, juce::String& error) {
+  const juce::String filename = url.getFileName();
+  juce::MemoryOutputStream bytes;
+  const auto in = url.createInputStream(
+      juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress));
+  if (in == nullptr || bytes.writeFromInputStream(*in, -1) <= 0) {
+    juce::Logger::writeToLog("[LocalLoad] " + filename + ": Couldn't read the file");
+    error = "Couldn't read the file";
+    return {};
+  }
+  return stashLocalBytes(filename, bytes, error);
+}
+#endif  // JUCE_IOS
+
 // Shared user-facing error result for the local-load entry points.
 juce::var localToneError(const juce::String& title, const juce::String& message) {
   juce::Logger::writeToLog("[LocalLoad] " + title + ": " + message);
@@ -404,6 +429,59 @@ juce::var TONE3000Processor::loadLocalTonePath(const juce::File& source,
 
   return finishLocalToneLoad(title, {model}, {}, 1, targetInsertId);
 }
+
+#if JUCE_IOS
+juce::var TONE3000Processor::loadLocalToneUrls(const juce::Array<juce::URL>& sources,
+                                               const std::string& targetInsertId) {
+  // Multi-select stands in for the folder route on iOS: the document picker
+  // can hand back a folder URL, but a security-scoped directory cannot be
+  // enumerated through juce::URL (there is no listing API behind the
+  // bookmark), so "Load Folder" asks for the files themselves instead. See
+  // pickLocalToneFile.
+  const juce::String title = sources.size() == 1
+                                 ? sources.getReference(0).getFileName().upToLastOccurrenceOf(
+                                       ".", false, false)
+                                 : juce::String(sources.size()) + " files";
+
+  if (sources.isEmpty())
+    return localToneError(title, "Nothing to load");
+  if (sources.size() > kMaxFolderModels)
+    return localToneError(
+        title, "Too many files (max " + juce::String(kMaxFolderModels) + ")");
+
+  // Natural name order, matching the folder and drop paths, so the model list
+  // is stable regardless of the order the picker reports.
+  juce::Array<juce::URL> picked(sources);
+  std::sort(picked.begin(), picked.end(), [](const juce::URL& a, const juce::URL& b) {
+    return a.getFileName().compareNatural(b.getFileName()) < 0;
+  });
+
+  juce::Array<juce::var> models;
+  juce::String firstError;
+  for (const auto& url : picked) {
+    const juce::String filename = url.getFileName();
+    const juce::String extension = filename.fromLastOccurrenceOf(".", true, false).toLowerCase();
+    if (extension != ".nam" && extension != ".wav") {
+      if (firstError.isEmpty())
+        firstError = "Only .nam and .wav files are supported";
+      continue;
+    }
+    juce::String error;
+    const juce::var model = stashLocalFileFromUrl(url, error);
+    if (!model.isObject()) {
+      if (firstError.isEmpty())
+        firstError = error;
+      continue;
+    }
+    models.add(model);
+  }
+
+  if (models.isEmpty())
+    return localToneError(title, firstError.isEmpty() ? "Couldn't read the file" : firstError);
+
+  return finishLocalToneLoad(title, models, firstError, picked.size(), targetInsertId);
+}
+#endif  // JUCE_IOS
 
 juce::var TONE3000Processor::finishLocalToneLoad(const juce::String& title,
                                                  const juce::Array<juce::var>& stashedModels,

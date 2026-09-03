@@ -103,6 +103,19 @@ public:
   // folder name. A single file must be .nam or .wav; title is the file
   // name. Same return contract as loadLocalTone.
   juce::var loadLocalTonePath(const juce::File& source, const std::string& targetInsertId = {});
+
+#if JUCE_IOS
+  /** URL sibling of loadLocalTonePath, for the iOS document picker.
+      Files chosen from the Files app live outside the app sandbox and are
+      readable only through the security scope JUCE's FileChooser bookmarked,
+      so the bytes have to come through juce::URL rather than the raw path.
+      Takes 1..N URLs because multi-select stands in for the folder route on
+      iOS (a security-scoped directory cannot be enumerated through
+      juce::URL); see pickLocalToneFile. Same return contract as
+      loadLocalTone. */
+  juce::var loadLocalToneUrls(const juce::Array<juce::URL>& sources,
+                              const std::string& targetInsertId = {});
+#endif
   // Age out local-model stash files unused for a week (runs once per
   // process, off-thread). Called from the constructor.
   static void cleanLocalModelStash();

@@ -285,6 +285,20 @@ void TONE3000Editor::pickLocalToneFile(
     return;
   }
 
+#if JUCE_IOS
+  // iOS has no usable folder route. The document picker can return a folder
+  // URL, but everything it returns from the Files app is security scoped and a
+  // scoped directory cannot be enumerated through juce::URL, so a picked
+  // folder would be an unreadable handle. Multi-select is the equivalent the
+  // platform does support, so "Load Folder" asks for the files themselves and
+  // the same many-models-at-once path runs on the result.
+  localFileChooser = std::make_unique<juce::FileChooser>(
+      pickFolder ? "Load Files" : "Load File", juce::File{}, juce::String("*.nam;*.wav"));
+
+  const int flags = juce::FileBrowserComponent::openMode |
+                    juce::FileBrowserComponent::canSelectFiles |
+                    (pickFolder ? juce::FileBrowserComponent::canSelectMultipleItems : 0);
+#else
   localFileChooser = std::make_unique<juce::FileChooser>(
       pickFolder ? "Load Folder" : "Load File", juce::File{},
       pickFolder ? juce::String("*") : juce::String("*.nam;*.wav"));
@@ -292,6 +306,7 @@ void TONE3000Editor::pickLocalToneFile(
   const int flags = juce::FileBrowserComponent::openMode |
                     (pickFolder ? juce::FileBrowserComponent::canSelectDirectories
                                 : juce::FileBrowserComponent::canSelectFiles);
+#endif
 
   // The dialog can outlive user patience but not the editor: destroying the
   // editor destroys the chooser (dialog dismissed, callback never fires, and
@@ -309,12 +324,28 @@ void TONE3000Editor::pickLocalToneFile(
             self->localFileChooser.reset();
         });
 
+#if JUCE_IOS
+        // getURLResults(), not getResults(): JUCE's own FileChooser docs say
+        // to use the URL form on mobile, and here it is load bearing rather
+        // than stylistic. The picker's files live outside the app sandbox and
+        // are only readable through the security scope JUCE bookmarked;
+        // getResults() flattens them to raw paths that the sandbox then
+        // refuses to open ("Couldn't read the file"), which is exactly what a
+        // file picked from Files on a device did before this.
+        const auto results = chooser.getURLResults();
+        if (results.isEmpty()) {
+          completion(cancelled());
+          return;
+        }
+        completion(self->processor.loadLocalToneUrls(results, target));
+#else
         const auto results = chooser.getResults();
         if (results.isEmpty()) {
           completion(cancelled());
           return;
         }
         completion(self->processor.loadLocalTonePath(results.getReference(0), target));
+#endif
       });
 }
 
