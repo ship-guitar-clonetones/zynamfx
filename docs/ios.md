@@ -117,6 +117,27 @@ Simulator build.
   file name under the current stash folder; a path that still exists is used
   as-is, which is every desktop case. Presets and project state were never
   affected: they embed the model bytes.
+- **Bluetooth headphones cap the whole session at 16 or 24 kHz.** The owner
+  hit this on the iPad with AirPods: `prepareToPlay: sampleRate=24000` and a
+  sample-rate warning in Settings with nothing saying why. JUCE opens the iOS
+  session as `PlayAndRecord` with `AllowBluetoothHFP`
+  (`juce_Audio_ios.cpp`, `setAudioSessionCategory`), so a headset with a
+  microphone wins the route and iOS refuses the requested 48 kHz. Two answers
+  ship together, both in `IosAudioRoute` (the Haptics / AudioPermissions
+  shim pattern, header-only no-op off iOS):
+  - `disallowBluetoothHfp()` re-sets the session category without that one
+    option, keeping every other option JUCE asked for, `AllowBluetoothA2DP`
+    included, so Bluetooth output-only listening still works and only the
+    low-rate headset *mic* route goes away. It is not a JUCE text patch:
+    JUCE sets the category when it *opens* a device and never on its own
+    route-change `restart()` path, so re-applying it on every device-manager
+    change is enough and the JUCE tree stays untouched.
+  - `isBluetoothRoute()` feeds `bluetoothRoute` in the settings state, and
+    the UI turns that (or any session under 44.1 kHz) into one plain tip in
+    Settings > System Settings, next to Sample Rate: use wired headphones,
+    the iPad speaker, or a USB audio interface. The generic "runs lightest
+    at 48 kHz" note is suppressed while it shows, so there is one
+    explanation instead of two.
 - `xcrun simctl privacy grant microphone` does not suppress the prompt;
   `AVAudioSession` still asks once.
 - **`UIRequiresFullScreen` no longer opts an app out of multitasking** on
