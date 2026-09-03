@@ -55,6 +55,10 @@ jobs:
             runs-on: ubuntu-24.04
             os: linux
             arch: x64
+          - name: Linux aarch64
+            runs-on: ubuntu-24.04-arm
+            os: linux
+            arch: aarch64
 
     steps:
       - name: Checkout
@@ -517,7 +521,7 @@ jobs:
           signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
           files-folder: ${{ github.workspace }}\build
-          files-folder-filter: '*-setup.exe'
+          files-folder-filter: "*-setup.exe"
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -535,7 +539,7 @@ jobs:
         if: matrix.os == 'linux'
         run: |
           set -euo pipefail
-          PKG="TONE3000-v${T3K_VERSION}-linux-x64"
+          PKG="TONE3000-v${T3K_VERSION}-${{ matrix.os }}-${{ matrix.arch }}"
           ARTEFACTS="build/plugin/TONE3000_artefacts/${{ env.BUILD_TYPE }}"
           STAGE="build/${PKG}"
           mkdir -p "$STAGE"
@@ -558,5 +562,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TONE3000-v${{ env.T3K_VERSION }}-${{ matrix.os }}-${{ matrix.arch }}
-          path: build/TONE3000-v*-linux-x64.tar.gz
+          path: build/TONE3000-v*-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
           if-no-files-found: error
