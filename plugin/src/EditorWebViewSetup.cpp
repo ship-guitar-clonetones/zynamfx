@@ -788,14 +788,29 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
             // Forward WebView console output to the native logger so it is
             // captured in the on-disk log even in release builds.
             (function () {
+              // Error fields are non-enumerable, so JSON.stringify(err) is
+              // '{}', which hides exactly what a crash report needs. Unwrap
+              // by hand, and duck-type rather than instanceof so cross-realm
+              // errors survive too.
+              const describe = (p) => {
+                if (typeof p === 'string') return p;
+                if (p && typeof p.message === 'string' && typeof p.stack === 'string')
+                  return (p.name || 'Error') + ': ' + p.message + '\n' + p.stack;
+                try {
+                  const json = JSON.stringify(p);
+                  if (json !== undefined && json !== '{}') return json;
+                } catch (e) {
+                  return String(p);
+                }
+                // DOM events and other exotic objects also stringify to '{}'.
+                // Naming the type keeps the line worth reading.
+                const type = p && p.constructor && p.constructor.name;
+                return (type || typeof p) + ' ' + String(p);
+              };
+
               const forward = (level, parts) => {
                 try {
-                  const text = parts
-                    .map((p) => {
-                      if (typeof p === 'string') return p;
-                      try { return JSON.stringify(p); } catch (e) { return String(p); }
-                    })
-                    .join(' ');
+                  const text = parts.map(describe).join(' ');
                   // The raw __juce__invoke protocol (what getNativeFunction
                   // wraps). window.__JUCE__.backend only exists once the app
                   // bundle has loaded (it's defined by the JUCE frontend
@@ -824,14 +839,19 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
                 };
               });
               window.addEventListener('error', (e) => {
-                forward('error', [e.message + ' @ ' + e.filename + ':' + e.lineno]);
+                forward('error', [e.message + ' @ ' + e.filename + ':' + e.lineno +
+                                  (e.error ? '\n' + describe(e.error) : '')]);
               });
               window.addEventListener('unhandledrejection', (e) => {
-                forward('error', ['Unhandled promise rejection: ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason)]);
+                forward('error', ['Unhandled promise rejection: ' + describe(e.reason)]);
               });
             })();
 
-            console.log("Main WebView: JUCE C++ Backend loaded");
+            // The webview runs the system WebKit on macOS, and its version
+            // decides which language and DOM features exist, so record the
+            // engine with every load; the boot watchdog in index.html only
+            // logs it when the UI fails to boot.
+            console.log("Main WebView: JUCE C++ Backend loaded | " + navigator.userAgent);
           )");
 }
 
