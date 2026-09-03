@@ -5,6 +5,7 @@ import { KnobControl } from './KnobControl';
 import { offsetMsScale } from './knobScale';
 import { useParameter } from '../hooks/useParameter';
 import { useDismissable } from '../hooks/useDismissable';
+import { useTouchHold } from '../hooks/useTouchHold';
 import { HELP, helpProps } from './helpText';
 import { ChromeIconButton } from './ChromeIconButton';
 import { ImageDeckPanel, useImageDeckReset } from './ImageDeckPanel';
@@ -116,8 +117,15 @@ export const SpreadGroup: React.FC = () => {
   // close the panel. primaryOnly keeps the contextmenu toggle working.
   useDismissable(open, panelRef, close, { primaryOnly: true });
 
+  // Touch and hold is the right-click of the platform: WKWebView never
+  // fires contextmenu for a long press, so without this the advanced deck
+  // has no route at all on iPad. Renders nothing off iOS.
+  const toggle = useCallback(() => setOpen((prev) => !prev), []);
+  const holdProps = useTouchHold(toggle);
+
   return (
     <div
+      {...holdProps}
       onContextMenu={(e) => {
         e.preventDefault();
         setOpen((prev) => !prev);

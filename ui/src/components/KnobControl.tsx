@@ -5,8 +5,8 @@ import type { KnobThumb, KnobVariant } from './KnobInner';
 import type { KnobScale } from './knobScale';
 import { percentScale } from './knobScale';
 import { helpProps, pinHelp, unpinHelp } from './helpText';
-import { GRAY, KNOB_LABEL_GAP, SURFACE_RAISED, WHITE } from './theme';
-import { getUiScale, rem } from '../hooks/useUiScale';
+import { BORDER, BLACK, GRAY, KNOB_LABEL_GAP, SURFACE_RAISED, WHITE } from './theme';
+import { getUiScale, IS_IOS, rem } from '../hooks/useUiScale';
 
 /**
  * Knob interaction conventions (matching typical plugin UX):
@@ -20,6 +20,16 @@ import { getUiScale, rem } from '../hooks/useUiScale';
  * No scroll-wheel support on purpose: knobs sit inside the horizontally
  * scrolling chain view, and hijacking wheel events there hurts more than it
  * helps.
+ *
+ * On iOS the two mouse-only gestures are replaced rather than dropped:
+ * - Double tap resets to the default (there is no Alt key on a touch screen,
+ *   and the type-in editor it opens on desktop would put the iOS keyboard
+ *   over the knob you are editing). Detected from the pointer stream, not
+ *   from `dblclick`, which WKWebView ties to its own double-tap handling.
+ * - The value is mirrored in a bubble above the knob while dragging: the
+ *   readout under the knob is exactly where the finger is, so on touch it is
+ *   the one place the value cannot be read from.
+ * Both are `IS_IOS`-gated; desktop behaviour is byte-identical.
  */
 interface KnobControlProps {
   label: string;
@@ -85,6 +95,11 @@ const roundKnobValue = (x: number, snapCenter: boolean, fine: boolean) => {
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
+/** iOS double tap: the system's own recognizer window, and a slop wide
+    enough for two taps by the same finger without being a drag. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_SLOP_PX = 24;
+
 export const KnobControl: React.FC<KnobControlProps> = ({
   label,
   value,
@@ -120,6 +135,11 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   const emittedRef = useRef(value);
   const lastYRef = useRef(0);
   const fineRef = useRef(false);
+  // iOS double-tap recognizer state (time + position of the previous tap).
+  const lastTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
+  // Where the current press went down, so a gesture that turns into a drag
+  // can withdraw its tap candidate (see handleDragPointerMove).
+  const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
 
   const [dragging, setDragging] = useState(false);
   const [fine, setFine] = useState(false);
@@ -200,6 +220,19 @@ export const KnobControl: React.FC<KnobControlProps> = ({
     };
     const handleDragPointerMove = (e: PointerEvent) => {
       if (!draggingRef.current) return;
+      // A press that travels is a drag, not the first half of a double tap.
+      // Without this, dragging a knob and then tapping it inside the
+      // recognizer window read as a pair and threw the drag away: the knob
+      // snapped back to its default the moment you touched it again.
+      const origin = pressOriginRef.current;
+      if (
+        origin !== null &&
+        (Math.abs(e.clientX - origin.x) > DOUBLE_TAP_SLOP_PX ||
+          Math.abs(e.clientY - origin.y) > DOUBLE_TAP_SLOP_PX)
+      ) {
+        pressOriginRef.current = null;
+        lastTapRef.current = null;
+      }
       const shift = e.shiftKey || e.getModifierState?.('Shift');
       if (shift !== fineRef.current) setFineMode(shift);
       // clientY is real px; divide by the UI scale so sensitivity stays
@@ -213,29 +246,53 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       lastYRef.current = e.clientY;
     };
 
+    const resetToDefault = () => {
+      const fallback = defaultValueRef.current;
+      if (fallback === undefined) return false;
+      onChangeRef.current(fallback);
+      onResetRef.current?.();
+      liveRef.current = fallback;
+      emittedRef.current = fallback;
+      setLiveValue(fallback);
+      return true;
+    };
+
     const handlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       // Own the gesture so react-knob-headless's useDrag (value + thisDelta)
       // never starts; that path is what fought the native echo.
       e.stopPropagation();
       knobElement.focus();
+
+      // iOS: second tap of a double tap resets, and ends the gesture there.
+      // Engaging the drag as well would let the few pixels of finger travel
+      // between the two taps move the value straight back off the default.
+      if (IS_IOS && e.pointerType === 'touch') {
+        const previous = lastTapRef.current;
+        const isDoubleTap =
+          previous !== null &&
+          e.timeStamp - previous.at < DOUBLE_TAP_MS &&
+          Math.abs(e.clientX - previous.x) < DOUBLE_TAP_SLOP_PX &&
+          Math.abs(e.clientY - previous.y) < DOUBLE_TAP_SLOP_PX;
+        lastTapRef.current = isDoubleTap
+          ? null // a third tap starts a fresh pair, it is not another reset
+          : { at: e.timeStamp, x: e.clientX, y: e.clientY };
+        if (isDoubleTap && resetToDefault()) return;
+      }
       // Alt/Option-click: reset to default. The drag still engages beneath,
       // which is harmless: releasing without moving stays at the default.
       // onReset runs after so owners can restore sibling defaults (e.g. the
       // Spread/Align advanced deck) in the same gesture.
-      if (e.altKey && defaultValueRef.current !== undefined) {
-        onChangeRef.current(defaultValueRef.current);
-        onResetRef.current?.();
-        liveRef.current = defaultValueRef.current;
-        emittedRef.current = defaultValueRef.current;
-        setLiveValue(defaultValueRef.current);
-      } else {
+      // Alt/Option-click resets; the drag still engages beneath, which is
+      // harmless (releasing without moving stays at the default).
+      if (!(e.altKey && resetToDefault())) {
         liveRef.current = valueRef.current;
         emittedRef.current = valueRef.current;
         setLiveValue(valueRef.current);
       }
 
       draggingRef.current = true;
+      pressOriginRef.current = { x: e.clientX, y: e.clientY };
       lastYRef.current = e.clientY;
       setFineMode(e.shiftKey || e.getModifierState?.('Shift'));
       setDragging(true);
@@ -261,6 +318,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
     const handlePointerUp = () => {
       if (!draggingRef.current) return;
       draggingRef.current = false;
+      pressOriginRef.current = null;
       setDragging(false);
       setFineMode(false);
       window.removeEventListener('keydown', handleShift);
@@ -354,6 +412,37 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   const showReadout = !editing && readoutVisible;
   const slotHeight = Math.round(LABEL_SIZE * 1.2);
 
+  /** Touch value bubble: the same string the label readout shows, floated
+      clear of the finger. Mounted only while dragging on iOS, so it can
+      never affect layout (it is absolutely positioned) or desktop. */
+  const valueBubble =
+    IS_IOS && showReadout ? (
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          marginBottom: '10rem',
+          padding: '4rem 8rem',
+          borderRadius: '6rem',
+          background: BLACK,
+          border: BORDER,
+          color: WHITE,
+          fontSize: '14rem',
+          fontWeight: 400,
+          lineHeight: 1.2,
+          whiteSpace: 'nowrap',
+          fontVariantNumeric: 'tabular-nums',
+          pointerEvents: 'none',
+          zIndex: 40,
+        }}
+      >
+        {scale.format(shownValue)}
+      </div>
+    ) : null;
+
   const labelText = (
     <span
       style={{
@@ -424,7 +513,9 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         valueRawRoundFn={(x) => roundKnobValue(x, variant === 'bipolar', fine)}
         valueRawDisplayFn={(x) => scale.format(x)}
         onValueRawChange={() => {}}
-        onDoubleClick={openEditor}
+        // iOS owns the double tap (reset, see handlePointerDown); letting
+        // WKWebView's dblclick also open the type-in editor would fire both.
+        onDoubleClick={IS_IOS ? undefined : openEditor}
         className="knob"
         style={{
           width: rem(size),
@@ -438,6 +529,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         }}
       >
         <KnobInner value={shownValue} size={size} variant={variant} thumb={thumb} />
+        {valueBubble}
       </KnobHeadless>
 
       <div

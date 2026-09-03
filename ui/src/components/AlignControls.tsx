@@ -5,6 +5,7 @@ import { KnobControl } from './KnobControl';
 import { offsetMsScale } from './knobScale';
 import { useParameter } from '../hooks/useParameter';
 import { useDismissable } from '../hooks/useDismissable';
+import { useTouchHold } from '../hooks/useTouchHold';
 import { useAutoMeasure, type AutoMeasureResult } from '../hooks/useAutoMeasure';
 import { HELP, helpProps } from './helpText';
 import { ChromeIconButton } from './ChromeIconButton';
@@ -162,8 +163,15 @@ export const AlignGroup: React.FC = () => {
   // working. (Same pattern as SpreadGroup.)
   useDismissable(open, panelRef, close, { primaryOnly: true });
 
+  // Touch and hold is the right-click of the platform: WKWebView never
+  // fires contextmenu for a long press, so without this the advanced deck
+  // has no route at all on iPad. Renders nothing off iOS.
+  const toggle = useCallback(() => setOpen((prev) => !prev), []);
+  const holdProps = useTouchHold(toggle);
+
   return (
     <div
+      {...holdProps}
       onContextMenu={(e) => {
         e.preventDefault();
         setOpen((prev) => !prev);
