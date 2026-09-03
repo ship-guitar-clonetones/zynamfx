@@ -1,8 +1,9 @@
 # iOS (iPad) build
 
-Standalone-only iPad build of the plugin: the same C++ and the same React
-UI, with every platform difference behind `#if JUCE_IOS`. Desktop behaviour
-is unchanged. AUv3 is out of scope; iPhone is untested.
+Standalone-only iPad port of the plugin: the same C++ and the same React UI,
+with every difference behind `#if JUCE_IOS` (C++) or
+`window.__T3K_PLATFORM__ === 'ios'` / `pointerType === 'touch'` (UI). Desktop
+behaviour is unchanged. AUv3 is out of scope; iPhone is untested.
 
 Deployment target iOS 16. Landscape only.
 
@@ -117,11 +118,68 @@ Simulator build.
   pinned to an older Xcode builds and signs fine and is then refused at upload,
   which reads as a signing problem and is not one.
 
+## Touch rules
+
+| gesture | result |
+| ------- | ------ |
+| tap a tile | open the block |
+| swipe over a tile | scroll the chain lane |
+| hold 250 ms, then drag | reorder |
+| hold, release without moving | tile menu at that point |
+| `...` on a tile | the same menu, visibly |
+| hold on the Spread / Align group | the advanced deck (desktop: right-click) |
+| press a control | its help in the info bar; release clears it |
+| drag a knob | adjust, with the value in a bubble above it |
+| double tap a knob | reset to default |
+| swipe in from the left edge | back, on BLOCK and SELECT TONE |
+| swipe down | dismiss the Tuner and Settings |
+
+No gesture is the only route to anything: every action above also has a
+visible control, per the HIG.
+
+Every touch target meets 44 pt through one rule in `index.css` under
+`html.t3k-ios`: an invisible `::after` at `max(100%, 44px)`, centred and out
+of flow, so no layout changes.
+
+## Touch verification
+
+Everything below was driven on the iPad Simulator against a Release build.
+Local `.nam` models only: the catalogue needs a sign-in the port cannot
+complete (see Known gaps).
+
+| Area | Verdict |
+| ---- | ------- |
+| Tap a chain tile; power / `...` / swap / trash on it | fixed and passing. A 44 pt hit expander was landing on the tile wrapper, which dnd-kit marks `role="button"`, and swallowing every tap |
+| Preset prev / next | steps and wraps |
+| Preset name popover | opens under the pill, above the keyboard it raises |
+| Save preset | popover and its field stay clear of the keyboard; saves |
+| New | clears the chain, greys out once at the default |
+| Preset reorder on touch | swipe scrolls the list; hold the grip, then drag, moves the row |
+| Tuner | opens; closes by `X` and by swipe down |
+| Undo / redo | covers reorder (both ways), remove and paste |
+| Mono / stereo toggle | switches; two lanes, pan rail, ALIGN and Balance appear |
+| Stereo two-lane layout | tiles scale with the same three-across rule as mono |
+| Spread / Align, hold for the advanced deck | both decks open on a touch and hold |
+| Per-block EQ | faders and curve dots both drag; the response redraws |
+| Block swap / remove | swap opens SELECT TONE for that block; remove takes it out |
+| Block info / share | **not tested**: both controls exist only for a catalogue tone |
+
 ## Platform notes worth knowing
 
 - **Picker results must be read through security-scoped URLs.** A file chosen
   outside the app container is unreadable through its raw path. A test with
   the file *inside* the container passes and proves nothing.
+- **WebKit replays a mouse event pair after every touch**, aimed at the
+  element just tapped and landing after `pointerup`. Anything that clears
+  state on release has to ignore that replay.
+- **`pointercancel` is reported at 0,0.** The page opts into panning, so
+  WKWebView takes swipes over and ends them with a cancel carrying no useful
+  position, and no `pointerup`. Swipe gestures use touch events instead.
+- **A control that takes pointer capture retargets its release**, so a release
+  that must be seen regardless is watched on `window` in the capture phase.
+- **`env(safe-area-inset-*)` is 0 on all sides** here: the WKWebView is
+  already inset (1366x999 in a 1024 pt screen), so the faceplate clears the
+  home indicator without the page doing anything.
 - **The app data container's UUID rotates on every reinstall and every app
   update.** Any absolute path the plugin persisted then names a directory
   that no longer exists, and the only path it persists is a local model's
@@ -179,12 +237,24 @@ Simulator build.
 
 ## Known gaps
 
-- The UI is the desktop UI. It renders and is usable, but it is not yet
-  adapted for touch: hit targets, gestures and the "On this iPad" local
-  browsing section are a separate change.
 - Load Folder is a multi-select on iOS: a security-scoped *directory* cannot
   be enumerated, so the picker returns files instead.
+- The double-tap knob reset is proved in a browser against the same bundle,
+  not on a device: two taps cannot be driven inside 300 ms through the
+  Simulator automation bridge.
 - Dragging a `.nam` from Files onto a tile is untested. The receiving code is
   the same HTML5 drop path the desktop uses, and the app does window alongside
   Files, but the drag could not be driven from the automation.
+- No haptics: the iPad has no Taptic Engine, so
+  `UIImpactFeedbackGenerator` does nothing there and the tile lift and drop
+  are silent.
 - AUv3 is not built. Only the Standalone app exists on iOS.
+
+## Desktop CI evidence
+
+Nothing on this branch reaches a desktop build. The C++ side is one
+`withUserScript` call inside `#if JUCE_IOS`, so every other platform's
+injected script is byte-identical to before; everything else is TypeScript
+and CSS gated on `IS_IOS` / `html.t3k-ios`, which is false and absent in
+every desktop build. macOS Release was rebuilt locally on this branch as the
+regression check, and the shared `ui` bundle builds and lints clean.
