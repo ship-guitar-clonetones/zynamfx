@@ -12,6 +12,25 @@ type ChainStateActions = ReturnType<typeof useChainState>['actions'];
 const SWAP_STORAGE_KEY = 't3k.pendingSwapBlockId';
 const INSERT_TARGET_STORAGE_KEY = 't3k.pendingInsertBlockId';
 
+/**
+ * The slot or block that opened the tone browser, if any.
+ *
+ * Exported for the "On this iPad" section in Select Tone: a local pick has to
+ * land exactly where a catalogue pick would have, so it reads the same pending
+ * targets handleToneSelected consumes. Reading does not consume them - a
+ * cancelled picker must leave the slot armed for the next attempt.
+ */
+export const peekPendingToneTarget = (): string | undefined =>
+  sessionStorage.getItem(SWAP_STORAGE_KEY) ??
+  sessionStorage.getItem(INSERT_TARGET_STORAGE_KEY) ??
+  undefined;
+
+/** Consume both pending targets once a load has actually succeeded. */
+export const consumePendingToneTarget = (): void => {
+  sessionStorage.removeItem(SWAP_STORAGE_KEY);
+  sessionStorage.removeItem(INSERT_TARGET_STORAGE_KEY);
+};
+
 /** Sanity cap for dropped files; real .nam files and IRs are a few MB, and
     the bytes ride the native bridge as base64 strings. */
 const MAX_LOCAL_FILE_BYTES = 50 * 1024 * 1024;

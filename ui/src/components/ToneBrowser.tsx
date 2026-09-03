@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Bookmark,
   Download,
+  File,
   FolderClosed,
   Search as SearchIcon,
 } from './icons';
@@ -193,6 +194,53 @@ const GearFilterPill: React.FC<{
     {label}
   </button>
 );
+
+/**
+ * "On this iPad": the visible local-import route inside Select Tone.
+ *
+ * HIG: "Always make context menu items available in the main interface,
+ * too." Loading a local capture must not depend on knowing that a tile has a
+ * hidden long press. Rendered only when the host supplies `onLoadLocal`, so
+ * desktop's Select Tone is untouched.
+ */
+const OnThisDeviceSection: React.FC<{
+  onLoadLocal: (kind: 'file' | 'folder') => Promise<string | null>;
+  onError: (message: string | null) => void;
+}> = ({ onLoadLocal, onError }) => {
+  const run = async (kind: 'file' | 'folder') => {
+    onError(null);
+    const error = await onLoadLocal(kind);
+    if (error) onError(error);
+  };
+  return (
+    <div style={{ marginBottom: '20rem' }}>
+      <div
+        style={{
+          fontFamily: FONT_MONO,
+          fontSize: '12rem',
+          textTransform: 'uppercase',
+          color: GRAY,
+          marginBottom: '10rem',
+        }}
+      >
+        On this iPad
+      </div>
+      <div style={{ display: 'flex', gap: '10rem', flexWrap: 'wrap' }}>
+        <button type="button" onClick={() => run('file')} style={browseButtonStyle}>
+          <File size={16} />
+          Load file
+        </button>
+        <button type="button" onClick={() => run('folder')} style={browseButtonStyle}>
+          <FolderClosed size={16} />
+          Load files
+        </button>
+      </div>
+      <div style={{ fontSize: '12rem', color: GRAY, marginTop: '8rem' }}>
+        .nam models and IR .wav files from Files. No account needed.
+      </div>
+    </div>
+  );
+};
 
 /** Row of radio-select gear filters shared across streams; default is no
     filter (every gear type). Edges fade to black under the same gradient
@@ -533,6 +581,11 @@ interface ToneBrowserProps {
   onSignIn: () => void;
   /** Return to the signal chain (the header back arrow). */
   onClose: () => void;
+  /** Load a local .nam / IR into the slot that opened this browser. Supplied
+      only on touch platforms, where the tile long press and "..." button are
+      otherwise the only routes to a local file and a user who opened Select
+      Tone to add a block has no way to say "actually, one of mine". */
+  onLoadLocal?: (kind: 'file' | 'folder') => Promise<string | null>;
 }
 
 interface StreamResult {
@@ -549,6 +602,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
   onBrowseTone3000,
   onSignIn,
   onClose,
+  onLoadLocal,
 }) => {
   // Land on the stream the user was on last time they browsed; default to
   // the public Trending feed rather than a gated stream that might now be
@@ -850,6 +904,10 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
           shared meter band). */}
       <div style={{ maxWidth: `${COLUMN_MAX_WIDTH}rem`, margin: '0 auto', width: '100%' }}>
         <div style={{ padding: '20rem 0 24rem' }}>
+          {onLoadLocal && (
+            <OnThisDeviceSection onLoadLocal={onLoadLocal} onError={setPickError} />
+          )}
+
           {!showSignInPrompt && (
             <GearFilterRow active={gearFilter} onChange={handleGearFilterChange} />
           )}

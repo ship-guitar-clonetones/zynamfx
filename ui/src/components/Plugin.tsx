@@ -12,6 +12,7 @@ import { useToneLoadFlow } from '../hooks/useToneLoadFlow';
 import { useUpdateNotice } from '../hooks/useUpdateNotice';
 import { useUiScale, DESIGN_WIDTH, DESIGN_HEIGHT, IS_IOS } from '../hooks/useUiScale';
 import { shouldRestoreToneBrowser } from '../hooks/useT3kSelect';
+import { consumePendingToneTarget, peekPendingToneTarget } from '../hooks/useToneLoadFlow';
 import { CHAIN_SCROLL_STORAGE_KEY, ChainView, DETAIL_BLOCK_STORAGE_KEY } from './ChainView';
 import { Faceplate, PLATE_HEIGHT } from './Faceplate';
 import { HintBar, HINT_HEIGHT } from './HintBar';
@@ -330,6 +331,24 @@ export const Plugin: React.FC = () => {
     [pickLocalToneFile, refresh]
   );
 
+  /**
+   * "On this iPad" in Select Tone: load a local file into whatever slot or
+   * block opened the browser. Lives here rather than in useToneLoadFlow
+   * because the picker is a native bridge call wired up in this component.
+   */
+  const handleLoadLocalIntoTarget = useCallback(
+    async (kind: 'file' | 'folder'): Promise<string | null> => {
+      const error = await handlePickLocalFile(peekPendingToneTarget() ?? '', kind);
+      if (error) return error;
+      // Only consume the target once the load succeeded; a cancelled picker
+      // must leave the slot armed for the next attempt.
+      consumePendingToneTarget();
+      setShowToneBrowser(false);
+      return null;
+    },
+    [handlePickLocalFile]
+  );
+
   // Non-blocking update check (enabled via VITE_T3K_UPDATE_NOTICE); also
   // resolves the running build's version for the Settings footer.
   const { notice: updateNotice, update, localVersion, remindLater } = useUpdateNotice(t3kClient);
@@ -542,6 +561,7 @@ export const Plugin: React.FC = () => {
                   onBrowseTone3000={handleBrowseTone3000}
                   onSignIn={handleBrowserSignIn}
                   onClose={handleBrowserClose}
+                  onLoadLocal={IS_IOS ? handleLoadLocalIntoTarget : undefined}
                 />
               ) : (
                 <ChainActionsProvider value={chainActions}>
