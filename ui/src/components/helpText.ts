@@ -237,8 +237,16 @@ const HELP_DESKTOP = {
   presetNew: 'New: clear the chain and reset every control to its default.',
   presetRename: 'Rename: edit name. Enter: commit · Esc: cancel.',
   presetDelete: 'Delete: remove this preset.',
-  presetReorder: 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',
-  presetDrag: 'Drag: move this preset within its section.',
+  // The gesture differs, so these two are branched by hand rather than left
+  // to `touchify` (which only swaps the noun for "press this"). Verified on
+  // the iPad: the grip is the only drag handle, so a swipe anywhere in the
+  // list scrolls it, and the grip itself lifts after dnd-kit's 250 ms hold.
+  presetReorder: IS_IOS
+    ? 'Reorder: touch and hold a preset’s grip, then drag. Prev/Next and MIDI follow the order.'
+    : 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',
+  presetDrag: IS_IOS
+    ? 'Grip: touch and hold, then drag to move this preset within its section.'
+    : 'Drag: move this preset within its section.',
   presetPcToggle:
     'MIDI PC: show each preset\u2019s program change number. Prev/Next and PC follow the list order.',
   presetPc: 'PC: the MIDI program change number that loads this preset.',

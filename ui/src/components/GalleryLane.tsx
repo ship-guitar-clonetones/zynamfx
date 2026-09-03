@@ -34,7 +34,9 @@ import { isInsertSlot } from '../types/chain';
  */
 
 export const TILE_SIZE = 224;
-/** Stereo shows two lanes, so its tiles shrink to fit the fixed height. */
+/** Stereo shows two lanes, so its tiles shrink to fit the fixed height. The
+    design size, and on iOS the floor the lane can grow from (see
+    laneTileSize in ChainView). */
 export const STEREO_TILE_SIZE = 160;
 /** Gap between tiles: the visible run of each connector line. */
 export const TILE_GAP = 24;
@@ -357,7 +359,10 @@ const PanRailChips: React.FC<{
  * buttons for a MONO chip that says why. Solo and polarity stay live: they
  * act on the chains inside the sum.
  */
-export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
+export const StereoPanRail: React.FC<{ monoSum: boolean; tileSize: number }> = ({
+  monoSum,
+  tileSize,
+}) => {
   const { swapChains } = useChainActions();
   const [panLeft, setPanLeft, onPanLeftDrag] = useParameter('chainPanLeft', 'slider');
   const [panRight, setPanRight, onPanRightDrag] = useParameter('chainPanRight', 'slider');
@@ -428,7 +433,9 @@ export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
         flexDirection: 'column',
         alignItems: 'center',
         alignSelf: 'center',
-        height: `${STEREO_TILE_SIZE * 2 + LANE_GAP}rem`,
+        // Matches the two lanes it sits beside, whatever size they resolve to
+        // (iOS grows them into the band; see laneTileSize in ChainView).
+        height: `${tileSize * 2 + LANE_GAP}rem`,
         flexShrink: 0,
         // Room for the left edge-fade's 1rem outer overhang (see EdgeFade)
         // so it doesn't sit on the link/swap pill.
