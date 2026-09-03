@@ -128,6 +128,18 @@ public:
   // over an hour (the age guard protects a concurrent instance's in-flight
   // file). Returns how many files it deleted.
   static int sweepLeakedIrTempFiles(const juce::File& tempDir);
+  // Resolve a persisted local-model `file://` URL to the stash file that
+  // actually holds those bytes, given the current stash root. The URL stored
+  // in a block's tone JSON is absolute, and that JSON is persisted in
+  // presets, DAW/app state and undo snapshots; on iOS the app data
+  // container's UUID rotates on every reinstall or app update, so every one
+  // of those paths goes stale. Stash names are content hashes in a flat
+  // folder, so the file name *is* the stable token: when the stored path no
+  // longer exists, the same name under the current root is the same bytes.
+  // A stored path that does exist is returned untouched, which is every
+  // desktop case (the root never moves there). Empty File for a non-file URL.
+  static juce::File resolveLocalModelFile(const juce::File& stashRoot,
+                                          const juce::String& modelUrl);
   // Replace the tone of an existing block in place. Keeps the block's chain
   // position and user params (enabled/gains/mix); the new tone's first model
   // is queued for background loading.

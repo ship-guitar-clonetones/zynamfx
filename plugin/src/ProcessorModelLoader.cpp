@@ -102,7 +102,8 @@ bool namConfigIsA2(const nlohmann::json& modelJson) {
 // remove, undo across a tone swap) re-reads this copy even after the user's
 // original file moved. Content-addressed names dedupe re-drops of the same
 // file; stale entries age out (see cleanLocalModelStash). Same app-data
-// root as PresetManager.
+// root as PresetManager. Persisted URLs are resolved back to this folder by
+// resolveLocalModelFile, which is what survives the iOS container rotating.
 juce::File localModelsDir() {
   juce::File base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
 #if JUCE_MAC
@@ -590,13 +591,34 @@ int TONE3000Processor::sweepLeakedIrTempFiles(const juce::File& tempDir) {
   return removed;
 }
 
-void TONE3000Processor::refreshLocalStashCopy(const juce::String& modelUrl,
-                                              const std::vector<uint8_t>& bytes) {
+juce::File TONE3000Processor::resolveLocalModelFile(const juce::File& stashRoot,
+                                                    const juce::String& modelUrl) {
   const juce::URL url(modelUrl);
   if (!url.isLocalFile())
-    return;
-  const juce::File stash = url.getLocalFile();
-  if (!stash.isAChildOf(localModelsDir()))
+    return {};
+
+  const juce::File stored = url.getLocalFile();
+  if (stored.existsAsFile())
+    return stored;
+
+  // The stored path is gone. On iOS that is the normal case after a
+  // reinstall or an app update: the data container's UUID rotates, so every
+  // absolute path a preset, an undo snapshot or the saved app state baked in
+  // points at a container that no longer exists, and the block came back as
+  // "Download failed / Retry". Stash names are content hashes in one flat
+  // folder, so re-rooting the name is exact, not a guess. On desktop the
+  // root never moves, so this yields the path we just probed and the outcome
+  // is unchanged; that is why it is not gated on JUCE_IOS.
+  const juce::String name = stored.getFileName();
+  if (name.isEmpty() || name == "." || name == "..")
+    return stored;
+  return stashRoot.getChildFile(name);
+}
+
+void TONE3000Processor::refreshLocalStashCopy(const juce::String& modelUrl,
+                                              const std::vector<uint8_t>& bytes) {
+  const juce::File stash = resolveLocalModelFile(localModelsDir(), modelUrl);
+  if (stash == juce::File() || !stash.isAChildOf(localModelsDir()))
     return;
 
   if (stash.existsAsFile()) {
@@ -619,15 +641,18 @@ std::vector<uint8_t> TONE3000Processor::fetchModelFromUrl(const juce::String& mo
   // Local-file models (drag-and-drop loads) resolve to their stash copy:
   // no network, no auth. See loadLocalTone.
   if (url.isLocalFile()) {
+    // Through resolveLocalModelFile, not url.getLocalFile(): a path persisted
+    // before an iOS reinstall names a container that is gone.
+    const juce::File stash = resolveLocalModelFile(localModelsDir(), modelUrl);
     juce::MemoryBlock data;
-    if (!url.getLocalFile().loadFileAsData(data) || data.getSize() == 0) {
+    if (!stash.loadFileAsData(data) || data.getSize() == 0) {
       juce::Logger::writeToLog("[ModelLoader] Local model file missing or unreadable: " +
                                modelUrl);
       return {};
     }
     // In use, so keep the GC away (mtime is its liveness signal, see
     // cleanLocalModelStash).
-    url.getLocalFile().setLastModificationTime(juce::Time::getCurrentTime());
+    stash.setLastModificationTime(juce::Time::getCurrentTime());
     const auto* bytes = static_cast<const uint8_t*>(data.getData());
     return std::vector<uint8_t>(bytes, bytes + data.getSize());
   }

@@ -251,3 +251,40 @@ TEST(LocalLoadTest, PathRejectsBadInputs) {
   EXPECT_TRUE(firstToneBlock(proc).isVoid());
   dir.deleteRecursively();
 }
+
+// The stash path a block persists as its model_url is absolute, and the tone
+// JSON carrying it lives in presets, DAW/app state and undo snapshots. On iOS
+// the app data container's UUID rotates on every reinstall or app update, so
+// those paths name a container that is gone. Resolution therefore re-roots the
+// (content-hashed) file name under the current stash folder.
+TEST(LocalLoadTest, StashUrlResolvesUnderTheCurrentRoot) {
+  const juce::File tmp = juce::File::getSpecialLocation(juce::File::tempDirectory);
+  const juce::File root = tmp.getChildFile("t3k-stash-" + juce::Uuid().toString());
+  const juce::File live = root.getChildFile("deadbeef-4096.nam");
+  ASSERT_TRUE(root.createDirectory());
+  ASSERT_TRUE(live.replaceWithText("model bytes"));
+
+  // What a preset saved under a previous container holds.
+  const juce::String staleUrl =
+      juce::URL(tmp.getChildFile("Containers")
+                    .getChildFile(juce::Uuid().toString())
+                    .getChildFile("LocalModels")
+                    .getChildFile("deadbeef-4096.nam"))
+          .toString(false);
+  EXPECT_EQ(TONE3000Processor::resolveLocalModelFile(root, staleUrl), live);
+
+  // A path that still resolves comes back untouched: every desktop case.
+  EXPECT_EQ(TONE3000Processor::resolveLocalModelFile(root, juce::URL(live).toString(false)), live);
+
+  // Nothing to re-root for a catalog URL.
+  EXPECT_EQ(TONE3000Processor::resolveLocalModelFile(root, "https://test.invalid/model.nam"),
+            juce::File());
+
+  // Bytes that are gone everywhere still read as missing (the caller reports
+  // the failure), not as some other file.
+  EXPECT_FALSE(
+      TONE3000Processor::resolveLocalModelFile(root, staleUrl.replace("deadbeef", "0badc0de"))
+          .existsAsFile());
+
+  root.deleteRecursively();
+}
