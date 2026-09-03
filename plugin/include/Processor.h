@@ -140,6 +140,13 @@ public:
   // desktop case (the root never moves there). Empty File for a non-file URL.
   static juce::File resolveLocalModelFile(const juce::File& stashRoot,
                                           const juce::String& modelUrl);
+  // The file name a URL names, percent-decoded. juce::URL::getFileName returns
+  // the raw, still-escaped last path component, so a file picked as
+  // "Deluxe Reverb 2.nam" reads back as "Deluxe%20Reverb%202.nam" and would
+  // reach the title, the model name and the stash name in that form. Desktop
+  // derives names from juce::File and never sees escapes; this keeps the URL
+  // path identical.
+  static juce::String localFileNameFromUrl(const juce::URL& url);
   // Replace the tone of an existing block in place. Keeps the block's chain
   // position and user params (enabled/gains/mix); the new tone's first model
   // is queued for background loading.

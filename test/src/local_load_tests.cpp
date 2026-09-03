@@ -288,3 +288,23 @@ TEST(LocalLoadTest, StashUrlResolvesUnderTheCurrentRoot) {
 
   root.deleteRecursively();
 }
+
+// The iOS document picker hands back URLs, whose last path component is
+// percent-escaped. Names must come back exactly as the desktop path derives
+// them from juce::File, or a file called "Deluxe Reverb 2.nam" loads (and
+// stashes, and titles its tile) as "Deluxe%20Reverb%202".
+TEST(LocalLoadTest, UrlFileNameIsPercentDecoded) {
+  const juce::File dir =
+      juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("t3k-name");
+  const juce::File spaced = dir.getChildFile("Deluxe Reverb 2.nam");
+  EXPECT_EQ(TONE3000Processor::localFileNameFromUrl(juce::URL(spaced)), "Deluxe Reverb 2.nam");
+
+  const juce::File accented = dir.getChildFile("Amplificador Válvulas.wav");
+  EXPECT_EQ(TONE3000Processor::localFileNameFromUrl(juce::URL(accented)),
+            juce::String::fromUTF8("Amplificador V\xc3\xa1lvulas.wav"));
+
+  // A non-file URL has no local file to ask, so the escapes come off the path.
+  EXPECT_EQ(TONE3000Processor::localFileNameFromUrl(
+                juce::URL("https://test.invalid/x/Deluxe%20Reverb%202.nam")),
+            "Deluxe Reverb 2.nam");
+}

@@ -259,7 +259,7 @@ juce::var stashLocalFileFromDisk(const juce::File& file, juce::String& error) {
 // "Couldn't read the file". juce::URL::createInputStream goes through the
 // bookmark and the scope, so it reads the same bytes the user actually picked.
 juce::var stashLocalFileFromUrl(const juce::URL& url, juce::String& error) {
-  const juce::String filename = url.getFileName();
+  const juce::String filename = TONE3000Processor::localFileNameFromUrl(url);
   juce::MemoryOutputStream bytes;
   const auto in = url.createInputStream(
       juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inAddress));
@@ -439,10 +439,10 @@ juce::var TONE3000Processor::loadLocalToneUrls(const juce::Array<juce::URL>& sou
   // enumerated through juce::URL (there is no listing API behind the
   // bookmark), so "Load Folder" asks for the files themselves instead. See
   // pickLocalToneFile.
-  const juce::String title = sources.size() == 1
-                                 ? sources.getReference(0).getFileName().upToLastOccurrenceOf(
-                                       ".", false, false)
-                                 : juce::String(sources.size()) + " files";
+  const juce::String title =
+      sources.size() == 1
+          ? localFileNameFromUrl(sources.getReference(0)).upToLastOccurrenceOf(".", false, false)
+          : juce::String(sources.size()) + " files";
 
   if (sources.isEmpty())
     return localToneError(title, "Nothing to load");
@@ -454,13 +454,13 @@ juce::var TONE3000Processor::loadLocalToneUrls(const juce::Array<juce::URL>& sou
   // is stable regardless of the order the picker reports.
   juce::Array<juce::URL> picked(sources);
   std::sort(picked.begin(), picked.end(), [](const juce::URL& a, const juce::URL& b) {
-    return a.getFileName().compareNatural(b.getFileName()) < 0;
+    return localFileNameFromUrl(a).compareNatural(localFileNameFromUrl(b)) < 0;
   });
 
   juce::Array<juce::var> models;
   juce::String firstError;
   for (const auto& url : picked) {
-    const juce::String filename = url.getFileName();
+    const juce::String filename = localFileNameFromUrl(url);
     const juce::String extension = filename.fromLastOccurrenceOf(".", true, false).toLowerCase();
     if (extension != ".nam" && extension != ".wav") {
       if (firstError.isEmpty())
@@ -589,6 +589,14 @@ int TONE3000Processor::sweepLeakedIrTempFiles(const juce::File& tempDir) {
     if (file.getLastModificationTime() < cutoff && file.deleteFile())
       ++removed;
   return removed;
+}
+
+juce::String TONE3000Processor::localFileNameFromUrl(const juce::URL& url) {
+  // A file:// URL knows its own local file, which carries the decoded name;
+  // anything else only has the escaped path component to unescape.
+  if (url.isLocalFile())
+    return url.getLocalFile().getFileName();
+  return juce::URL::removeEscapeChars(url.getFileName());
 }
 
 juce::File TONE3000Processor::resolveLocalModelFile(const juce::File& stashRoot,
