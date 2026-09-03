@@ -141,6 +141,34 @@ Every touch target meets 44 pt through one rule in `index.css` under
 `html.t3k-ios`: an invisible `::after` at `max(100%, 44px)`, centred and out
 of flow, so no layout changes.
 
+## Local import
+
+One entry, not two. Desktop offers **Load File** and **Load Folder**; iOS
+offers **Load files**, in both places local loading is reachable from: the
+**On this iPad** section in SELECT TONE and the tile's `...` menu.
+
+The collapse is not a simplification, it is what the platform gives. iOS has a
+single document picker and it is multi-select, so the two desktop entries are
+the same picker with the multi-select flag on or off. With it on, both desktop
+outcomes are already reachable:
+
+| picked | result | desktop equivalent |
+| ------ | ------ | ------------------ |
+| one file | a tone with one model, titled after the file | Load File |
+| several files | one tone with a model each, natural-name ordered | Load Folder |
+
+A separate "Load file" row would therefore open the same sheet with a
+restriction and no new capability, and the HIG's shortest-sheet rule argues
+against carrying it.
+
+A folder cannot be the unit here: the picker can return a folder URL, but a
+security-scoped directory has no listing API behind its bookmark, so a picked
+folder is an unreadable handle. Native already reflects this: on iOS
+`pickLocalToneFile(pickFolder = true)` asks for files with multi-select and
+`loadLocalToneUrls` titles the result from the single file's name when exactly
+one comes back. Only the UI changed; desktop's two entries are untouched,
+behind `IS_IOS`.
+
 ## Touch verification
 
 Everything below was driven on the iPad Simulator against a Release build.
@@ -237,8 +265,9 @@ complete (see Known gaps).
 
 ## Known gaps
 
-- Load Folder is a multi-select on iOS: a security-scoped *directory* cannot
-  be enumerated, so the picker returns files instead.
+- There is no folder import on iOS: a security-scoped *directory* cannot be
+  enumerated, so the one **Load files** entry multi-selects the files instead
+  (see Local import).
 - The double-tap knob reset is proved in a browser against the same bundle,
   not on a device: two taps cannot be driven inside 300 ms through the
   Simulator automation bridge.

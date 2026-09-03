@@ -253,18 +253,23 @@ const HELP_DESKTOP = {
 
   // Chain gallery
   addTile: IS_IOS
-    ? 'Add Tone: browse TONE3000 for this slot, or use On this iPad to load a local .nam or IR .wav. Touch and hold: slot menu.'
+    ? 'Add Tone: browse TONE3000 for this slot, or use On this iPad, Load files, for local .nam or IR .wav files. Touch and hold: slot menu.'
     : 'Add Tone: browse TONE3000 for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.',
   closeToneBrowser: 'Close: back to the chain.',
   copyBlock: 'Copy: copy this block (tone, model and all settings).',
   pasteBlock: 'Paste: add a copy of the copied block in this slot.',
   loadFileTile: 'Load File: pick a local .nam or IR .wav file to load here. No account needed.',
+  // iOS only: the single row that replaces Load File and Load Folder.
+  loadFilesTile:
+    'Load files: pick .nam or IR .wav files from Files. One file loads a single model, several load as one multi-model block. No account needed.',
   loadFolderTile:
     'Load Folder: pick a folder of .nam or .wav files; loads as one multi-model block.',
   blockPower: 'Power: bypass this block.',
   retryLoad: 'Retry: re-download this model.',
   swapTone: 'Swap: replace this tone, keeping its slot.',
-  tileMenu: 'More: block actions (copy, load a local file, remove).',
+  tileMenu: IS_IOS
+    ? 'More: block actions (copy, load files, remove).'
+    : 'More: block actions (copy, load a local file, remove).',
   moveBlockLeft: 'Move left: swap this block with the one before it.',
   moveBlockRight: 'Move right: swap this block with the one after it.',
   removeBlock: 'Remove: delete this block.',

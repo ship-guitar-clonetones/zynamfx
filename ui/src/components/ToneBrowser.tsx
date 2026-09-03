@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Bookmark,
   Download,
-  File,
   FolderClosed,
   Search as SearchIcon,
 } from './icons';
@@ -212,6 +211,15 @@ const OnThisDeviceSection: React.FC<{
     const error = await onLoadLocal(kind);
     if (error) onError(error);
   };
+  // One entry, not two. iOS has a single document picker and it is
+  // multi-select, so desktop's "Load File" and "Load Folder" collapse into
+  // it: pick one file and the tone has one model, pick several and it has
+  // several, which is exactly what Load Folder produces from a folder.
+  // A second button would offer the same picker with the multi-select
+  // switched off, i.e. a strictly worse version of this one.
+  // `'folder'` is the multi-select flag on the native call, not a folder
+  // request (see pickLocalToneFile).
+
   return (
     <div style={{ marginBottom: '20rem' }}>
       <div
@@ -226,17 +234,14 @@ const OnThisDeviceSection: React.FC<{
         On this iPad
       </div>
       <div style={{ display: 'flex', gap: '10rem', flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => run('file')} style={browseButtonStyle}>
-          <File size={16} />
-          Load file
-        </button>
         <button type="button" onClick={() => run('folder')} style={browseButtonStyle}>
           <FolderClosed size={16} />
           Load files
         </button>
       </div>
       <div style={{ fontSize: '12rem', color: GRAY, marginTop: '8rem' }}>
-        .nam models and IR .wav files from Files. No account needed.
+        .nam models and IR .wav files from Files. Pick one file for a single-model tone, or several
+        for one tone with a model each. No account needed.
       </div>
     </div>
   );
@@ -904,9 +909,7 @@ export const ToneBrowser: React.FC<ToneBrowserProps> = ({
           shared meter band). */}
       <div style={{ maxWidth: `${COLUMN_MAX_WIDTH}rem`, margin: '0 auto', width: '100%' }}>
         <div style={{ padding: '20rem 0 24rem' }}>
-          {onLoadLocal && (
-            <OnThisDeviceSection onLoadLocal={onLoadLocal} onError={setPickError} />
-          )}
+          {onLoadLocal && <OnThisDeviceSection onLoadLocal={onLoadLocal} onError={setPickError} />}
 
           {!showSignInPrompt && (
             <GearFilterRow active={gearFilter} onChange={handleGearFilterChange} />

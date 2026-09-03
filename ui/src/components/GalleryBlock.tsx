@@ -233,6 +233,21 @@ const localLoadMenuItems = (
     const error = await actions.pickLocalFile(targetBlockId, kind);
     if (error) toast.show(error);
   };
+  // iOS collapses the two rows into one. The platform has a single document
+  // picker and it is multi-select, so "Load files" covers both cases: one
+  // file gives a single-model tone, several give one multi-model tone, which
+  // is what Load Folder produces from a folder. (`'folder'` is the
+  // multi-select flag on the native call, not a folder request.) Desktop
+  // keeps both rows unchanged.
+  if (IS_IOS)
+    return [
+      {
+        label: 'Load files',
+        icon: <FolderClosed size={16} />,
+        help: HELP.loadFilesTile,
+        onSelect: () => void pick('folder'),
+      },
+    ];
   return [
     {
       label: 'Load File',
