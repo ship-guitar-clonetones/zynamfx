@@ -28,6 +28,7 @@ import {
 // too; importing it from here would cycle (ChainView -> GalleryLane -> GalleryBlock).
 import { GALLERY_DRAG_DISTANCE_PX } from './GalleryBlock';
 import { useChainActions } from '../hooks/useChainActions';
+import { useEdgeSwipeBack } from '../hooks/useTouchGestures';
 import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll';
 import { FONT_MONO, WHITE } from './theme';
 import type { ChainBranch, ChainItem, ChainSide, ToneBlock } from '../types/chain';
@@ -386,6 +387,11 @@ export const ChainView: React.FC<ChainViewProps> = ({
   useEffect(() => {
     if (detailBlockId != null && detailBlock == null) setDetailBlockId(null);
   }, [detailBlockId, detailBlock]);
+
+  // Left-edge swipe is a shortcut out of BLOCK, never the only way: the
+  // 44 pt back arrow in the card header stays exactly where it was. Called
+  // before the early return below so the hook order never changes.
+  useEdgeSwipeBack(detailBlock != null, () => setDetailBlockId(null));
 
   if (detailBlock) {
     // Another enabled+loaded NAM after this block in its lane. This mirrors the

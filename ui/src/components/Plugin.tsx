@@ -11,6 +11,7 @@ import { useToneSession } from '../hooks/useToneSession';
 import { useToneLoadFlow } from '../hooks/useToneLoadFlow';
 import { useUpdateNotice } from '../hooks/useUpdateNotice';
 import { useUiScale, DESIGN_WIDTH, DESIGN_HEIGHT, IS_IOS } from '../hooks/useUiScale';
+import { useEdgeSwipeBack, useSwipeDownDismiss } from '../hooks/useTouchGestures';
 import { shouldRestoreToneBrowser } from '../hooks/useT3kSelect';
 import { consumePendingToneTarget, peekPendingToneTarget } from '../hooks/useToneLoadFlow';
 import { CHAIN_SCROLL_STORAGE_KEY, ChainView, DETAIL_BLOCK_STORAGE_KEY } from './ChainView';
@@ -273,6 +274,14 @@ export const Plugin: React.FC = () => {
     loadFlow.clearPendingTargets();
     setShowToneBrowser(false);
   }, [loadFlow]);
+
+  // iPad navigation shortcuts (see useTouchGestures). Every one of these
+  // screens keeps its visible 44 pt control: the gesture is an extra route,
+  // not a replacement, which is both the HIG rule and what keeps the app
+  // usable with a mouse or VoiceOver. No-ops off iOS.
+  useEdgeSwipeBack(showToneBrowser, handleBrowserClose);
+  useSwipeDownDismiss(showTuner, closeTuner);
+  useSwipeDownDismiss(showSettings, () => setShowSettings(false));
 
   // Switch a block's model. Native downloads the new model file itself, so
   // refresh-and-sync the token first; switching after the editor has been
