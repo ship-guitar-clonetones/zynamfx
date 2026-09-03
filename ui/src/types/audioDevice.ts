@@ -50,7 +50,22 @@ export interface AudioDeviceState {
   midiInputs: MidiInputDevice[];
   /** OS Bluetooth MIDI pairing dialog exists (macOS). */
   btMidiAvailable: boolean;
+  /** iOS only: the audio session's current route is Bluetooth (HFP, A2DP or
+      LE). Always false on desktop, where the OS does not force a route on
+      us. Drives the Bluetooth tip (see shouldShowBluetoothTip). */
+  bluetoothRoute: boolean;
 }
+
+/**
+ * Should the Bluetooth tip show? Pure, so it can be tested without React.
+ *
+ * Two ways in: the route itself is Bluetooth, or the session came up below
+ * 44.1 kHz, which on iOS effectively only happens on a headset (HFP) route
+ * capped at 16 or 24 kHz. The rate arm is the safety net for a route the
+ * port-type list does not name; the caller gates the whole thing to iOS.
+ */
+export const shouldShowBluetoothTip = (state: AudioDeviceState): boolean =>
+  state.deviceOpen && (state.bluetoothRoute || (state.sampleRate > 0 && state.sampleRate < 44100));
 
 export interface MidiInputDevice {
   /** OS device identifier (stable key for enable/disable). */
