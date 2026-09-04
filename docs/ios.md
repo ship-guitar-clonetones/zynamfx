@@ -131,7 +131,12 @@ Simulator build.
     low-rate headset *mic* route goes away. It is not a JUCE text patch:
     JUCE sets the category when it *opens* a device and never on its own
     route-change `restart()` path, so re-applying it on every device-manager
-    change is enough and the JUCE tree stays untouched.
+    change is enough and the JUCE tree stays untouched. What was verified:
+    the rate is right when the device is (re)opened after the option is
+    gone. Whether a session already running at 24 kHz climbs back to 48 kHz
+    the moment HFP is dropped, without a reopen, is not confirmed on a
+    device: JUCE's `handleRouteChange` ignores `CategoryChange` and
+    `RouteConfigurationChange`, so it depends on which reason iOS reports.
   - `isBluetoothRoute()` feeds `bluetoothRoute` in the settings state, and
     the UI turns that (or any session under 44.1 kHz) into one plain tip in
     Settings > System Settings, next to Sample Rate: use wired headphones,

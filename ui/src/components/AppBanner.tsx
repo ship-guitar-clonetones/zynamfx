@@ -1,5 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { shouldShowBluetoothTip, type AudioDeviceState } from '../types/audioDevice';
+import {
+  bluetoothTipHeadline,
+  shouldShowBluetoothTip,
+  type AudioDeviceState,
+} from '../types/audioDevice';
 import { IS_IOS } from '../hooks/useUiScale';
 import { AlertIcon, type AlertVariant } from './controls';
 import { BORDER, MUTED } from './theme';
@@ -190,10 +194,10 @@ const BANNER_RULES: BannerRule[] = [
     variant: 'info',
     dismissable: true,
     when: (state) => IS_IOS && shouldShowBluetoothTip(state),
-    content: () => (
+    content: (state) => (
       <>
-        <b>Bluetooth headphones limit audio to 24 kHz and add latency.</b> For playing, use wired
-        headphones, the iPad speaker, or a USB audio interface.
+        <b>{bluetoothTipHeadline(state)}</b> For playing, use wired headphones, the iPad speaker, or
+        a USB audio interface.
       </>
     ),
     action: { label: 'Open Settings', kind: 'openSettings' },

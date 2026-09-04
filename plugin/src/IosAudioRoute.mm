@@ -45,9 +45,11 @@ void disallowBluetoothHfp() {
   if ((options & hfp) == 0)
     return;
 
-  [session setCategory:session.category
-           withOptions:(options & ~hfp)
-                 error:nil];
+  NSError* error = nil;
+  if (! [session setCategory:session.category withOptions:(options & ~hfp) error:&error])
+    DBG ("IosAudioRoute: could not drop the HFP option: "
+         << (error != nil ? juce::String::fromUTF8 ([[error localizedDescription] UTF8String])
+                          : juce::String ("no error object")));
 }
 
 }  // namespace IosAudioRoute

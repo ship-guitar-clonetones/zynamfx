@@ -67,6 +67,22 @@ export interface AudioDeviceState {
 export const shouldShowBluetoothTip = (state: AudioDeviceState): boolean =>
   state.deviceOpen && (state.bluetoothRoute || (state.sampleRate > 0 && state.sampleRate < 44100));
 
+/**
+ * The headline the tip can stand behind. Only a route the session reports as
+ * Bluetooth gets named as Bluetooth; a low rate on any other route (a USB
+ * interface opened at 32 kHz, say) is described as what it is, a low rate,
+ * so the banner never claims a cause it cannot see. Pure, tested.
+ */
+export const bluetoothTipHeadline = (state: AudioDeviceState): string => {
+  const kHz = `${Math.round(state.sampleRate / 1000)} kHz`;
+  const capped = state.sampleRate > 0 && state.sampleRate < 44100;
+  if (state.bluetoothRoute)
+    return capped
+      ? `Bluetooth headphones are limiting audio to ${kHz} and add latency.`
+      : 'Bluetooth headphones add latency.';
+  return `This audio route is running at ${kHz}, which limits fidelity and adds latency.`;
+};
+
 export interface MidiInputDevice {
   /** OS device identifier (stable key for enable/disable). */
   id: string;

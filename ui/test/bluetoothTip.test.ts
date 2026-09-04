@@ -9,7 +9,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { shouldShowBluetoothTip, type AudioDeviceState } from '../src/types/audioDevice.ts';
+import {
+  bluetoothTipHeadline,
+  shouldShowBluetoothTip,
+  type AudioDeviceState,
+} from '../src/types/audioDevice.ts';
 
 /** A healthy USB-interface snapshot: open, 48 kHz, no Bluetooth. Only the
     three fields the predicate reads matter. */
@@ -43,4 +47,17 @@ test('stays quiet while no device is open (0 Hz is not a capped rate)', () => {
   assert.equal(withState({ deviceOpen: false, sampleRate: 0 }), false);
   assert.equal(withState({ deviceOpen: false, bluetoothRoute: true }), false);
   assert.equal(withState({ sampleRate: 0 }), false);
+});
+
+test('names Bluetooth only when the route says so', () => {
+  const headline = (over: Partial<AudioDeviceState>) =>
+    bluetoothTipHeadline({ ...base, ...over } as AudioDeviceState);
+  // A2DP at a normal rate: latency is the only true claim.
+  assert.equal(headline({ bluetoothRoute: true }), 'Bluetooth headphones add latency.');
+  // HFP: the cap is named with the rate the session actually has, not a fixed 24.
+  assert.match(headline({ sampleRate: 24000, bluetoothRoute: true }), /limiting audio to 24 kHz/);
+  assert.match(headline({ sampleRate: 16000, bluetoothRoute: true }), /limiting audio to 16 kHz/);
+  // A USB interface at 32 kHz is a low rate, not Bluetooth.
+  assert.doesNotMatch(headline({ sampleRate: 32000 }), /Bluetooth/);
+  assert.match(headline({ sampleRate: 32000 }), /32 kHz/);
 });
