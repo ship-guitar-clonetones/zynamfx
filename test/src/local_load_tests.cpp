@@ -308,3 +308,79 @@ TEST(LocalLoadTest, UrlFileNameIsPercentDecoded) {
                 juce::URL("https://test.invalid/x/Deluxe%20Reverb%202.nam")),
             "Deluxe Reverb 2.nam");
 }
+
+// The iOS picker path. Compiled on every platform (the DSP suite does not
+// build for iOS), fed file:// URLs here, security-scoped ones on the iPad; the
+// bytes come through juce::URL::createInputStream either way. Multi-select is
+// the folder route on iOS, so it must sort, filter and aggregate errors the
+// way loadLocalTonePath does for a folder.
+TEST(LocalLoadTest, UrlsLoadMultiSelectInNaturalOrderSkippingBadFiles) {
+  const juce::File dir =
+      juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("t3k-url-test");
+  dir.deleteRecursively();
+  ASSERT_TRUE(dir.createDirectory().wasOk());
+  ASSERT_TRUE(testFile("a2-amp-test.nam").copyFileTo(dir.getChildFile("amp 2.nam")));
+  ASSERT_TRUE(testFile("a2-amp-cab-test.nam").copyFileTo(dir.getChildFile("amp 10.nam")));
+  ASSERT_TRUE(testFile("a2-am-test-2.nam").copyFileTo(dir.getChildFile("amp 1.nam")));
+  ASSERT_TRUE(dir.getChildFile("notes.txt").replaceWithText("hi"));
+
+  // Picker order is arbitrary; hand them over scrambled, with a wrong type and
+  // a file that does not exist mixed in.
+  TONE3000Processor proc;
+  const juce::var res = proc.loadLocalToneUrls({
+      juce::URL(dir.getChildFile("amp 10.nam")),
+      juce::URL(dir.getChildFile("notes.txt")),
+      juce::URL(dir.getChildFile("amp 2.nam")),
+      juce::URL(dir.getChildFile("missing.nam")),
+      juce::URL(dir.getChildFile("amp 1.nam")),
+  });
+  EXPECT_TRUE(res["error"].isVoid()) << res["error"].toString().toStdString();
+  ASSERT_TRUE(waitForChainLoaded(proc));
+
+  const juce::var block = firstToneBlock(proc);
+  EXPECT_EQ(block["tone"]["title"].toString(), juce::String("5 files"));
+  EXPECT_EQ(block["tone"]["format"].toString(), juce::String("nam"));
+  ASSERT_EQ(block["tone"]["models"].size(), 3)
+      << "models: " << juce::JSON::toString(block["tone"]["models"]).toStdString();
+  EXPECT_EQ(block["tone"]["models"][0]["name"].toString(), juce::String("amp 1"));
+  EXPECT_EQ(block["tone"]["models"][1]["name"].toString(), juce::String("amp 2"));
+  EXPECT_EQ(block["tone"]["models"][2]["name"].toString(), juce::String("amp 10"));
+
+  dir.deleteRecursively();
+}
+
+TEST(LocalLoadTest, UrlsSingleFileTitlesFromNameAndRejectBadInputs) {
+  TONE3000Processor proc;
+
+  // One file: the title is its name without the extension, as on desktop.
+  juce::var res = proc.loadLocalToneUrls({juce::URL(testFile("a2-amp-test.nam"))});
+  EXPECT_TRUE(res["error"].isVoid()) << res["error"].toString().toStdString();
+  ASSERT_TRUE(waitForChainLoaded(proc));
+  EXPECT_EQ(firstToneBlock(proc)["tone"]["title"].toString(), juce::String("a2-amp-test"));
+
+  TONE3000Processor rejecting;
+  res = rejecting.loadLocalToneUrls({});
+  EXPECT_EQ(res["error"].toString(), juce::String("Nothing to load"));
+
+  res = rejecting.loadLocalToneUrls({juce::URL(juce::File("/nonexistent-t3k/missing.nam"))});
+  EXPECT_EQ(res["error"].toString(), juce::String("Couldn't read the file"));
+
+  const juce::File dir =
+      juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("t3k-url-reject");
+  dir.deleteRecursively();
+  ASSERT_TRUE(dir.createDirectory().wasOk());
+  ASSERT_TRUE(dir.getChildFile("notes.txt").replaceWithText("hi"));
+  res = rejecting.loadLocalToneUrls({juce::URL(dir.getChildFile("notes.txt"))});
+  EXPECT_EQ(res["error"].toString(), juce::String("Only .nam and .wav files are supported"));
+
+  // The folder cap (300 files) applies to a multi-select too. Nothing is read
+  // before the cap fires, so the URLs need not exist.
+  juce::Array<juce::URL> many;
+  for (int i = 0; i < 301; ++i)
+    many.add(juce::URL(dir.getChildFile("amp " + juce::String(i) + ".nam")));
+  res = rejecting.loadLocalToneUrls(many);
+  EXPECT_EQ(res["error"].toString(), juce::String("Too many files (max 300)"));
+
+  EXPECT_TRUE(firstToneBlock(rejecting).isVoid());
+  dir.deleteRecursively();
+}

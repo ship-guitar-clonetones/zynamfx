@@ -247,11 +247,13 @@ juce::var stashLocalFileFromDisk(const juce::File& file, juce::String& error) {
   return stashLocalBytes(file.getFileName(), bytes, error);
 }
 
-#if JUCE_IOS
 // A file the OS document picker handed us as a security-scoped URL.
 //
-// iOS is the reason this exists. Everything the picker returns from the Files
-// app lives outside the app sandbox (an iCloud / file-provider container), and
+// iOS is the reason this exists, and iOS is the only caller (see
+// pickLocalToneFile); it is compiled everywhere so the DSP suite, which does
+// not build for iOS, can exercise the same code the iPad runs. Everything the
+// picker returns from the Files app lives outside the app sandbox (an iCloud /
+// file-provider container), and
 // the app is only allowed to touch it through the security scope JUCE's
 // FileChooser opened and stored as a bookmark. Reading the raw path with a
 // FileInputStream, which is what stashLocalFileFromDisk does and what every
@@ -270,7 +272,6 @@ juce::var stashLocalFileFromUrl(const juce::URL& url, juce::String& error) {
   }
   return stashLocalBytes(filename, bytes, error);
 }
-#endif  // JUCE_IOS
 
 // Shared user-facing error result for the local-load entry points.
 juce::var localToneError(const juce::String& title, const juce::String& message) {
@@ -431,21 +432,22 @@ juce::var TONE3000Processor::loadLocalTonePath(const juce::File& source,
   return finishLocalToneLoad(title, {model}, {}, 1, targetInsertId);
 }
 
-#if JUCE_IOS
 juce::var TONE3000Processor::loadLocalToneUrls(const juce::Array<juce::URL>& sources,
                                                const std::string& targetInsertId) {
   // Multi-select stands in for the folder route on iOS: the document picker
   // can hand back a folder URL, but a security-scoped directory cannot be
   // enumerated through juce::URL (there is no listing API behind the
   // bookmark), so "Load Folder" asks for the files themselves instead. See
-  // pickLocalToneFile.
+  // pickLocalToneFile. Not gated on JUCE_IOS so the DSP suite can run it;
+  // the editor only reaches it on iOS.
+  if (sources.isEmpty())
+    return localToneError("Load Files", "Nothing to load");
+
   const juce::String title =
       sources.size() == 1
           ? localFileNameFromUrl(sources.getReference(0)).upToLastOccurrenceOf(".", false, false)
           : juce::String(sources.size()) + " files";
 
-  if (sources.isEmpty())
-    return localToneError(title, "Nothing to load");
   if (sources.size() > kMaxFolderModels)
     return localToneError(
         title, "Too many files (max " + juce::String(kMaxFolderModels) + ")");
@@ -459,14 +461,9 @@ juce::var TONE3000Processor::loadLocalToneUrls(const juce::Array<juce::URL>& sou
 
   juce::Array<juce::var> models;
   juce::String firstError;
+  // No extension check here: stashLocalBytes rejects anything but .nam and
+  // .wav by name before it looks at the bytes, with the same message.
   for (const auto& url : picked) {
-    const juce::String filename = localFileNameFromUrl(url);
-    const juce::String extension = filename.fromLastOccurrenceOf(".", true, false).toLowerCase();
-    if (extension != ".nam" && extension != ".wav") {
-      if (firstError.isEmpty())
-        firstError = "Only .nam and .wav files are supported";
-      continue;
-    }
     juce::String error;
     const juce::var model = stashLocalFileFromUrl(url, error);
     if (!model.isObject()) {
@@ -482,7 +479,6 @@ juce::var TONE3000Processor::loadLocalToneUrls(const juce::Array<juce::URL>& sou
 
   return finishLocalToneLoad(title, models, firstError, picked.size(), targetInsertId);
 }
-#endif  // JUCE_IOS
 
 juce::var TONE3000Processor::finishLocalToneLoad(const juce::String& title,
                                                  const juce::Array<juce::var>& stashedModels,
@@ -615,8 +611,14 @@ juce::File TONE3000Processor::resolveLocalModelFile(const juce::File& stashRoot,
   // points at a container that no longer exists, and the block came back as
   // "Download failed / Retry". Stash names are content hashes in one flat
   // folder, so re-rooting the name is exact, not a guess. On desktop the
-  // root never moves, so this yields the path we just probed and the outcome
-  // is unchanged; that is why it is not gated on JUCE_IOS.
+  // root never moves, so a path this machine wrote still exists and comes
+  // back untouched above. The one desktop case this does change is a preset
+  // or saved state carrying a stash URL from another machine or account:
+  // that path is gone here too, and the block now re-roots it into the local
+  // stash (and refreshLocalStashCopy writes the embedded bytes there) instead
+  // of reading from the embedded cache alone. Same bytes, one more file on
+  // disk. Not gated on JUCE_IOS because that case is a repair, not a
+  // regression.
   const juce::String name = stored.getFileName();
   if (name.isEmpty() || name == "." || name == "..")
     return stored;
