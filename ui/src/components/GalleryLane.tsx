@@ -253,10 +253,15 @@ export const GalleryLane: React.FC<{
   onSetBranch,
   onClearBranch,
 }) => {
-  // The lane's order, as ids. Memoized on the order itself so GalleryBlock's
-  // memo still holds: a re-render that does not move anything hands every
-  // tile the same array reference.
-  const laneIds = React.useMemo(() => items.map((i) => i.blockId), [items]);
+  // The lane's order, as ids. Memoized on the order itself, not on `items`,
+  // so GalleryBlock's memo still holds: ChainView hands this lane a fresh
+  // `items` array on every drag-over and reset, and only a change in the
+  // sequence of ids should reach the tiles as a new reference.
+  const laneOrder = items.map((i) => i.blockId).join('\u0000');
+  const laneIds = React.useMemo(
+    () => (laneOrder.length === 0 ? [] : laneOrder.split('\u0000')),
+    [laneOrder]
+  );
   return (
     <div style={{ position: 'relative', width: 'max-content' }}>
       <GhostRail slots={items.length} tileSize={tileSize} />

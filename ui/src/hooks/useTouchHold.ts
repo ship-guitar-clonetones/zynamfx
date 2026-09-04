@@ -61,9 +61,15 @@ export const useTouchHold = (onHold: () => void): TouchHoldProps => {
       // labelled control in the group, and it must stay holdable since it is
       // the whole group while the feature is off. If a labelled control is
       // ever added there, mark the ones to skip instead.
+      // A knob is never a hold target either: a finger resting on it before a
+      // turn is the most common touch pattern there, and it has no text, so
+      // it needs its own entry (role="slider", not role="button").
       const control =
-        e.target instanceof Element ? e.target.closest('button, input, [role="button"]') : null;
-      if (control && !control.textContent?.trim()) return;
+        e.target instanceof Element
+          ? e.target.closest('button, input, [role="button"], [role="slider"]')
+          : null;
+      if (control && (control.getAttribute('role') === 'slider' || !control.textContent?.trim()))
+        return;
       cancel();
       start.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
       timer.current = window.setTimeout(() => {
