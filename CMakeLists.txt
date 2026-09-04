@@ -41,6 +41,16 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 project(TONE3000 VERSION ${T3K_VERSION} LANGUAGES C CXX)
 add_compile_options(-fsigned-char)
 
+# A toolchain file sets CMAKE_SYSTEM_NAME too late for the block above (it is
+# only read at project()), so T3K_IOS would stay off, the 10.15 macOS floor
+# would be forced into the cache and the desktop plugin formats would be
+# built for iOS. Fail here with the fix rather than somewhere in the plugin.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND NOT T3K_IOS)
+    message(FATAL_ERROR "iOS: pass -DCMAKE_SYSTEM_NAME=iOS on the configure command line "
+        "(or use the ios-simulator / ios-device presets); a toolchain file sets it too late "
+        "for the deployment-target floor.")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs)
 

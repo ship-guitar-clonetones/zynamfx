@@ -164,11 +164,10 @@ endif()
 #   out of scope for this PR, so no iPhone orientation list.
 # The microphone and Bluetooth permission strings the plugin already declares
 # are the same keys iOS wants, so they are left in the shared block below.
-set(T3K_IOS_BUNDLE_ID "com.TONE3000.TONE3000" CACHE STRING
-    "Bundle identifier for the iOS app (override to sign under a personal team)")
-
 set(_t3k_ios_args "")
 if (T3K_IOS)
+    set(T3K_IOS_BUNDLE_ID "com.TONE3000.TONE3000" CACHE STRING
+        "Bundle identifier for the iOS app (override to sign under a personal team)")
     set(_t3k_ios_args
         BUNDLE_ID "${T3K_IOS_BUNDLE_ID}"
         BACKGROUND_AUDIO_ENABLED TRUE
