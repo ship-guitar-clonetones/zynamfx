@@ -16,13 +16,14 @@
 //   - garbage, legacy-format, and newer-schema state blobs are ignored,
 //   - the tail report covers the DC blocker floor.
 //
-// No models/IRs are loaded here; chains stay empty, so nothing touches the
-// network. Runs on the message thread (ScopedJuceInitialiser_GUI in main).
+// Model tests use embedded local fixtures, so nothing touches the network.
+// Runs on the message thread (ScopedJuceInitialiser_GUI in main).
 // Oversampling parameter changes are applied via a re-prepare, exactly like
 // a host would (the live-toggle path is an AsyncUpdater that needs a running
 // message pump; prepareToPlay resolves the same parameters synchronously).
 #include "Processor.h"
 #include "test_helpers.h"
+#include "chain_test_helpers.h"
 
 #include <gtest/gtest.h>
 
@@ -266,6 +267,50 @@ TEST(ProcessorTest, ParameterStateSurvivesSaveRestore) {
   b.setPlayConfigDetails(2, 2, kFs, 512);
   b.prepareToPlay(kFs, 512);
   EXPECT_EQ(b.getLatencySamples(), 0);
+}
+
+TEST(ProcessorTest, RestoredNamsBeforePrepareMatchNamsLoadedAtFourTimes) {
+  juce::MemoryBlock saved;
+  {
+    ChainTestProcessor source;
+    juce::ValueTree snapshot("ChainSnapshot"), chain("ChainBlocks");
+    chain.appendChild(makeNamBlockTree("first", 1, 101), nullptr);
+    chain.appendChild(makeNamBlockTree("second", 2, 102, "a2-am-test-2.nam"), nullptr);
+    snapshot.appendChild(chain, nullptr);
+    source.restoreFromTree(snapshot);
+    ASSERT_TRUE(waitForChainLoaded(source));
+    source.parameters.getParameter("osEnabled")->setValueNotifyingHost(1.0f);
+    source.parameters.getParameter("osFactor")->setValueNotifyingHost(0.5f);  // 4x
+    source.getStateInformation(saved);
+  }
+
+  const auto input = makeNoise(96 * 512, 42, 0.05f);
+  auto renderRestored = [&]() {
+    TONE3000Processor proc;
+    proc.setStateInformation(saved.getData(), static_cast<int>(saved.getSize()));
+    EXPECT_TRUE(waitForChainLoaded(proc));  // engines installed at the initial 1x
+    proc.setPlayConfigDetails(2, 2, kFs, 512);
+    proc.prepareToPlay(kFs, 512);
+    EXPECT_TRUE(waitForChainLoaded(proc));
+    return processThrough(proc, input, 512);
+  };
+  const auto restored = renderRestored();
+
+  TONE3000Processor reference;
+  reference.parameters.getParameter("osEnabled")->setValueNotifyingHost(1.0f);
+  reference.parameters.getParameter("osFactor")->setValueNotifyingHost(0.5f);
+  reference.setPlayConfigDetails(2, 2, kFs, 512);
+  reference.prepareToPlay(kFs, 512);
+  reference.setStateInformation(saved.getData(), static_cast<int>(saved.getSize()));
+  ASSERT_TRUE(waitForChainLoaded(reference));
+  const auto expected = processThrough(reference, input, 512);
+  float maxDiff = 0.0f, peak = 0.0f;
+  for (size_t i = 16384; i < expected.size(); ++i) {
+    maxDiff = std::max(maxDiff, std::abs(restored[i] - expected[i]));
+    peak = std::max(peak, std::abs(expected[i]));
+  }
+  ASSERT_GT(peak, 1e-5f);
+  EXPECT_LT(maxDiff, 1e-5f);
 }
 
 TEST(ProcessorTest, IgnoresGarbageLegacyAndNewerSchemaState) {
