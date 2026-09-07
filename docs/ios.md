@@ -23,6 +23,10 @@ cmake --build build-ios-device --config Release --target TONE3000_Standalone -- 
   -sdk iphoneos -allowProvisioningUpdates
 ```
 
+The **Build Plugin** workflow (`.github/workflows/build.yml`) has an
+`iOS Simulator` job that runs the same Simulator build on a macOS runner and
+uploads the unsigned `.app` as an artifact.
+
 Build **Release** on the Simulator. A Debug iOS build points the WebView at
 `http://localhost:5173/`, so it shows a dead page and logs "navigation failed".
 
