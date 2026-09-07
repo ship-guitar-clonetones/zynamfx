@@ -708,17 +708,30 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
   // Resolve the requested factor before anything chain-domain is sized: the
   // domain block size and rate both depend on it. Hosts re-run prepareToPlay
   // freely, so this also picks up a factor restored from session state.
-  chainOversampleFactor.store(resolvedOversampleFactor());
-  chainOversampler.prepare(chainOversampleFactor.load(), juce::jmax(1, chainBaseBlockSize()));
-  DBG("Chain oversampling ×" << chainOversampleFactor.load() << " (chain rate: "
-      << chainSampleRate() << " Hz)");
-
   // Prepare every engine in both lanes for the chain domain (fixed rate; the
   // domain block size depends on the host rate/block size).
   {
     juce::ScopedLock lock(chainMutex);
-    for (auto& l : lanes)
+    chainOversampleFactor.store(resolvedOversampleFactor());
+    chainOversampler.prepare(chainOversampleFactor.load(), juce::jmax(1, chainBaseBlockSize()));
+    DBG("Chain oversampling ×" << chainOversampleFactor.load() << " (chain rate: "
+        << chainSampleRate() << " Hz)");
+
+    for (auto& l : lanes) {
+      // Restore-time loads can land before the host resolves the saved
+      // factor here. prepare() cannot change an engine's phase count.
+      // In-flight loads already have a factor guard at installation.
+      for (auto& block : l) {
+        if (block->type == ChainBlockType::NAM && block->loaded && !block->modelLoading &&
+            block->namEngine != nullptr &&
+            block->namEngine->getOversampleFactor() != chainOversampleFactor.load()) {
+          block->loaded = false;
+          block->modelLoading = true;
+          queueActiveModelLoad(*block);
+        }
+      }
       prepareChain(l);
+    }
   }
 
   juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(samplesPerBlock), 2};
