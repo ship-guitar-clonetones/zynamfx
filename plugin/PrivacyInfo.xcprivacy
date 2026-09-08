@@ -47,6 +47,18 @@
                 <string>85F4.1</string>
             </array>
         </dict>
+        <dict>
+            <!-- [[NSProcessInfo processInfo] systemUptime] timestamps every
+                 touch and scroll event in juce_UIViewComponentPeer_ios.mm.
+                 Also covers the mach_absolute_time calls in
+                 juce_SystemStats_mac.mm and juce_CoreMidi_mac.mm. -->
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>35F9.1</string>
+            </array>
+        </dict>
     </array>
 </dict>
 </plist>

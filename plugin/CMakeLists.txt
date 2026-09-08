@@ -269,14 +269,24 @@ if (T3K_IOS)
     else()
         file(GLOB _t3k_icons "${_t3k_iconset}/*.png")
         set(_t3k_flat "${CMAKE_CURRENT_BINARY_DIR}/_t3k_icon_opaque.png")
+        set(_t3k_missed "")
         foreach(_png ${_t3k_icons})
             execute_process(COMMAND "${T3K_MAGICK}" "${_png}" -alpha off "PNG24:${_t3k_flat}"
                             RESULT_VARIABLE _t3k_rc OUTPUT_QUIET ERROR_QUIET)
             if (_t3k_rc EQUAL 0 AND EXISTS "${_t3k_flat}")
                 file(RENAME "${_t3k_flat}" "${_png}")
+            else()
+                get_filename_component(_t3k_name "${_png}" NAME)
+                list(APPEND _t3k_missed "${_t3k_name}")
             endif()
         endforeach()
-        message(STATUS "iOS: app icons flattened to opaque")
+        if (_t3k_missed)
+            message(WARNING "iOS: ImageMagick could not flatten ${_t3k_missed}. Those icons keep "
+                            "their alpha channel, and an App Store Connect upload is rejected "
+                            "with ITMS-90717 if Icon-AppStore-1024.png is among them.")
+        else()
+            message(STATUS "iOS: app icons flattened to opaque")
+        endif()
     endif()
 
     # juceaide never enlarges the source (RectanglePlacement::onlyReduceInSize),
