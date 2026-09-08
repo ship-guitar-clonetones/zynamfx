@@ -162,14 +162,21 @@ endif()
 #   can drop captures in, and let juce::FileChooser open them in place.
 # - IPAD_SCREEN_ORIENTATIONS: the faceplate is landscape by design. iPhone is
 #   out of scope for this PR, so no iPhone orientation list.
+# - BUILD_VERSION: CFBundleVersion, which JUCE otherwise defaults to the
+#   marketing version. App Store Connect refuses a build number it has already
+#   seen for that marketing version, so with the default every upload after the
+#   first bounces. T3K_IOS_BUILD_NUMBER is a plain integer for CI to override.
 # The microphone and Bluetooth permission strings the plugin already declares
 # are the same keys iOS wants, so they are left in the shared block below.
 set(_t3k_ios_args "")
 if (T3K_IOS)
     set(T3K_IOS_BUNDLE_ID "com.TONE3000.TONE3000" CACHE STRING
         "Bundle identifier for the iOS app (override to sign under a personal team)")
+    set(T3K_IOS_BUILD_NUMBER "1" CACHE STRING
+        "CFBundleVersion for the iOS app: bump on every upload of one marketing version")
     set(_t3k_ios_args
         BUNDLE_ID "${T3K_IOS_BUNDLE_ID}"
+        BUILD_VERSION "${T3K_IOS_BUILD_NUMBER}"
         BACKGROUND_AUDIO_ENABLED TRUE
         FILE_SHARING_ENABLED TRUE
         DOCUMENT_BROWSER_ENABLED TRUE

@@ -87,6 +87,11 @@ Simulator build.
 - `plugin/icon/icon.png` is 512x512 and juceaide never enlarges a source, so the
   App Store icon is currently that 512 artwork centred on a blank 1024 field.
   Exporting the icon at 1024 fixes it; the configure step warns until then.
+- `T3K_IOS_BUILD_NUMBER` is CFBundleVersion, and it defaults to 1. App Store
+  Connect refuses a build number it has already seen for the same marketing
+  version, so a second upload of one version needs
+  `-DT3K_IOS_BUILD_NUMBER=<n>`. Without the setting at all, JUCE uses the
+  marketing version as the build number and the second upload always bounces.
 - App Store Connect requires uploads built against a current iOS SDK. A runner
   pinned to an older Xcode builds and signs fine and is then refused at upload,
   which reads as a signing problem and is not one.
