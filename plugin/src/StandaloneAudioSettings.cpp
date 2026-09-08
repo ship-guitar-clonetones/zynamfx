@@ -116,6 +116,7 @@ StandaloneAudioSettings::StandaloneAudioSettings(TONE3000Processor& p,
   jassert(isAvailable());
   if (auto* dm = deviceManager())
     dm->addChangeListener(this);
+  applyRawInputMode();
   ensureInitialPolicies();
 }
 
@@ -133,6 +134,7 @@ void StandaloneAudioSettings::changeListenerCallback(juce::ChangeBroadcaster*) {
   // Fires for every device-manager change: our own setters, hot-plugs,
   // devices vanishing mid-session, vendor control panel edits. Re-run the
   // sync policies, then push the UI to re-pull state.
+  applyRawInputMode();
   ensureInitialPolicies();
   applyMonitoringPolicy();
   if (onDeviceStateChanged)
@@ -798,6 +800,32 @@ void StandaloneAudioSettings::rememberCurrentSetup() {
   if (auto* obj = remembered.getDynamicObject())
     obj->setProperty(currentSetupKey(), entryVar);
   p->setValue(kRememberedSetupsKey, juce::JSON::toString(remembered, true));
+}
+
+void StandaloneAudioSettings::applyRawInputMode() {
+#if JUCE_IOS
+  auto* dm = deviceManager();
+  auto* device = dm != nullptr ? dm->getCurrentAudioDevice() : nullptr;
+  if (device == nullptr)
+    return;
+
+  // JUCE opens the session with setCategory: and no mode, so it stays in
+  // AVAudioSessionModeDefault - the voice chain. Its AGC levels the guitar
+  // before the model ever sees it (pick attack and the guitar's volume knob
+  // stop coming through), and the processing inflates
+  // AVAudioSession.inputLatency, the figure the settings UI reports.
+  // setAudioPreprocessingEnabled(false) is Measurement mode, the raw path.
+  //
+  // The mode belongs to the session and setCategory: clears it, which JUCE
+  // does again on every device open and route change - hence re-applying it
+  // here rather than once at startup. On a USB route restart the first
+  // setMode: can be dropped while the route is still settling, so a refusal
+  // is retried once.
+  if (!device->setAudioPreprocessingEnabled(false) &&
+      !device->setAudioPreprocessingEnabled(false))
+    juce::Logger::writeToLog(
+        "[Audio] iOS Measurement mode refused; the input stays pre-processed");
+#endif
 }
 
 void StandaloneAudioSettings::applyMonitoringPolicy() {
