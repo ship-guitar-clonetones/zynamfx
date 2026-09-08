@@ -521,7 +521,7 @@ jobs:
           signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
           files-folder: ${{ github.workspace }}\build
-          files-folder-filter: "*-setup.exe"
+          files-folder-filter: "*.exe"
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -531,7 +531,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: TONE3000-v${{ env.T3K_VERSION }}-${{ matrix.os }}-${{ matrix.arch }}
-          path: build/TONE3000-v*-setup.exe
+          path: build/TONE3000-v*-${{ matrix.os }}-${{ matrix.arch }}.exe
           if-no-files-found: error
 
       # Linux: tarball with install script (the usual convention on Linux).
