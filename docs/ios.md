@@ -43,14 +43,26 @@ The requested asset name in the app's log tells you which bundle is running.
 
 ## Install and log
 
+Each preset writes to its own build directory: `build-ios` for
+`ios-simulator`, `build-ios-device` for `ios-device`. The artefact path under
+each is the same.
+
 ```sh
+# Simulator
 xcrun simctl install <udid> build-ios/plugin/TONE3000_artefacts/Release/Standalone/TONE3000.app
 xcrun simctl launch <udid> <bundle-id>
+
+# Device
+xcrun devicectl device install app --device <udid> \
+  build-ios-device/plugin/TONE3000_artefacts/Release/Standalone/TONE3000.app
 
 # The app's own log: console.* from the WebView is forwarded into it, which
 # is the most useful debugging channel on both Simulator and device.
 tail -f "$(xcrun simctl get_app_container <udid> <bundle-id> data)/Library/TONE3000/TONE3000.log"
 ```
+
+Xcode's Devices and Simulators window installs either build too, if you
+prefer it to the command line.
 
 Simulator screenshots come out portrait while the app renders landscape.
 
