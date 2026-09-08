@@ -816,15 +816,19 @@ void StandaloneAudioSettings::applyRawInputMode() {
   // AVAudioSession.inputLatency, the figure the settings UI reports.
   // setAudioPreprocessingEnabled(false) is Measurement mode, the raw path.
   //
-  // The mode belongs to the session and setCategory: clears it, which JUCE
-  // does again on every device open and route change - hence re-applying it
-  // here rather than once at startup. On a USB route restart the first
-  // setMode: can be dropped while the route is still settling, so a refusal
-  // is retried once.
-  if (!device->setAudioPreprocessingEnabled(false) &&
-      !device->setAudioPreprocessingEnabled(false))
-    juce::Logger::writeToLog(
-        "[Audio] iOS Measurement mode refused; the input stays pre-processed");
+  // setCategory: clears the session mode, and JUCE calls it every time a
+  // device opens, so this cannot be done once at startup. Device opens and
+  // route changes both end up at the device manager's change broadcast, which
+  // is where this is re-applied from.
+  //
+  // The retry covers a USB route restart, where the first setMode: can be
+  // dropped while the route is still settling. Nothing is reported on a second
+  // refusal: JUCE returns `session.mode == mode`, an NSString pointer
+  // comparison rather than isEqualToString:, so a false is not evidence the
+  // mode failed to take, and a log built on it would send someone chasing a
+  // session that is already in Measurement mode.
+  if (!device->setAudioPreprocessingEnabled(false))
+    device->setAudioPreprocessingEnabled(false);
 #endif
 }
 
