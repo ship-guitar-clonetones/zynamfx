@@ -28,8 +28,7 @@ import { useChainActions } from '../hooks/useChainActions';
 import { useParameter } from '../hooks/useParameter';
 import type { BlockParamName, ToneBlock } from '../types/chain';
 import { catalogModelCount, type Model, type Tone } from '../types/tone';
-import { DEFAULT_EQ_BANDS,
-  isEqFlat, isSlimSizeFull, SLIM_SIZE_FULL, SLIM_SIZE_LITE } from '../types/chain';
+import { isEqFlat, isSlimSizeFull, SLIM_SIZE_FULL, SLIM_SIZE_LITE } from '../types/chain';
 import {
   CARD_WIDTH,
   CARD_HEIGHT,
@@ -319,12 +318,6 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
     setEqOn((prev) => {
       actions.setBlockEqEnabled(blockId, !prev);
       return !prev;
-    });
-  }, [actions, blockId]);
-
-    const handleResetEq = useCallback(() => {
-    DEFAULT_EQ_BANDS.forEach((band, index) => {
-      actions.setBlockEqBand(blockId, index, band);
     });
   }, [actions, blockId]);
 
@@ -745,14 +738,6 @@ export const ChainBlock: React.FC<ChainBlockProps> = ({
                         <EqCurveIcon />
                       </button>
                     </div>
-                    <span
-                      className={uiOffClass(!eqOn)}
-                      style={{ display: "inline-flex", transition: "opacity 0.2s ease" }}
-                    >
-                      <ChromeTextButton armed={false} help="Reset all EQ bands to default (flat)" onClick={handleResetEq}>
-                        FLAT
-                      </ChromeTextButton>
-                    </span>
                   </>
                 )}
                 <ChromeTextButton
