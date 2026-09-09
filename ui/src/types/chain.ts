@@ -18,7 +18,7 @@ export type ChainSide = 'left' | 'right';
 
 /**
  * Per-block 6-band EQ. Runs on the block's wet signal after its model by
- * default (before Out Gain and the dry/wet mix), or between the block's
+ * default (before the dry/wet mix), or between the block's
  * input gain and its model when `pre` is on.
  * Band curve types match BlockEq::BandType on the native side.
  */

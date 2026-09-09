@@ -6,9 +6,9 @@
 
 /**
  * Six-band parametric EQ, one per chain block. Runs on the block's wet
- * signal by default (after the model, before Out Gain and the dry/wet mix,
- * so the dry share of Mix stays untouched); the `pre` flag moves it between
- * the block's input gain and its model instead, shaping the signal
+ * signal by default (after the model, before the dry/wet mix, so the dry
+ * share of Mix stays untouched); the `pre` flag moves it between the
+ * block's input gain and its model instead, shaping the signal
  * that drives the amp/IR. Self-contained module: band parameters, biquad
  * coefficient math (RBJ cookbook, mirrored exactly by
  * ui/src/components/eqMath.ts so the drawn curve is the audio truth),
