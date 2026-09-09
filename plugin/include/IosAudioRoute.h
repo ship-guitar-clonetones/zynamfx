@@ -8,8 +8,8 @@
  * JUCE's iOS device opens the session as PlayAndRecord with
  * AllowBluetoothHFP (juce_Audio_ios.cpp, setAudioSessionCategory), so a
  * Bluetooth headset with a microphone becomes the whole route and iOS caps
- * the session at 16 or 24 kHz, refusing the requested 48 kHz. The owner hit
- * exactly that with AirPods: `prepareToPlay: sampleRate=24000` and no
+ * the session at 16 or 24 kHz, refusing the requested 48 kHz. We hit exactly
+ * that on an iPad with AirPods: `prepareToPlay: sampleRate=24000` and no
  * explanation in the UI.
  *
  * Two answers, both here: tell the user what happened (isBluetoothRoute

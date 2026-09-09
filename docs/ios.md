@@ -117,9 +117,9 @@ Simulator build.
   file name under the current stash folder; a path that still exists is used
   as-is, which is every desktop case. Presets and project state were never
   affected: they embed the model bytes.
-- **Bluetooth headphones cap the whole session at 16 or 24 kHz.** The owner
-  hit this on the iPad with AirPods: `prepareToPlay: sampleRate=24000` and a
-  sample-rate warning in Settings with nothing saying why. JUCE opens the iOS
+- **Bluetooth headphones cap the whole session at 16 or 24 kHz.** We hit this
+  on an iPad with AirPods: `prepareToPlay: sampleRate=24000` and a sample-rate
+  warning in Settings with nothing saying why. JUCE opens the iOS
   session as `PlayAndRecord` with `AllowBluetoothHFP`
   (`juce_Audio_ios.cpp`, `setAudioSessionCategory`), so a headset with a
   microphone wins the route and iOS refuses the requested 48 kHz. Two answers
@@ -137,14 +137,14 @@ Simulator build.
     (DefaultToSpeaker gone). It is not a JUCE text patch: JUCE sets the
     category when it *opens* a device and never on its own route-change
     `restart()` path, so re-applying it on every device-manager change is
-    enough and the JUCE tree stays untouched. Measured on an iPad Pro
-    (iPadOS 26) with AirPods Pro connected, reading `AVAudioSession` from
-    the app log: the first open with HFP allowed came up at 24 kHz; after
-    the call the device reopened at 48 kHz on the built-in mic. With a USB
-    interface unplugged mid-session, the route went to the built-in mic at
-    48 kHz, then to built-in mic plus AirPods A2DP output at 48 kHz, and
-    back to the interface when it was plugged in again, with options `0x69`
-    and Measurement mode held through every change.
+    enough and the JUCE tree stays untouched. On the same iPad Pro, with
+    AirPods Pro connected and reading `AVAudioSession` from the app log:
+    the first open with HFP allowed came up at 24 kHz; after the call the
+    device reopened at 48 kHz on the built-in mic. With a USB interface
+    unplugged mid-session, the route went to the built-in mic at 48 kHz,
+    then to built-in mic plus AirPods A2DP output at 48 kHz, and back to
+    the interface when it was plugged in again, with options `0x69` and
+    Measurement mode held through every change.
   - `isBluetoothRoute()` feeds `bluetoothRoute` in the settings state, and
     the UI turns that (or any session under 44.1 kHz) into one plain tip in
     Settings > System Settings, next to Sample Rate: use wired headphones,

@@ -51,15 +51,20 @@ void configureSession() {
       && [session.mode isEqualToString:AVAudioSessionModeMeasurement])
     return;
 
-  // One retry: the first call can be refused while a USB route is still
-  // settling, and nothing else re-applies this until the next change.
+  // Two attempts, back to back with no delay, so the second one only covers
+  // a refusal the OS clears immediately (a route still settling as the call
+  // lands). Anything slower than that is not retried here: the next route
+  // change re-applies this anyway. Each attempt starts from a fresh error so
+  // the log below describes the attempt that actually failed last.
   NSError* error = nil;
-  for (int attempt = 0; attempt < 2; ++attempt)
+  for (int attempt = 0; attempt < 2; ++attempt) {
+    error = nil;
     if ([session setCategory:session.category
                         mode:AVAudioSessionModeMeasurement
                      options:options
                        error:&error])
       return;
+  }
 
   DBG ("IosAudioRoute: could not set Measurement mode without HFP: "
        << (error != nil ? juce::String::fromUTF8 ([[error localizedDescription] UTF8String])

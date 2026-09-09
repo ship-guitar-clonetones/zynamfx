@@ -583,7 +583,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({ device }) => {
               id="rate-not-48k"
               state={state}
               show={
-                !bannerRuleById['bluetooth-route'].when(state) &&
+                !bannerRuleById['bluetooth-route']?.when(state) &&
                 bannerRuleById['rate-not-48k'].when(state)
               }
             />

@@ -34,7 +34,7 @@ test('fires on a Bluetooth route even at a normal rate (A2DP output)', () => {
   assert.equal(withState({ bluetoothRoute: true }), true);
 });
 
-test('fires on the 24 kHz session the owner saw, route flag or not', () => {
+test('fires on a 24 kHz HFP session, route flag or not', () => {
   assert.equal(withState({ sampleRate: 24000 }), true);
   assert.equal(withState({ sampleRate: 24000, bluetoothRoute: true }), true);
 });
@@ -59,5 +59,8 @@ test('names Bluetooth only when the route says so', () => {
   assert.match(headline({ sampleRate: 16000, bluetoothRoute: true }), /limiting audio to 16 kHz/);
   // A USB interface at 32 kHz is a low rate, not Bluetooth.
   assert.doesNotMatch(headline({ sampleRate: 32000 }), /Bluetooth/);
-  assert.match(headline({ sampleRate: 32000 }), /32 kHz/);
+  assert.equal(
+    headline({ sampleRate: 32000 }),
+    'This audio route is running at 32 kHz, which limits fidelity and adds latency.'
+  );
 });
