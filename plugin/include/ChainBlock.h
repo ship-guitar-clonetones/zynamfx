@@ -112,10 +112,11 @@ struct ChainBlock {
   // callbacks are running the change applies directly, nothing is audible).
   //
   // Two fade shapes, picked by `swapMuteWet`:
-  //  - false (bypass fade): wetFadeGain rides the mix, so the output
-  //    crossfades toward the block's dry input. Right for transitions that
-  //    END at bypass (power off, removal, failure drop, fresh-block
-  //    fade-in; dry is what plays afterwards anyway).
+  //  - false (bypass fade): wetFadeGain rides the mix and glides the
+  //    post-mix Out Gain to unity in step, so the output crossfades toward
+  //    the block's dry input at pass-through level. Right for transitions
+  //    that END at bypass (power off, removal, failure drop, fresh-block
+  //    fade-in; unity dry is what plays afterwards anyway).
   //  - true (wet mute): engine swaps end back at wet, and their dry input
   //    was never audible; at 100% mix crossfading through it blasts ~50 ms
   //    of the un-cabbed/un-ampped signal (a raw amp head into no cab is a
@@ -198,7 +199,8 @@ struct ChainBlock {
 
   // Per-block meter levels (dB, -60 floor). Written by the audio thread every
   // block, read by the UI via getMeterLevels(). Input is measured post
-  // input-gain (what the model actually receives), output post gain+mix.
+  // input-gain (what the model actually receives), output post mix + Out
+  // Gain.
   std::atomic<float> inputMeterDb{-60.0f};
   std::atomic<float> outputMeterDb{-60.0f};
 
