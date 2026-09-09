@@ -20,6 +20,7 @@ TONE3000-CERTS/
 *.p12
 *.cer
 *.certSigningRequest
+*.p8
 
 # Private maintainer notes
 notes/
