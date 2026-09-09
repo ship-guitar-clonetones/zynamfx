@@ -22,17 +22,12 @@ bool isBluetoothRoute() {
   return false;
 }
 
-void disallowBluetoothHfp() {
+void configureSession() {
   AVAudioSession* session = [AVAudioSession sharedInstance];
 
   // Only PlayAndRecord carries the option; leave Playback alone.
   if (![session.category isEqualToString:AVAudioSessionCategoryPlayAndRecord])
     return;
-
-  // Take JUCE's own options and clear one bit, rather than rebuilding the
-  // set: MixWithOthers, DefaultToSpeaker, AllowAirPlay and A2DP stay exactly
-  // as JUCE asked for them, whatever the JUCE version decided.
-  const AVAudioSessionCategoryOptions options = session.categoryOptions;
 
   // Same SDK gate JUCE uses for the same constant (it was renamed in the
   // iOS 26 SDK; the value is unchanged).
@@ -42,14 +37,33 @@ void disallowBluetoothHfp() {
   constexpr auto hfp = AVAudioSessionCategoryOptionAllowBluetooth;
  #endif
 
-  if ((options & hfp) == 0)
+  // Take JUCE's own options and clear one bit, rather than rebuilding the
+  // set: MixWithOthers, DefaultToSpeaker, AllowAirPlay and A2DP stay exactly
+  // as JUCE asked for them, whatever the JUCE version decided. They are read
+  // from the live session, so this never adds an option back; JUCE sets the
+  // full set again on the next device open.
+  const AVAudioSessionCategoryOptions options = session.categoryOptions & ~hfp;
+
+  // Also what ends the loop: our own setCategory raises a CategoryChange
+  // route notification, the device type forwards every reason to the
+  // device-manager broadcast, and that lands here again.
+  if (options == session.categoryOptions
+      && [session.mode isEqualToString:AVAudioSessionModeMeasurement])
     return;
 
+  // One retry: the first call can be refused while a USB route is still
+  // settling, and nothing else re-applies this until the next change.
   NSError* error = nil;
-  if (! [session setCategory:session.category withOptions:(options & ~hfp) error:&error])
-    DBG ("IosAudioRoute: could not drop the HFP option: "
-         << (error != nil ? juce::String::fromUTF8 ([[error localizedDescription] UTF8String])
-                          : juce::String ("no error object")));
+  for (int attempt = 0; attempt < 2; ++attempt)
+    if ([session setCategory:session.category
+                        mode:AVAudioSessionModeMeasurement
+                     options:options
+                       error:&error])
+      return;
+
+  DBG ("IosAudioRoute: could not set Measurement mode without HFP: "
+       << (error != nil ? juce::String::fromUTF8 ([[error localizedDescription] UTF8String])
+                        : juce::String ("no error object")));
 }
 
 }  // namespace IosAudioRoute

@@ -125,18 +125,26 @@ Simulator build.
   microphone wins the route and iOS refuses the requested 48 kHz. Two answers
   ship together, both in `IosAudioRoute` (the Haptics / AudioPermissions
   shim pattern, header-only no-op off iOS):
-  - `disallowBluetoothHfp()` re-sets the session category without that one
-    option, keeping every other option JUCE asked for, `AllowBluetoothA2DP`
-    included, so Bluetooth output-only listening still works and only the
-    low-rate headset *mic* route goes away. It is not a JUCE text patch:
-    JUCE sets the category when it *opens* a device and never on its own
-    route-change `restart()` path, so re-applying it on every device-manager
-    change is enough and the JUCE tree stays untouched. What was verified:
-    the rate is right when the device is (re)opened after the option is
-    gone. Whether a session already running at 24 kHz climbs back to 48 kHz
-    the moment HFP is dropped, without a reopen, is not confirmed on a
-    device: JUCE's `handleRouteChange` ignores `CategoryChange` and
-    `RouteConfigurationChange`, so it depends on which reason iOS reports.
+  - `configureSession()` makes one `setCategory:mode:options:` call: the
+    category and options JUCE asked for, minus `AllowBluetoothHFP`, with
+    Measurement mode (the raw input path). `AllowBluetoothA2DP` stays, so
+    Bluetooth output-only listening still works and only the low-rate
+    headset *mic* route goes away. Mode and options go in one call on
+    purpose: on iPadOS 26 a bare `setMode:` clears category options.
+    Measured on an iPad Pro: from Default mode `0x69` became `0x1` (A2DP,
+    AirPlay and DefaultToSpeaker all gone); with the mode already
+    Measurement, a repeated `setMode:` turned `0x69` into `0x61`
+    (DefaultToSpeaker gone). It is not a JUCE text patch: JUCE sets the
+    category when it *opens* a device and never on its own route-change
+    `restart()` path, so re-applying it on every device-manager change is
+    enough and the JUCE tree stays untouched. Measured on an iPad Pro
+    (iPadOS 26) with AirPods Pro connected, reading `AVAudioSession` from
+    the app log: the first open with HFP allowed came up at 24 kHz; after
+    the call the device reopened at 48 kHz on the built-in mic. With a USB
+    interface unplugged mid-session, the route went to the built-in mic at
+    48 kHz, then to built-in mic plus AirPods A2DP output at 48 kHz, and
+    back to the interface when it was plugged in again, with options `0x69`
+    and Measurement mode held through every change.
   - `isBluetoothRoute()` feeds `bluetoothRoute` in the settings state, and
     the UI turns that (or any session under 44.1 kHz) into one plain tip in
     Settings > System Settings, next to Sample Rate: use wired headphones,

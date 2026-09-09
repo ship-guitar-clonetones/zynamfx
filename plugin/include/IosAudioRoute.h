@@ -14,8 +14,9 @@
  *
  * Two answers, both here: tell the user what happened (isBluetoothRoute
  * feeds the settings tip), and stop asking for the HFP route in the first
- * place (disallowBluetoothHfp). A2DP stays allowed, so Bluetooth output-only
- * listening still works; only the low-rate headset *mic* route goes away.
+ * place (configureSession, which also holds Measurement mode). A2DP stays
+ * allowed, so Bluetooth output-only listening still works; only the
+ * low-rate headset *mic* route goes away.
  *
  * Same platform-shim pattern as Haptics / AudioPermissions: one header, one
  * ObjC++ implementation, a header-only no-op off iOS so desktop links.
@@ -28,20 +29,25 @@ namespace IosAudioRoute {
     LE). Cheap enough to call on every state pull. */
 bool isBluetoothRoute();
 
-/** Re-set the session category without AllowBluetoothHFP, keeping every other
-    option JUCE asked for (including A2DP and MixWithOthers). Idempotent, and
-    a no-op unless the option is actually set, so it can be called after every
+/** One setCategory:mode:options: call: the category and options JUCE asked
+    for minus AllowBluetoothHFP, with Measurement mode (the raw input path, no
+    AGC and no voice processing). Mode and options go together because a bare
+    setMode: clears category options on iPadOS 26. Measured: from Default
+    mode 0x69 became 0x1 (A2DP, AirPlay and DefaultToSpeaker all gone); with
+    the mode already Measurement, a repeated setMode: turned 0x69 into 0x61
+    (DefaultToSpeaker gone). Playback (no input channels) is left alone:
+    nothing to keep raw there. Idempotent, so it can be called after every
     device-manager change: JUCE only sets the category when it opens a device,
     never on the route-change restart path, so re-applying is how the override
     survives a reopen. */
-void disallowBluetoothHfp();
+void configureSession();
 
 #else
 
 inline bool isBluetoothRoute() {
   return false;
 }
-inline void disallowBluetoothHfp() {}
+inline void configureSession() {}
 
 #endif
 
