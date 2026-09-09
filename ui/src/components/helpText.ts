@@ -250,7 +250,7 @@ export const HELP = {
   eqSlidersView: 'Sliders: gain-only fader view.',
   eqCurveView: 'Curve: parametric freq/gain/Q editor.',
   eqReset: 'Reset EQ: all bands flat, position post.',
-  eqPre: 'PRE: EQ before the model. Off: after the block.',
+  eqPre: 'PRE: EQ before the model. Off: after the model (wet only).',
   eqPower: 'EQ Power: bypass EQ, keep settings.',
   shareTone: 'Share: copy TONE3000 link.',
   modelSelectSignedOut: 'Models: sign in to TONE3000 to switch models.',

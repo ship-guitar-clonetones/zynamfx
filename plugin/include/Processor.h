@@ -270,7 +270,7 @@ public:
   // -60 floor. Designed to be polled once per UI frame.
   juce::var getMeterLevels() const;
 
-  // Per-block EQ (post-block by default, pre-model when its pre flag is on).
+  // Per-block EQ (wet-only post-model by default, pre-model when its pre flag is on).
   // setBlockEqBand takes { type, freqHz, gainDb, q } for one band, the undo
   // stack's mutation granularity. Band drags defer their revision bump like
   // continuous block params (see deferredRevisionBump).

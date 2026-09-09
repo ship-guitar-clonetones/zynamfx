@@ -17,8 +17,9 @@
 export type ChainSide = 'left' | 'right';
 
 /**
- * Per-block 6-band EQ. Runs after the block's output gain + mix by default,
- * or between the block's input gain and its model when `pre` is on.
+ * Per-block 6-band EQ. Runs on the block's wet signal after its model by
+ * default (before Out Gain and the dry/wet mix), or between the block's
+ * input gain and its model when `pre` is on.
  * Band curve types match BlockEq::BandType on the native side.
  */
 export type EqBandType = 'lowcut' | 'lowshelf' | 'bell' | 'highshelf' | 'highcut';
@@ -34,7 +35,7 @@ export interface BlockEqParams {
   /** EQ power/bypass. Band settings persist while disabled. */
   enabled: boolean;
   /** Position: true = before the block's model (after its input gain),
-      false = after the block (default). */
+      false = after the model on the wet path (default). */
   pre: boolean;
   bands: EqBand[];
 }
