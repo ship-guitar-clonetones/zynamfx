@@ -715,7 +715,8 @@ export const AddTile: React.FC<AddTileProps> = ({
   onClick,
   onPaste = null,
 }) => {
-  const { menuAnchor, openMenu, closeMenu, shouldIgnoreClick, longPressProps } = useTileMenu();
+  const { menuAnchor, openMenu, openMenuAtElement, closeMenu, shouldIgnoreClick, longPressProps } =
+    useTileMenu();
   const actions = useChainActions();
   const toast = useToast();
   // True while an OS file drag hovers the tile (drop-target highlight).
@@ -767,8 +768,10 @@ export const AddTile: React.FC<AddTileProps> = ({
         ...(dropArmed ? { border: FILE_DROP_BORDER } : {}),
         opacity: isDragging ? DRAG_GHOST_OPACITY : 1,
         cursor: 'pointer',
-        // Touch drags need the gesture (see the tone tile face).
-        touchAction: 'none',
+        // Same rail as the tone tile face (see TileSurface): pan-x on iOS so
+        // a swipe that starts on an empty slot still scrolls the lane, while
+        // the 250 ms hold lifts the tile for a reorder.
+        touchAction: IS_IOS ? 'pan-x' : 'none',
         // Above the neighboring tiles while the action sheet is up.
         zIndex: menuAnchor ? 5 : undefined,
       }}
@@ -785,6 +788,20 @@ export const AddTile: React.FC<AddTileProps> = ({
         <Upload size={FILE_DROP_ICON_SIZE} color={GRAY} />
       ) : (
         <PlusCircle size={plusIconSize(size)} strokeWidth={1} />
+      )}
+      {/* Same "..." chrome as the tone tile, so Paste (and the local load
+          rows) are reachable without the hidden hold gesture. Touch only;
+          desktop reaches the same sheet with a right-click. */}
+      {IS_IOS && !dropArmed && (
+        <div style={{ position: 'absolute', top: '4rem', right: '4rem' }}>
+          <ChromeIconButton
+            help={HELP.tileMenu}
+            onClick={openMenuAtElement}
+            onMouseDown={preventFocus}
+          >
+            <Ellipsis size={ICON_SIZE} />
+          </ChromeIconButton>
+        </div>
       )}
       {menuAnchor && (
         <TileMenu

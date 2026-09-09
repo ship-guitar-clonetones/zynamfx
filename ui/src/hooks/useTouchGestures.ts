@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 import { IS_IOS } from './useUiScale';
 
 /**
@@ -19,9 +20,18 @@ type Swipe = { edge?: boolean; dx?: number; dy?: number };
 /** Longest touch that still counts as a swipe. */
 const SWIPE_MAX_MS = 600;
 
-const useSwipe = (active: boolean, { edge = false, dx = 0, dy = 0 }: Swipe, onFire: () => void) => {
+/** `canStart` vetoes the gesture at touch down (a sheet whose own list is
+    scrolled away from the top owns the downward swipe, not the dismiss). */
+const useSwipe = (
+  active: boolean,
+  { edge = false, dx = 0, dy = 0 }: Swipe,
+  onFire: () => void,
+  canStart?: () => boolean
+) => {
   const fire = useRef(onFire);
   fire.current = onFire;
+  const allow = useRef(canStart);
+  allow.current = canStart;
 
   useEffect(() => {
     if (!IS_IOS || !active) return;
@@ -30,7 +40,7 @@ const useSwipe = (active: boolean, { edge = false, dx = 0, dy = 0 }: Swipe, onFi
     const start = (e: TouchEvent) => {
       const t = e.touches.length === 1 ? e.touches[0] : null;
       from =
-        t && (!edge || t.clientX <= 24)
+        t && (!edge || t.clientX <= 24) && (allow.current?.() ?? true)
           ? { x: t.clientX, y: t.clientY, id: t.identifier, at: e.timeStamp }
           : null;
     };
@@ -69,8 +79,11 @@ const useSwipe = (active: boolean, { edge = false, dx = 0, dy = 0 }: Swipe, onFi
 export const useEdgeSwipeBack = (active: boolean, onBack: () => void) =>
   useSwipe(active, { edge: true, dx: 72 }, onBack);
 
-/** Swipe down anywhere on a sheet: dismiss. ponytail: fires even if the sheet
-    body is mid-scroll; neither sheet that uses it (Tuner, Settings) scrolls
-    far. If one grows, gate on the scroller being at scrollTop 0. */
-export const useSwipeDownDismiss = (active: boolean, onDismiss: () => void) =>
-  useSwipe(active, { dy: 96 }, onDismiss);
+/** Swipe down anywhere on a sheet: dismiss. Pass the sheet's own scroller to
+    gate the gesture on it sitting at the top, so scrolling a long list (the
+    Settings sheet) back up does not dismiss the sheet instead. */
+export const useSwipeDownDismiss = (
+  active: boolean,
+  onDismiss: () => void,
+  scroller?: RefObject<HTMLElement | null>
+) => useSwipe(active, { dy: 96 }, onDismiss, () => (scroller?.current?.scrollTop ?? 0) === 0);

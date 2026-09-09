@@ -1,9 +1,10 @@
 # iOS (iPad) build
 
 Standalone-only iPad port of the plugin: the same C++ and the same React UI,
-with every difference behind `#if JUCE_IOS` (C++) or
-`window.__T3K_PLATFORM__ === 'ios'` / `pointerType === 'touch'` (UI). Desktop
-behaviour is unchanged. AUv3 is out of scope; iPhone is untested.
+with every difference behind `#if JUCE_IOS` (C++),
+`window.__T3K_PLATFORM__ === 'ios'` / `pointerType === 'touch'` (UI) or the
+`html.t3k-ios` class (CSS). Desktop behaviour is unchanged. AUv3 is out of
+scope; iPhone is untested.
 
 Deployment target iOS 16. Landscape only.
 

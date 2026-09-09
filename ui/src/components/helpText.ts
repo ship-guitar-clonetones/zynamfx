@@ -362,7 +362,10 @@ const touchify = (copy: Record<string, string>): Record<string, string> =>
     ])
   );
 
-export const HELP = (IS_IOS ? touchify(HELP_DESKTOP) : HELP_DESKTOP) as typeof HELP_DESKTOP;
+export const HELP = (IS_IOS ? touchify(HELP_DESKTOP) : HELP_DESKTOP) as Record<
+  keyof typeof HELP_DESKTOP,
+  string
+>;
 
 /** Gallery tile: leads with the tone's own name. */
 export const toneTileHelp = (title: string) =>

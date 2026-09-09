@@ -90,6 +90,9 @@ interface SettingsProps {
   device: AudioDevice;
   /** Tab to open on (defaults to System; banner actions land there too). */
   initialTab?: SettingsTab;
+  /** The sheet's scroller, so the swipe-down dismiss can stand down while
+      the list is scrolled (see useSwipeDownDismiss). */
+  scrollRef?: React.RefObject<HTMLDivElement | null>;
   /** Running build version ("" outside the plugin). */
   version: string;
   /** Newer published build, if the startup check found one (even if the
@@ -179,6 +182,7 @@ export const Settings: React.FC<SettingsProps> = ({
   standalone,
   device,
   initialTab = 'system',
+  scrollRef,
   version,
   update,
   namSlimSizeDefault,
@@ -625,6 +629,7 @@ export const Settings: React.FC<SettingsProps> = ({
 
   return (
     <div
+      ref={scrollRef}
       className="hide-scrollbar"
       style={{
         position: 'absolute',

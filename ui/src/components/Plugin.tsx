@@ -37,6 +37,9 @@ export const Plugin: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   // Which tab Settings opens on; banner / gear land on System (setup first).
   const settingsTabRef = useRef<SettingsTab>('system');
+  // The Settings sheet's scroller; the swipe-down dismiss reads its
+  // scrollTop so scrolling the list back up doesn't close the sheet.
+  const settingsScrollRef = useRef<HTMLDivElement>(null);
   const [showTuner, setShowTuner] = useState(false);
   // In-plugin tone browser takeover (streams of TONE3000 tones). Opened by
   // the + when already authenticated, or right after the no-prompt login
@@ -281,7 +284,7 @@ export const Plugin: React.FC = () => {
   // usable with a mouse or VoiceOver. No-ops off iOS.
   useEdgeSwipeBack(showToneBrowser, handleBrowserClose);
   useSwipeDownDismiss(showTuner, closeTuner);
-  useSwipeDownDismiss(showSettings, () => setShowSettings(false));
+  useSwipeDownDismiss(showSettings, () => setShowSettings(false), settingsScrollRef);
 
   // Switch a block's model. Native downloads the new model file itself, so
   // refresh-and-sync the token first; switching after the editor has been
@@ -635,6 +638,7 @@ export const Plugin: React.FC = () => {
             standalone={standalone}
             device={audioDevice}
             initialTab={settingsTabRef.current}
+            scrollRef={settingsScrollRef}
             version={localVersion}
             update={update}
             namSlimSizeDefault={namSlimSizeDefault}

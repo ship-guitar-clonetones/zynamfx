@@ -413,8 +413,9 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   const slotHeight = Math.round(LABEL_SIZE * 1.2);
 
   /** Touch value bubble: the same string the label readout shows, floated
-      clear of the finger. Mounted only while dragging on iOS, so it can
-      never affect layout (it is absolutely positioned) or desktop. */
+      clear of the finger. Mounted on iOS while the readout is up, so it
+      lingers with it for READOUT_HOLD_MS after release. Absolutely
+      positioned, so it never affects layout, and never mounts on desktop. */
   const valueBubble =
     IS_IOS && showReadout ? (
       <div
