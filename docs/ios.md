@@ -8,9 +8,15 @@ Deployment target iOS 16. Landscape only.
 
 ## Build
 
-The UI is embedded as JUCE binary data, so it is built first.
+Configure first, then build the UI, then configure again. `ui/package.json`
+resolves `@juce-framework/webview` from `libs/juce`, which the first configure
+is what creates, so building the UI first on a clean checkout fails with
+`Cannot find module '@juce-framework/webview'`. That first configure embeds a
+placeholder UI; the second picks up the real bundle. Same order as the root
+README and the `iOS Simulator` CI job.
 
 ```sh
+cmake --preset ios-simulator   # or ios-device: bootstrap, fetches JUCE into libs/
 cd ui && npm ci && npm run build && cd ..
 
 # Simulator
