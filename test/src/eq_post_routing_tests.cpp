@@ -1,10 +1,9 @@
 // Pins that POST-position block EQ only touches the wet path: at mix = 0
 // (pure dry), engaging a strongly shaped POST band must have zero audible
-// effect, since the EQ now runs on the wet buffer before the dry/wet blend
-// (see Processor.cpp's per-block loop). Regression test for the routing fix
-// in this PR: before it, POST EQ ran on the already-mixed buffer, so even a
-// pure-dry block (mix = 0) got colored by EQ, which is what
-// EqPostDoesNotAffectDryPath below would have caught.
+// effect, since the EQ runs on the wet buffer before the dry/wet blend
+// (see Processor.cpp's per-block loop). Regression guard: if POST EQ ever
+// moves back onto the already-mixed buffer, even a pure-dry block (mix = 0)
+// gets colored by EQ, and DoesNotAffectDryPath below catches it.
 #include "chain_test_helpers.h"
 
 #include <algorithm>
@@ -27,10 +26,10 @@ juce::var shapedBand() {
 
 // Two full processor runs, EQ flat (default, isActive() == false, a no-op)
 // vs. a strongly shaped POST band, everything else identical - isolating the
-// EQ's own contribution from the rest of the signal path (same reasoning as
-// PredelayTest.DoesNotAffectDryPath: comparing against the raw input is
-// invalid because of the global input gate's own dynamics; only two full
-// runs against *each other* isolate the block under test).
+// EQ's own contribution from the rest of the signal path. Comparing against
+// the raw input would be invalid because of the global input gate's own
+// dynamics; only two full runs against *each other* isolate the stage under
+// test.
 std::pair<std::vector<float>, std::vector<float>> runWithEq(double mix, bool shapeEq) {
   ChainTestProcessor proc;
   proc.setPlayConfigDetails(2, 2, kFs, kBlock);
@@ -68,9 +67,8 @@ TEST(EqPostRoutingTest, DoesNotAffectDryPath) {
   ASSERT_EQ(flatL.size(), shapedL.size());
   // Not bit-exact: two independently-run instances through a chain with a
   // noise gate, DC blocker and FFT convolver naturally accumulate ordinary
-  // floating-point rounding noise (same reasoning as PredelayTest's dry-path
-  // check). A real EQ->dry leak would show up as a broadband spectral
-  // difference, not a rounding-floor one.
+  // floating-point rounding noise. A real EQ->dry leak would show up as a
+  // broadband spectral difference, not a rounding-floor one.
   const float diff = std::max(maxAbsDiff(flatL, shapedL), maxAbsDiff(flatR, shapedR));
   const float diffDb = juce::Decibels::gainToDecibels(diff, -300.0f);
   std::printf(

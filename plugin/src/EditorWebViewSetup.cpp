@@ -371,7 +371,7 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
           }))
       .withNativeFunction(
           // EQ position: true = before the block's model (after its input
-          // gain), false = after the block (default).
+          // gain), false = after the model on the wet path (default).
           "setBlockEqPre", guarded(2, false, [editor](const juce::Array<juce::var>& args) {
             return juce::var(editor->processor.setBlockEqPre(args[0].toString().toStdString(),
                                                              coerceBool(args[1])));

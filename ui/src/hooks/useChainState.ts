@@ -243,7 +243,7 @@ export function useChainState() {
       /** EQ power/bypass: band settings persist, processing is skipped. */
       setBlockEqEnabled: (blockId: string, enabled: boolean) =>
         run<boolean>('setBlockEqEnabled', () => native.setBlockEqEnabled(blockId, enabled)),
-      /** EQ position: pre = before the block's model, off = after the block. */
+      /** EQ position: pre = before the block's model, off = after the model (wet only). */
       setBlockEqPre: (blockId: string, pre: boolean) =>
         run<boolean>('setBlockEqPre', () => native.setBlockEqPre(blockId, pre)),
       /** Back to flat defaults (and native skips EQ processing again). */
