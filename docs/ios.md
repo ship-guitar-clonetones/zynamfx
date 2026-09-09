@@ -8,9 +8,15 @@ Deployment target iOS 16. Landscape only.
 
 ## Build
 
-The UI is embedded as JUCE binary data, so it is built first.
+Configure first, then build the UI, then configure again. `ui/package.json`
+resolves `@juce-framework/webview` from `libs/juce`, which the first configure
+is what creates, so building the UI first on a clean checkout fails with
+`Cannot find module '@juce-framework/webview'`. That first configure embeds a
+placeholder UI; the second picks up the real bundle. Same order as the root
+README and the `iOS Simulator` CI job.
 
 ```sh
+cmake --preset ios-simulator   # or ios-device: bootstrap, fetches JUCE into libs/
 cd ui && npm ci && npm run build && cd ..
 
 # Simulator
@@ -65,6 +71,38 @@ Xcode's Devices and Simulators window installs either build too, if you
 prefer it to the command line.
 
 Simulator screenshots come out portrait while the app renders landscape.
+
+## TestFlight and the App Store
+
+A signed build is the `ios-device` preset plus your team. Everything below is
+what App Store Connect checks on top of that, and none of it shows up in a
+Simulator build.
+
+- `plugin/PrivacyInfo.xcprivacy` declares the required-reason APIs the binary
+  reaches through JUCE: user defaults (the WebView component), file timestamps
+  and free disk space (both `juce_SharedCode_posix.h`), and system boot time
+  (`systemUptime` timestamping touch events in
+  `juce_UIViewComponentPeer_ios.mm`, plus `mach_absolute_time`). An upload whose
+  binary calls one of those without declaring it is rejected with ITMS-91053,
+  so the list is worth re-deriving whenever the JUCE version moves.
+- The app icons are flattened to opaque at configure time with ImageMagick.
+  juceaide writes them RGBA whatever the source is, and an alpha channel on the
+  1024 icon means ITMS-90717 and no icon in TestFlight. Without ImageMagick the
+  configure step warns; Simulator builds are unaffected either way.
+- `ITSAppUsesNonExemptEncryption` is false in the Info.plist. The app's only
+  encryption is standard HTTPS, and declaring it here answers the
+  export-compliance question once instead of on every upload.
+- `plugin/icon/icon.png` is 512x512 and juceaide never enlarges a source, so the
+  App Store icon is currently that 512 artwork centred on a blank 1024 field.
+  Exporting the icon at 1024 fixes it; the configure step warns until then.
+- `T3K_IOS_BUILD_NUMBER` is CFBundleVersion, and it defaults to 1. App Store
+  Connect refuses a build number it has already seen for the same marketing
+  version, so a second upload of one version needs
+  `-DT3K_IOS_BUILD_NUMBER=<n>`. Without the setting at all, JUCE uses the
+  marketing version as the build number and the second upload always bounces.
+- App Store Connect requires uploads built against a current iOS SDK. A runner
+  pinned to an older Xcode builds and signs fine and is then refused at upload,
+  which reads as a signing problem and is not one.
 
 ## Platform notes worth knowing
 

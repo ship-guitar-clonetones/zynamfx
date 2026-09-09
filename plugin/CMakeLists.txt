@@ -162,14 +162,21 @@ endif()
 #   can drop captures in, and let juce::FileChooser open them in place.
 # - IPAD_SCREEN_ORIENTATIONS: the faceplate is landscape by design. iPhone is
 #   out of scope for this PR, so no iPhone orientation list.
+# - BUILD_VERSION: CFBundleVersion, which JUCE otherwise defaults to the
+#   marketing version. App Store Connect refuses a build number it has already
+#   seen for that marketing version, so with the default every upload after the
+#   first bounces. T3K_IOS_BUILD_NUMBER is a plain integer for CI to override.
 # The microphone and Bluetooth permission strings the plugin already declares
 # are the same keys iOS wants, so they are left in the shared block below.
 set(_t3k_ios_args "")
 if (T3K_IOS)
     set(T3K_IOS_BUNDLE_ID "com.TONE3000.TONE3000" CACHE STRING
         "Bundle identifier for the iOS app (override to sign under a personal team)")
+    set(T3K_IOS_BUILD_NUMBER "1" CACHE STRING
+        "CFBundleVersion for the iOS app: bump on every upload of one marketing version")
     set(_t3k_ios_args
         BUNDLE_ID "${T3K_IOS_BUNDLE_ID}"
+        BUILD_VERSION "${T3K_IOS_BUILD_NUMBER}"
         BACKGROUND_AUDIO_ENABLED TRUE
         FILE_SHARING_ENABLED TRUE
         DOCUMENT_BROWSER_ENABLED TRUE
@@ -181,7 +188,10 @@ endif()
 # target already rides in the binary and MinimumOSVersion, so merging a macOS
 # key there would just be noise in the plist.
 if (T3K_IOS)
-    set(_t3k_plist_to_merge "")
+    # The app's only encryption is standard HTTPS, which is exempt. Declaring
+    # that here answers App Store Connect's export-compliance question once
+    # instead of on every TestFlight upload.
+    set(_t3k_plist_to_merge PLIST_TO_MERGE "<plist version=\"1.0\"><dict><key>ITSAppUsesNonExemptEncryption</key><false/></dict></plist>")
 else()
     set(_t3k_plist_to_merge PLIST_TO_MERGE "<plist version=\"1.0\"><dict><key>LSMinimumSystemVersion</key><string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string></dict></plist>")
 endif()
@@ -223,6 +233,74 @@ juce_add_plugin(${PROJECT_NAME}
     ${_t3k_ios_args}
     ICON_BIG "${_app_icon}"
 )
+
+# What App Store Connect checks on upload. Nothing here changes how the app
+# behaves; without it the upload is rejected or the icon goes missing.
+if (T3K_IOS)
+    # Apple's privacy manifest. An upload whose binary calls a "required
+    # reason" API the manifest does not declare is rejected with ITMS-91053.
+    # It belongs to the app target rather than the shared code, and iOS
+    # bundles are flat, so "Resources" is the bundle root.
+    set(_t3k_privacy "${CMAKE_CURRENT_SOURCE_DIR}/PrivacyInfo.xcprivacy")
+    target_sources(${PROJECT_NAME}_Standalone PRIVATE "${_t3k_privacy}")
+    set_source_files_properties("${_t3k_privacy}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+
+    # The 1024 App Store icon must carry no alpha channel: with one, App Store
+    # Connect returns ITMS-90717 and the icon never appears in TestFlight.
+    # juceaide writes every icon RGBA no matter what the source is - its own
+    # opaque pass reallocates through the native image type, which is 32-bit
+    # ARGB on macOS - so the channel is dropped here, after juce_add_plugin
+    # generated the icon set and before actool compiles it into Assets.car.
+    # The pixels are already opaque; only the channel goes.
+    # JUCE writes the icon set under the shared-code target's generated sources
+    # but in a folder named for the format target that owns the bundle.
+    get_target_property(_t3k_gen ${PROJECT_NAME} JUCE_GENERATED_SOURCES_DIRECTORY)
+    set(_t3k_iconset "${_t3k_gen}/${PROJECT_NAME}_Standalone/Images.xcassets/AppIcon.appiconset")
+    find_program(T3K_MAGICK NAMES magick convert)
+    if (NOT EXISTS "${_t3k_iconset}")
+        message(WARNING "iOS: no icon set at ${_t3k_iconset}. JUCE has moved it, so the icons "
+                        "keep their alpha channel and an App Store Connect upload is rejected "
+                        "with ITMS-90717.")
+    elseif (NOT T3K_MAGICK)
+        message(WARNING "iOS: ImageMagick (magick/convert) not found, so the app icons keep "
+                        "their alpha channel. A Simulator build is fine; an App Store Connect "
+                        "upload is rejected with ITMS-90717. brew install imagemagick, then "
+                        "reconfigure.")
+    else()
+        file(GLOB _t3k_icons "${_t3k_iconset}/*.png")
+        set(_t3k_flat "${CMAKE_CURRENT_BINARY_DIR}/_t3k_icon_opaque.png")
+        set(_t3k_missed "")
+        foreach(_png ${_t3k_icons})
+            execute_process(COMMAND "${T3K_MAGICK}" "${_png}" -alpha off "PNG24:${_t3k_flat}"
+                            RESULT_VARIABLE _t3k_rc OUTPUT_QUIET ERROR_QUIET)
+            if (_t3k_rc EQUAL 0 AND EXISTS "${_t3k_flat}")
+                file(RENAME "${_t3k_flat}" "${_png}")
+            else()
+                get_filename_component(_t3k_name "${_png}" NAME)
+                list(APPEND _t3k_missed "${_t3k_name}")
+            endif()
+        endforeach()
+        if (_t3k_missed)
+            message(WARNING "iOS: ImageMagick could not flatten ${_t3k_missed}. Those icons keep "
+                            "their alpha channel, and an App Store Connect upload is rejected "
+                            "with ITMS-90717 if Icon-AppStore-1024.png is among them.")
+        else()
+            message(STATUS "iOS: app icons flattened to opaque")
+        endif()
+    endif()
+
+    # juceaide never enlarges the source (RectanglePlacement::onlyReduceInSize),
+    # so anything under 1024 leaves the App Store icon sitting at its own size
+    # in the middle of a blank 1024 field. Width lives at byte 16 of a PNG.
+    file(READ "${_app_icon}" _t3k_png_head HEX LIMIT 20)
+    string(SUBSTRING "${_t3k_png_head}" 32 8 _t3k_png_width)
+    math(EXPR _t3k_png_width "0x${_t3k_png_width}")
+    if (_t3k_png_width LESS 1024)
+        message(WARNING "iOS: ${_app_icon} is ${_t3k_png_width}px wide. The App Store icon is "
+                        "1024x1024 and is not upscaled, so it will show the artwork at "
+                        "${_t3k_png_width}px on a blank field. Export the icon at 1024.")
+    endif()
+endif()
 
 target_sources(${PROJECT_NAME}
     PRIVATE
