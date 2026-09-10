@@ -123,17 +123,18 @@ jobs:
 
       # Same order as the other jobs: configure so CPM fetches JUCE, which the
       # UI build needs, then reconfigure so the content-hashed UI assets are
-      # picked up. The ios-device preset signs for development, which an App
-      # Store export will not accept, so the identity is overridden here. The
-      # build number is the run number: App Store Connect refuses one it has
-      # already seen for a marketing version.
+      # picked up. The archive keeps the preset's automatic development
+      # signing: forcing "Apple Distribution" here conflicts with automatic
+      # signing and Xcode refuses to archive. The App Store signature is
+      # applied at export, where the app-store-connect method and the API key
+      # re-sign the archive. The build number is the run number: App Store
+      # Connect refuses one it has already seen for a marketing version.
       - name: Configure CMake (bootstrap)
         run: |
           cmake --preset ios-device \
             -DT3K_IOS_BUILD_NUMBER=${{ github.run_number }} \
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Automatic \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="Apple Distribution"
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Automatic
 
       - name: Build UI
         run: |
@@ -146,8 +147,7 @@ jobs:
           cmake --preset ios-device \
             -DT3K_IOS_BUILD_NUMBER=${{ github.run_number }} \
             -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Automatic \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="Apple Distribution"
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Automatic
 
       - name: Archive
         run: |
