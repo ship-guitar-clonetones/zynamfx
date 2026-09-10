@@ -162,6 +162,11 @@ endif()
 #   can drop captures in, and let juce::FileChooser open them in place.
 # - IPAD_SCREEN_ORIENTATIONS: the faceplate is landscape by design. iPhone is
 #   out of scope for this PR, so no iPhone orientation list.
+# - REQUIRES_FULL_SCREEN: App Store validation refuses a landscape-only iPad
+#   app unless it opts out of multitasking with UIRequiresFullScreen
+#   (ITMS-90474). On iPadOS 26 the key no longer blocks windowing at runtime,
+#   so it changes nothing there; on older iPadOS it disables Split View, which
+#   the landscape faceplate never supported anyway.
 # - BUILD_VERSION: CFBundleVersion, which JUCE otherwise defaults to the
 #   marketing version. App Store Connect refuses a build number it has already
 #   seen for that marketing version, so with the default every upload after the
@@ -181,6 +186,7 @@ if (T3K_IOS)
         FILE_SHARING_ENABLED TRUE
         DOCUMENT_BROWSER_ENABLED TRUE
         IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        REQUIRES_FULL_SCREEN TRUE
     )
 endif()
 

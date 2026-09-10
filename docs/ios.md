@@ -94,6 +94,10 @@ Simulator build.
 - `ITSAppUsesNonExemptEncryption` is false in the Info.plist. The app's only
   encryption is standard HTTPS, and declaring it here answers the
   export-compliance question once instead of on every upload.
+- `UIRequiresFullScreen` is true. A landscape-only iPad app must either list
+  all four orientations or declare itself full-screen; without the key the
+  upload is refused with ITMS-90474. It costs nothing at runtime on
+  iPadOS 26 (see the multitasking note below).
 - `plugin/icon/icon.png` is 512x512 and juceaide never enlarges a source, so the
   App Store icon is currently that 512 artwork centred on a blank 1024 field.
   Exporting the icon at 1024 fixes it; the configure step warns until then.
@@ -164,8 +168,10 @@ Simulator build.
   `AVAudioSession` still asks once.
 - **`UIRequiresFullScreen` no longer opts an app out of multitasking** on
   iPadOS 26: a second app dragged from the Dock windows itself over this one
-  regardless. The key is therefore not set. The app is not resized by it (the
-  other app floats), so the layout is unaffected.
+  regardless. The app is not resized by it (the other app floats), so the
+  layout is unaffected. The key is set anyway because App Store validation
+  still requires it for a landscape-only iPad app (ITMS-90474) — it changes
+  runtime behaviour only on older iPadOS, where it disables Split View.
 - The `NAM` static library must be force-loaded on iOS as well as macOS.
   `$<PLATFORM_ID:...>` reports `iOS`, not `Darwin`, when cross-compiling, so
   without both the linker strips the model-architecture registrations and
