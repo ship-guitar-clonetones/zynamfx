@@ -85,10 +85,12 @@ Simulator build.
   `juce_UIViewComponentPeer_ios.mm`, plus `mach_absolute_time`). An upload whose
   binary calls one of those without declaring it is rejected with ITMS-91053,
   so the list is worth re-deriving whenever the JUCE version moves.
-- The app icons are flattened to opaque at configure time with ImageMagick.
-  juceaide writes them RGBA whatever the source is, and an alpha channel on the
-  1024 icon means ITMS-90717 and no icon in TestFlight. Without ImageMagick the
-  configure step warns; Simulator builds are unaffected either way.
+- The app icons are flattened to opaque at configure time by
+  `script/flatten-icon-alpha.swift`, run through `xcrun swift`. juceaide writes
+  them RGBA whatever the source is, and an alpha channel on the 1024 icon means
+  ITMS-90717 and no icon in TestFlight. It uses ImageIO rather than a tool from
+  a package manager because every machine that can build this target already
+  has both, the GitHub macOS runner included.
 - `ITSAppUsesNonExemptEncryption` is false in the Info.plist. The app's only
   encryption is standard HTTPS, and declaring it here answers the
   export-compliance question once instead of on every upload.

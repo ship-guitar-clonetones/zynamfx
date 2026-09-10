@@ -252,40 +252,32 @@ if (T3K_IOS)
     # ARGB on macOS - so the channel is dropped here, after juce_add_plugin
     # generated the icon set and before actool compiles it into Assets.car.
     # The pixels are already opaque; only the channel goes.
+    #
+    # The rewrite uses ImageIO through a Swift script rather than a tool from
+    # the package manager: every machine that can build this target has Swift
+    # and ImageIO, and the GitHub macOS runner does not ship ImageMagick.
+    #
     # JUCE writes the icon set under the shared-code target's generated sources
     # but in a folder named for the format target that owns the bundle.
     get_target_property(_t3k_gen ${PROJECT_NAME} JUCE_GENERATED_SOURCES_DIRECTORY)
     set(_t3k_iconset "${_t3k_gen}/${PROJECT_NAME}_Standalone/Images.xcassets/AppIcon.appiconset")
-    find_program(T3K_MAGICK NAMES magick convert)
-    if (NOT EXISTS "${_t3k_iconset}")
+    file(GLOB _t3k_icons "${_t3k_iconset}/*.png")
+    if (NOT _t3k_icons)
         message(WARNING "iOS: no icon set at ${_t3k_iconset}. JUCE has moved it, so the icons "
                         "keep their alpha channel and an App Store Connect upload is rejected "
                         "with ITMS-90717.")
-    elseif (NOT T3K_MAGICK)
-        message(WARNING "iOS: ImageMagick (magick/convert) not found, so the app icons keep "
-                        "their alpha channel. A Simulator build is fine; an App Store Connect "
-                        "upload is rejected with ITMS-90717. brew install imagemagick, then "
-                        "reconfigure.")
     else()
-        file(GLOB _t3k_icons "${_t3k_iconset}/*.png")
-        set(_t3k_flat "${CMAKE_CURRENT_BINARY_DIR}/_t3k_icon_opaque.png")
-        set(_t3k_missed "")
-        foreach(_png ${_t3k_icons})
-            execute_process(COMMAND "${T3K_MAGICK}" "${_png}" -alpha off "PNG24:${_t3k_flat}"
-                            RESULT_VARIABLE _t3k_rc OUTPUT_QUIET ERROR_QUIET)
-            if (_t3k_rc EQUAL 0 AND EXISTS "${_t3k_flat}")
-                file(RENAME "${_t3k_flat}" "${_png}")
-            else()
-                get_filename_component(_t3k_name "${_png}" NAME)
-                list(APPEND _t3k_missed "${_t3k_name}")
-            endif()
-        endforeach()
-        if (_t3k_missed)
-            message(WARNING "iOS: ImageMagick could not flatten ${_t3k_missed}. Those icons keep "
-                            "their alpha channel, and an App Store Connect upload is rejected "
-                            "with ITMS-90717 if Icon-AppStore-1024.png is among them.")
-        else()
+        execute_process(
+            COMMAND xcrun swift "${CMAKE_CURRENT_SOURCE_DIR}/../script/flatten-icon-alpha.swift"
+                    ${_t3k_icons}
+            RESULT_VARIABLE _t3k_rc
+            ERROR_VARIABLE _t3k_err)
+        if (_t3k_rc EQUAL 0)
             message(STATUS "iOS: app icons flattened to opaque")
+        else()
+            message(WARNING "iOS: could not flatten the app icons (${_t3k_err}). They keep their "
+                            "alpha channel, and an App Store Connect upload is rejected with "
+                            "ITMS-90717.")
         endif()
     endif()
 
