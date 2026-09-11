@@ -148,7 +148,7 @@ Three gates, from narrowest reach to widest:
 | hold the Spread / Align Offset knob | the advanced deck (desktop: right-click the group) |
 | press a control | its help in the info bar; release clears it |
 | drag a knob up or down | adjust |
-| double tap a knob | reset to default |
+| double tap a knob, EQ fader or EQ dot | reset to default |
 | tap a knob's label | type the value |
 
 The tile face claims the gesture for dragging (`touch-action: none`, as on
