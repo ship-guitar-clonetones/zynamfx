@@ -1,12 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/react/sortable';
 import {
-  ArrowLeft,
   ArrowLeftRight,
-  ArrowRight,
   ClipboardPaste,
   Copy,
-  Ellipsis,
   File,
   FolderClosed,
   PlusCircle,
@@ -78,22 +75,14 @@ const preventFocus = (e: React.MouseEvent) => e.preventDefault();
     the OS context menu; macOS ctrl-click lands here too). Ctrl-click also
     fires a synthetic `click` after `contextmenu`; `shouldIgnoreClick`
     swallows that so the tile doesn't navigate away under the menu. */
-/** Design-px of travel before a drag engages, so a tap/click stays a click.
-    Scaled to real px per gesture so the feel tracks the rendered tile size.
-    Consumed by ChainView's PointerSensor and by the long-press slop below. */
-export const GALLERY_DRAG_DISTANCE_PX = 6;
 
-/** How long a touch has to be held before releasing it opens the tile menu.
-    Matches the lift delay in ChainView's touch activation constraint, so the
-    two halves of the same gesture agree: past this point the tile is lifted,
-    and letting go without moving is a request for the menu rather than a tap. */
-const LONG_PRESS_MS = 250;
+/** How long a touch is held before releasing it opens the tile menu: the
+    system's own long-press delay (same as useTouchHold). */
+const LONG_PRESS_MS = 500;
 
-/** How far the finger may drift before the long press is abandoned. The lane's
-    touch sensor lifts on Delay(250 ms, tolerance 5 real px, see ChainView), so
-    the same 5 px is the boundary: drift under it and the hold still stands,
-    drift over it and the tile is being dragged, not held, and the menu must
-    not fire. Real px, matching the tolerance it mirrors. */
+/** Real-px drift that abandons the long press. Kept under the drag sensor's
+    activation distance, so a press that starts travelling becomes a drag and
+    never also a menu. */
 const LONG_PRESS_SLOP_PX = 5;
 
 const useTileMenu = () => {
@@ -109,30 +98,15 @@ const useTileMenu = () => {
   }, []);
   const closeMenu = useCallback(() => setMenuAnchor(null), []);
 
-  /** Open the same sheet from a visible control rather than a gesture.
-      HIG: "Always make context menu items available in the main interface,
-      too" - a hidden long press must never be the only route. Anchored to the
-      button's own bottom-left so the sheet hangs off the chrome that opened
-      it, instead of at a pointer position the user never sees on touch. */
-  const openMenuAtElement = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    suppressClickRef.current = true;
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setMenuAnchor({ clientX: rect.left, clientY: rect.bottom });
-  }, []);
-
-  // Touch: the iOS Home screen rule. A hold lifts the tile (dnd-kit's Delay
-  // constraint, see ChainView); moving after that reorders and no menu ever
-  // appears, while releasing the hold without moving opens the tile's menu at
-  // that point. A quick swipe is neither: it scrolls the lane.
+  // iOS only: WKWebView never delivers `contextmenu` for a long press, so a
+  // touch hold has to open the sheet itself. Every other engine fires the
+  // native event and lands in openMenu above.
   //
-  // The menu therefore fires on pointerUP after a hold, not on a timer. Firing
-  // on a timer would race the lift: both would trigger at their own moment and
-  // the sheet would open over a tile that is already travelling.
-  //
-  // Gated on pointerType 'touch', so mouse and trackpad behaviour on every
-  // desktop platform is untouched.
+  // The menu fires on the release after a hold, not on a timer: a press that
+  // travels past the slop becomes a drag (the sensor's distance activation),
+  // and a timer would open the sheet over a tile already moving. The release
+  // is watched on window in the capture phase, because a drag that did start
+  // takes pointer capture and no pointerup reaches the tile at all.
   const pressStart = useRef<{ x: number; y: number; at: number; id: number } | null>(null);
   const releaseListener = useRef<((e: PointerEvent) => void) | null>(null);
 
@@ -156,12 +130,6 @@ const useTileMenu = () => {
       const start = { x: e.clientX, y: e.clientY, at: Date.now(), id: e.pointerId };
       pressStart.current = start;
 
-      // The release is watched on window, in the capture phase, not on the
-      // tile. Once the hold elapses, the sensor lifts the tile and takes
-      // pointer capture, after which no pointerup reaches this element at all
-      // - the first version of this listened on the tile and the menu simply
-      // never opened, while the swallowed click fell through and opened the
-      // block's detail view instead.
       const onRelease = (ev: PointerEvent) => {
         const held = pressStart.current;
         if (held != null && ev.pointerId !== held.id) return;
@@ -209,14 +177,7 @@ const useTileMenu = () => {
     },
     [menuAnchor, closeMenu]
   );
-  return {
-    menuAnchor,
-    openMenu,
-    openMenuAtElement,
-    closeMenu,
-    shouldIgnoreClick,
-    longPressProps,
-  };
+  return { menuAnchor, openMenu, closeMenu, shouldIgnoreClick, longPressProps };
 };
 
 /** The tile menus' native-picker rows (Load File / Load Folder). Local
@@ -233,21 +194,6 @@ const localLoadMenuItems = (
     const error = await actions.pickLocalFile(targetBlockId, kind);
     if (error) toast.show(error);
   };
-  // iOS collapses the two rows into one. The platform has a single document
-  // picker and it is multi-select, so "Load files" covers both cases: one
-  // file gives a single-model tone, several give one multi-model tone, which
-  // is what Load Folder produces from a folder. (`'folder'` is the
-  // multi-select flag on the native call, not a folder request.) Desktop
-  // keeps both rows unchanged.
-  if (IS_IOS)
-    return [
-      {
-        label: 'Load files',
-        icon: <FolderClosed size={16} />,
-        help: HELP.loadFilesTile,
-        onSelect: () => void pick('folder'),
-      },
-    ];
   return [
     {
       label: 'Load File',
@@ -287,11 +233,7 @@ const TileSurface: React.FC<{
   /** OS file drag is hovering this tile (upload icon + dashed green border). */
   dropArmed: boolean;
   actions: TileActions;
-  /** Opens the tile's action sheet from the visible "..." chrome button.
-      Only supplied on touch platforms; desktop reaches the same sheet with a
-      right-click and shows no extra button. */
-  onMore?: (e: React.MouseEvent) => void;
-}> = ({ block, size, enabled, dragging, dropArmed, actions, onMore }) => {
+}> = ({ block, size, enabled, dragging, dropArmed, actions }) => {
   const { blockId, tone } = block;
 
   // A model download/prepare is in flight: `modelLoading` covers switches
@@ -327,18 +269,10 @@ const TileSurface: React.FC<{
           cursor: 'pointer',
           boxSizing: 'border-box',
           border: dropArmed ? FILE_DROP_BORDER : undefined,
-          // Pointer devices: drag wins on the tile face, since a mouse has no
-          // competing scroll gesture there and lanes still pan from the gaps
-          // around it.
-          //
-          // iOS reverses this deliberately. HIG's reorder gesture is
-          // touch-and-hold to lift, then drag, which means a plain swipe over
-          // a tile has to scroll the lane like a swipe anywhere else. Allowing
-          // pan-x hands quick swipes to the browser (dnd-kit sees
-          // pointercancel and stands down), while a 250 ms hold elapses before
-          // any pan begins, so the sensor captures the pointer and the drag
-          // proceeds. See the activation constraints in ChainView.
-          touchAction: IS_IOS ? 'pan-x' : 'none',
+          // Touch drags: without this, touch devices claim the gesture for
+          // lane scrolling and pointercancel kills the drag instantly. Drag
+          // wins on the tile face; lanes still pan from the gaps around it.
+          touchAction: 'none',
         }}
       >
         {dropArmed ? (
@@ -442,11 +376,6 @@ const TileSurface: React.FC<{
               <Power size={ICON_SIZE} />
             </ChromeIconButton>
             <div style={{ display: 'flex', gap: '16rem' }}>
-              {onMore && (
-                <ChromeIconButton help={HELP.tileMenu} onClick={onMore} onMouseDown={preventFocus}>
-                  <Ellipsis size={ICON_SIZE} />
-                </ChromeIconButton>
-              )}
               <ChromeIconButton
                 help={HELP.swapTone}
                 onClick={actions.onSwap}
@@ -485,9 +414,6 @@ interface GalleryBlockProps {
   index: number;
   /** The lane this tile sorts in. */
   group: ChainSide;
-  /** The lane's full order, as ids. Backs the menu's Move left / Move right,
-      the visible alternative to the drag gesture (HIG: never only a gesture). */
-  laneIds: string[];
   /** Tile edge, px. */
   size: number;
   /** Open the detail takeover for this block. */
@@ -499,18 +425,11 @@ interface GalleryBlockProps {
     the ChainActions context, so there are no per-render callback props to
     defeat the memo. */
 export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
-  ({ block, index, group, size, onOpen, laneIds }) => {
+  ({ block, index, group, size, onOpen }) => {
     const { blockId, params } = block;
     const actions = useChainActions();
     const toast = useToast();
-    const {
-      menuAnchor,
-      openMenu,
-      openMenuAtElement,
-      closeMenu,
-      shouldIgnoreClick,
-      longPressProps,
-    } = useTileMenu();
+    const { menuAnchor, openMenu, closeMenu, shouldIgnoreClick, longPressProps } = useTileMenu();
 
     // Optimistic power state; native converges via the chainChanged resync
     // (same pattern as the detail card).
@@ -520,19 +439,6 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
     const [dropArmed, setDropArmed] = useState(false);
 
     const { ref, isDragging } = useSortable({ id: blockId, index, group });
-
-    /** Swap this tile with its neighbour, committing the whole lane order the
-        same way a drop does so undo covers it. */
-    const moveBy = useCallback(
-      (delta: -1 | 1) => {
-        const to = index + delta;
-        if (to < 0 || to >= laneIds.length) return;
-        const next = [...laneIds];
-        [next[index], next[to]] = [next[to], next[index]];
-        actions.reorderBlocks(next);
-      },
-      [actions, index, laneIds]
-    );
 
     const handleTogglePower = useCallback(
       (e: React.MouseEvent) => {
@@ -574,7 +480,6 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
         }}
       >
         <TileSurface
-          onMore={IS_IOS ? openMenuAtElement : undefined}
           block={block}
           size={size}
           enabled={enabled}
@@ -608,45 +513,7 @@ export const GalleryBlock: React.FC<GalleryBlockProps> = React.memo(
                 help: HELP.copyBlock,
                 onSelect: () => actions.copyBlock(blockId),
               },
-              // Visible alternative to the drag gesture, per the HIG rule
-              // that a gesture is never the only route. Hidden at the ends of
-              // the lane rather than dimmed, like every other unavailable row
-              // on touch. Reordering rides the same reorderBlocks action the
-              // drag commits, so it lands in undo history identically.
-              ...(IS_IOS
-                ? ([
-                    {
-                      label: 'Move left',
-                      icon: <ArrowLeft size={16} />,
-                      help: HELP.moveBlockLeft,
-                      disabled: index <= 0,
-                      onSelect: () => moveBy(-1),
-                    },
-                    {
-                      label: 'Move right',
-                      icon: <ArrowRight size={16} />,
-                      help: HELP.moveBlockRight,
-                      disabled: index >= laneIds.length - 1,
-                      onSelect: () => moveBy(1),
-                    },
-                  ] as TileMenuItem[])
-                : []),
               ...localLoadMenuItems(blockId, actions, toast),
-              // Destructive row last and red, per the HIG's context-menu
-              // shape. Touch only: on desktop the trash button in the tile
-              // chrome is always a hover away, and adding a row here would
-              // change a menu every existing user knows.
-              ...(IS_IOS
-                ? [
-                    {
-                      label: 'Remove',
-                      icon: <Trash2 size={16} />,
-                      help: HELP.removeBlock,
-                      destructive: true,
-                      onSelect: () => actions.removeBlock(blockId),
-                    },
-                  ]
-                : []),
             ]}
           />
         )}
@@ -715,8 +582,7 @@ export const AddTile: React.FC<AddTileProps> = ({
   onClick,
   onPaste = null,
 }) => {
-  const { menuAnchor, openMenu, openMenuAtElement, closeMenu, shouldIgnoreClick, longPressProps } =
-    useTileMenu();
+  const { menuAnchor, openMenu, closeMenu, shouldIgnoreClick, longPressProps } = useTileMenu();
   const actions = useChainActions();
   const toast = useToast();
   // True while an OS file drag hovers the tile (drop-target highlight).
@@ -768,10 +634,8 @@ export const AddTile: React.FC<AddTileProps> = ({
         ...(dropArmed ? { border: FILE_DROP_BORDER } : {}),
         opacity: isDragging ? DRAG_GHOST_OPACITY : 1,
         cursor: 'pointer',
-        // Same rail as the tone tile face (see TileSurface): pan-x on iOS so
-        // a swipe that starts on an empty slot still scrolls the lane, while
-        // the 250 ms hold lifts the tile for a reorder.
-        touchAction: IS_IOS ? 'pan-x' : 'none',
+        // Touch drags need the gesture (see the tone tile face).
+        touchAction: 'none',
         // Above the neighboring tiles while the action sheet is up.
         zIndex: menuAnchor ? 5 : undefined,
       }}
@@ -788,20 +652,6 @@ export const AddTile: React.FC<AddTileProps> = ({
         <Upload size={FILE_DROP_ICON_SIZE} color={GRAY} />
       ) : (
         <PlusCircle size={plusIconSize(size)} strokeWidth={1} />
-      )}
-      {/* Same "..." chrome as the tone tile, so Paste (and the local load
-          rows) are reachable without the hidden hold gesture. Touch only;
-          desktop reaches the same sheet with a right-click. */}
-      {IS_IOS && !dropArmed && (
-        <div style={{ position: 'absolute', top: '4rem', right: '4rem' }}>
-          <ChromeIconButton
-            help={HELP.tileMenu}
-            onClick={openMenuAtElement}
-            onMouseDown={preventFocus}
-          >
-            <Ellipsis size={ICON_SIZE} />
-          </ChromeIconButton>
-        </div>
       )}
       {menuAnchor && (
         <TileMenu

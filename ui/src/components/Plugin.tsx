@@ -10,10 +10,8 @@ import { useConnectionGate } from '../hooks/useConnectionGate';
 import { useToneSession } from '../hooks/useToneSession';
 import { useToneLoadFlow } from '../hooks/useToneLoadFlow';
 import { useUpdateNotice } from '../hooks/useUpdateNotice';
-import { useUiScale, DESIGN_WIDTH, DESIGN_HEIGHT, IS_IOS } from '../hooks/useUiScale';
-import { useEdgeSwipeBack, useSwipeDownDismiss } from '../hooks/useTouchGestures';
+import { useUiScale, DESIGN_WIDTH, DESIGN_HEIGHT } from '../hooks/useUiScale';
 import { shouldRestoreToneBrowser } from '../hooks/useT3kSelect';
-import { consumePendingToneTarget, peekPendingToneTarget } from '../hooks/useToneLoadFlow';
 import { CHAIN_SCROLL_STORAGE_KEY, ChainView, DETAIL_BLOCK_STORAGE_KEY } from './ChainView';
 import { Faceplate, PLATE_HEIGHT } from './Faceplate';
 import { HintBar, HINT_HEIGHT } from './HintBar';
@@ -37,9 +35,6 @@ export const Plugin: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   // Which tab Settings opens on; banner / gear land on System (setup first).
   const settingsTabRef = useRef<SettingsTab>('system');
-  // The Settings sheet's scroller; the swipe-down dismiss reads its
-  // scrollTop so scrolling the list back up doesn't close the sheet.
-  const settingsScrollRef = useRef<HTMLDivElement>(null);
   const [showTuner, setShowTuner] = useState(false);
   // In-plugin tone browser takeover (streams of TONE3000 tones). Opened by
   // the + when already authenticated, or right after the no-prompt login
@@ -278,14 +273,6 @@ export const Plugin: React.FC = () => {
     setShowToneBrowser(false);
   }, [loadFlow]);
 
-  // iPad navigation shortcuts (see useTouchGestures). Every one of these
-  // screens keeps its visible 44 pt control: the gesture is an extra route,
-  // not a replacement, which is both the HIG rule and what keeps the app
-  // usable with a mouse or VoiceOver. No-ops off iOS.
-  useEdgeSwipeBack(showToneBrowser, handleBrowserClose);
-  useSwipeDownDismiss(showTuner, closeTuner);
-  useSwipeDownDismiss(showSettings, () => setShowSettings(false), settingsScrollRef);
-
   // Switch a block's model. Native downloads the new model file itself, so
   // refresh-and-sync the token first; switching after the editor has been
   // sitting idle is exactly when the last-pushed token has expired. Local
@@ -341,24 +328,6 @@ export const Plugin: React.FC = () => {
       return res?.error ?? "Couldn't load the file";
     },
     [pickLocalToneFile, refresh]
-  );
-
-  /**
-   * "On this iPad" in Select Tone: load a local file into whatever slot or
-   * block opened the browser. Lives here rather than in useToneLoadFlow
-   * because the picker is a native bridge call wired up in this component.
-   */
-  const handleLoadLocalIntoTarget = useCallback(
-    async (kind: 'file' | 'folder'): Promise<string | null> => {
-      const error = await handlePickLocalFile(peekPendingToneTarget() ?? '', kind);
-      if (error) return error;
-      // Only consume the target once the load succeeded; a cancelled picker
-      // must leave the slot armed for the next attempt.
-      consumePendingToneTarget();
-      setShowToneBrowser(false);
-      return null;
-    },
-    [handlePickLocalFile]
   );
 
   // Non-blocking update check (enabled via VITE_T3K_UPDATE_NOTICE); also
@@ -431,28 +400,7 @@ export const Plugin: React.FC = () => {
         // The window grows by the chrome-strip height (see useChromeChoreography),
         // so the 578px core UI between them keeps its full space.
         // (Figma's 600 includes a 22px mock OS title bar outside JUCE setSize.)
-        // iOS: the window is the screen and the scale is fitted to the width
-        // alone (see useUiScale), so the box takes the real viewport height
-        // and the flex middle below absorbs whatever the design height does
-        // not use. Everywhere else this is the design-space height exactly as
-        // before.
-        //
-        // `100%`, not `100dvh`: in this WKWebView the viewport units report
-        // the screen (1024) while the layout box is 999, so a dvh root
-        // overflowed the document by 25 px and made every screen scroll
-        // vertically. `100%` resolves against #root, which index.css pins to
-        // the real box under `html.t3k-ios`.
-        height: IS_IOS ? '100%' : `${DESIGN_HEIGHT + chrome.rootExtraHeight}rem`,
-        // Home indicator. Measured on an iPad Pro 12.9 (6th gen): this
-        // WKWebView reports every safe-area inset as 0px and is already
-        // 25 pt shorter than the screen, i.e. the container is inset and
-        // there is nothing left for the page to avoid. The declaration is
-        // therefore a no-op today and is here so it stays correct if the
-        // webview is ever made full-bleed (viewport-fit=cover) or the app
-        // runs on a device that does report an inset. box-sizing is
-        // border-box, so any real inset shortens the box and the flex middle
-        // absorbs it: the faceplate and the hint bar move up together.
-        paddingBottom: IS_IOS ? 'env(safe-area-inset-bottom, 0px)' : undefined,
+        height: `${DESIGN_HEIGHT + chrome.rootExtraHeight}rem`,
         // While the banner slides, the root and the banner wrapper animate
         // height with the same curve, so the flex middle (root minus fixed
         // strips) stays exactly constant and nothing inside moves.
@@ -579,7 +527,6 @@ export const Plugin: React.FC = () => {
                   onBrowseTone3000={handleBrowseTone3000}
                   onSignIn={handleBrowserSignIn}
                   onClose={handleBrowserClose}
-                  onLoadLocal={IS_IOS ? handleLoadLocalIntoTarget : undefined}
                 />
               ) : (
                 <ChainActionsProvider value={chainActions}>
@@ -638,7 +585,6 @@ export const Plugin: React.FC = () => {
             standalone={standalone}
             device={audioDevice}
             initialTab={settingsTabRef.current}
-            scrollRef={settingsScrollRef}
             version={localVersion}
             update={update}
             namSlimSizeDefault={namSlimSizeDefault}

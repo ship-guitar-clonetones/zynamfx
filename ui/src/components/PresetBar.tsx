@@ -19,7 +19,7 @@ import { arrayMove } from '@dnd-kit/helpers';
 import type { DragEndEvent } from '@dnd-kit/react';
 import type { ActivePreset, PresetInfo } from '../types/chain';
 import { useDismissable } from '../hooks/useDismissable';
-import { IS_IOS } from '../hooks/useUiScale';
+import { IS_COARSE_POINTER } from '../hooks/useUiScale';
 import { useToast } from './Toast';
 import { HELP, helpProps } from './helpText';
 import { BORDER, FONT_MONO, GRAY, SEGMENTED_TRACK } from './theme';
@@ -468,11 +468,11 @@ export const PresetBar: React.FC<PresetBarProps> = ({
             // names ellipsize. Full pill height is the click target.
             width: '150rem',
             height: '100%',
-            // iOS: the chevrons' 44 pt hit areas are wider than the chevrons
+            // Touch: the chevrons' 44 pt hit areas are wider than the chevrons
             // and reach a few points into this button. Raising the name above
             // them keeps the whole name tappable and leaves the chevrons the
             // room *outside* the pill, where nothing else competes.
-            ...(IS_IOS ? { position: 'relative' as const, zIndex: 1 } : {}),
+            ...(IS_COARSE_POINTER ? { position: 'relative' as const, zIndex: 1 } : {}),
             lineHeight: '36rem',
             textAlign: 'center',
             overflow: 'hidden',

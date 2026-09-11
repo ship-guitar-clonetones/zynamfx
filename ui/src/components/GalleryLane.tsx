@@ -34,9 +34,7 @@ import { isInsertSlot } from '../types/chain';
  */
 
 export const TILE_SIZE = 224;
-/** Stereo shows two lanes, so its tiles shrink to fit the fixed height. The
-    design size, and on iOS the floor the lane can grow from (see
-    laneTileSize in ChainView). */
+/** Stereo shows two lanes, so its tiles shrink to fit the fixed height. */
 export const STEREO_TILE_SIZE = 160;
 /** Gap between tiles: the visible run of each connector line. */
 export const TILE_GAP = 24;
@@ -252,72 +250,56 @@ export const GalleryLane: React.FC<{
   branchInteractive = false,
   onSetBranch,
   onClearBranch,
-}) => {
-  // The lane's order, as ids. Memoized on the order itself, not on `items`,
-  // so GalleryBlock's memo still holds: ChainView hands this lane a fresh
-  // `items` array on every drag-over and reset, and only a change in the
-  // sequence of ids should reach the tiles as a new reference.
-  const laneOrder = items.map((i) => i.blockId).join('\u0000');
-  const laneIds = React.useMemo(
-    () => (laneOrder.length === 0 ? [] : laneOrder.split('\u0000')),
-    [laneOrder]
-  );
-  return (
-    <div style={{ position: 'relative', width: 'max-content' }}>
-      <GhostRail slots={items.length} tileSize={tileSize} />
-      {stereo && (branchInteractive || branch != null) && (
-        <BranchRail
-          items={items}
-          tileSize={tileSize}
-          side={side}
-          branch={branch}
-          interactive={branchInteractive}
-          onSetBranch={onSetBranch ?? (() => {})}
-          onClearBranch={onClearBranch ?? (() => {})}
-        />
+}) => (
+  <div style={{ position: 'relative', width: 'max-content' }}>
+    <GhostRail slots={items.length} tileSize={tileSize} />
+    {stereo && (branchInteractive || branch != null) && (
+      <BranchRail
+        items={items}
+        tileSize={tileSize}
+        side={side}
+        branch={branch}
+        interactive={branchInteractive}
+        onSetBranch={onSetBranch ?? (() => {})}
+        onClearBranch={onClearBranch ?? (() => {})}
+      />
+    )}
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: `${TILE_GAP}rem`,
+        position: 'relative',
+        zIndex: 2,
+      }}
+    >
+      {items.map((item, index) =>
+        isInsertSlot(item) ? (
+          <AddTile
+            key={item.blockId}
+            id={item.blockId}
+            index={index}
+            group={side}
+            size={tileSize}
+            routing={addTileRouting(index, items.length)}
+            onClick={() => onAdd(item.blockId)}
+            onPaste={onPasteBlock != null ? () => onPasteBlock(index) : null}
+          />
+        ) : (
+          <GalleryBlock
+            key={item.blockId}
+            block={item}
+            index={index}
+            group={side}
+            size={tileSize}
+            onOpen={onOpen}
+          />
+        )
       )}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: `${TILE_GAP}rem`,
-          position: 'relative',
-          zIndex: 2,
-        }}
-      >
-        {items.map((item, index) =>
-          isInsertSlot(item) ? (
-            <AddTile
-              key={item.blockId}
-              id={item.blockId}
-              index={index}
-              group={side}
-              size={tileSize}
-              routing={addTileRouting(index, items.length)}
-              onClick={() => onAdd(item.blockId)}
-              onPaste={onPasteBlock != null ? () => onPasteBlock(index) : null}
-            />
-          ) : (
-            <GalleryBlock
-              key={item.blockId}
-              block={item}
-              index={index}
-              group={side}
-              size={tileSize}
-              onOpen={onOpen}
-              // Keyboard- and menu-driven reorder needs the whole lane order,
-              // which only this component knows. Passing the ids (not a
-              // callback closing over them) keeps GalleryBlock's memo intact:
-              // the array identity changes exactly when the lane order does.
-              laneIds={laneIds}
-            />
-          )
-        )}
-      </div>
     </div>
-  );
-};
+  </div>
+);
 
 /** Per-lane solo + polarity as one segmented [S|Ø] under the pan label.
     Grey idle, house-armed yellow while engaged. Solo ("S") auditions its
@@ -364,10 +346,7 @@ const PanRailChips: React.FC<{
  * buttons for a MONO chip that says why. Solo and polarity stay live: they
  * act on the chains inside the sum.
  */
-export const StereoPanRail: React.FC<{ monoSum: boolean; tileSize: number }> = ({
-  monoSum,
-  tileSize,
-}) => {
+export const StereoPanRail: React.FC<{ monoSum: boolean }> = ({ monoSum }) => {
   const { swapChains } = useChainActions();
   const [panLeft, setPanLeft, onPanLeftDrag] = useParameter('chainPanLeft', 'slider');
   const [panRight, setPanRight, onPanRightDrag] = useParameter('chainPanRight', 'slider');
@@ -438,9 +417,7 @@ export const StereoPanRail: React.FC<{ monoSum: boolean; tileSize: number }> = (
         flexDirection: 'column',
         alignItems: 'center',
         alignSelf: 'center',
-        // Matches the two lanes it sits beside, whatever size they resolve to
-        // (iOS grows them into the band; see laneTileSize in ChainView).
-        height: `${tileSize * 2 + LANE_GAP}rem`,
+        height: `${STEREO_TILE_SIZE * 2 + LANE_GAP}rem`,
         flexShrink: 0,
         // Room for the left edge-fade's 1rem outer overhang (see EdgeFade)
         // so it doesn't sit on the link/swap pill.

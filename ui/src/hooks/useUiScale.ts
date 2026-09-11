@@ -28,32 +28,31 @@ let pendingTimer: number | undefined;
 export const IS_IOS =
   (window as unknown as { __T3K_PLATFORM__?: string }).__T3K_PLATFORM__ === 'ios';
 
-// Stylesheet hook for the iOS-only rules in index.css (the 44 pt touch floor
-// and the safe-area padding). Set here rather than in a component so it is on
-// the element before the first paint, and set only on iOS, so every other
-// build's <html> carries no extra class.
+// Stylesheet hook for the iOS-only rules in index.css (the document-scroll
+// fix and the vertical centering). Set here rather than in a component so it
+// is on the element before the first paint, and set only on iOS, so every
+// other build's <html> carries no extra class.
 if (IS_IOS && typeof document !== 'undefined') document.documentElement.classList.add('t3k-ios');
+
+/**
+ * True when the primary pointer is a finger (iPad, Android and Windows
+ * tablets). Gates the static touch ergonomics: the 44 pt hit floor and the
+ * touch-field growth in index.css (via the t3k-touch class below), the touch
+ * help copy, and render-time nudges that follow them. Behaviors gate on each
+ * event's own pointerType instead, so a hybrid device gets touch behavior
+ * from its touchscreen and desktop behavior from its mouse.
+ */
+export const IS_COARSE_POINTER = window.matchMedia('(pointer: coarse)').matches;
+
+if (IS_COARSE_POINTER && typeof document !== 'undefined')
+  document.documentElement.classList.add('t3k-touch');
 
 /** Largest scale at which a 1024 x designHeight box fits the viewport. The
  * floor covers 0-sized viewports during boot/teardown: pointer math divides
- * by the scale, so it must never be 0.
- *
- * On iOS the height term is dropped and the box is fitted to the width alone.
- * Letterboxing is the right answer on desktop, where the window is aspect
- * locked and any mismatch is a transient the user is actively dragging
- * through. On an iPad the mismatch is permanent and large: fitting 1024x578
- * into 1366x1024 leaves a fifth of the screen as a dead black band below the
- * UI, forever. Fitting to the width instead makes the design box as wide as
- * the screen and lets the root box grow to the real viewport height (see
- * Plugin.tsx), so the flex middle - the signal chain lane - absorbs the slack
- * and the tiles get bigger instead of the screen getting emptier. Every length
- * in the UI is still one rem per design px, so nothing is stretched or
- * distorted; there is simply more room between the header and the faceplate. */
+ * by the scale, so it must never be 0. */
 const fitScale = (designHeight: number): number => {
   const el = document.documentElement;
-  const widthFit = el.clientWidth / DESIGN_WIDTH;
-  if (IS_IOS) return Math.max(0.05, widthFit);
-  return Math.max(0.05, Math.min(widthFit, el.clientHeight / designHeight));
+  return Math.max(0.05, Math.min(el.clientWidth / DESIGN_WIDTH, el.clientHeight / designHeight));
 };
 
 /** Current UI scale (real viewport px per design px): the design box fitted

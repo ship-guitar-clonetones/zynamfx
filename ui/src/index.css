@@ -265,8 +265,7 @@ input[type='range'].accent-blue::-moz-range-thumb {
   display: none; /* Chrome, Safari, Opera */
 }
 
-/* ---------------------------------------------------------------------------
-   iOS: the document itself never scrolls.
+/* iOS: the document itself never scrolls.
 
    `100vh` is not the viewport here. This WKWebView lays out in a 1366x999
    box while `100vh` / `100dvh` / `innerHeight` / `visualViewport.height` all
@@ -286,25 +285,28 @@ input[type='range'].accent-blue::-moz-range-thumb {
    `overflow: hidden` on both html and body makes a document scroll
    impossible rather than merely unnecessary. Inner containers (the Select
    Tone results, Settings, the preset list, the lane) keep their own
-   scrollers and are untouched, and the swipe gestures are window-level touch
-   listeners (see useTouchGestures), so nothing here reaches them.
---------------------------------------------------------------------------- */
+   scrollers and are untouched. */
 html.t3k-ios,
 html.t3k-ios body {
   height: 100%;
   overflow: hidden;
 }
 
+/* The design box centers in the leftover height instead of leaving all the
+   slack at the bottom. #root is top-anchored on desktop only because the
+   window height transiently disagrees with the design box while a chrome
+   strip toggles (see the #root rule above); the iOS window never resizes,
+   so that transient cannot happen here. */
 html.t3k-ios #root {
   height: 100%;
+  justify-content: center;
 }
 
-/* ---------------------------------------------------------------------------
-   iOS touch floor. The class is set on <html> only in the iOS app (see
-   useUiScale), so every rule below is inert in every other build.
+/* Touch hit floor. The class is set on <html> only when the primary pointer
+   is coarse (see useUiScale), so every rule below is inert on desktop.
 
    Apple's 44 pt minimum applies to the *hit* area, not the glyph, so rather
-   than redraw the chrome bigger on one platform each control gets an
+   than redraw the chrome bigger on touch devices each control gets an
    invisible expander centred on itself. `max(100%, 44px)` never shrinks a
    control that is already larger, and the expander is out of flow, so no
    layout anywhere changes: only what a finger can land on.
@@ -317,25 +319,24 @@ html.t3k-ios #root {
    That is the accepted trade in every native toolkit that does this: a tap in
    the gap picks the nearer of two controls instead of missing both. A control
    that paints later still wins the overlap, so a small button inside a larger
-   one keeps its own taps.
---------------------------------------------------------------------------- */
-html.t3k-ios button,
-html.t3k-ios [role='button'],
-html.t3k-ios [role='switch'],
-html.t3k-ios [role='tab'],
-html.t3k-ios [role='radio'],
-html.t3k-ios a[href],
-html.t3k-ios .knob {
+   one keeps its own taps. */
+html.t3k-touch button,
+html.t3k-touch [role='button'],
+html.t3k-touch [role='switch'],
+html.t3k-touch [role='tab'],
+html.t3k-touch [role='radio'],
+html.t3k-touch a[href],
+html.t3k-touch .knob {
   position: relative;
 }
 
-html.t3k-ios button::after,
-html.t3k-ios [role='button']::after,
-html.t3k-ios [role='switch']::after,
-html.t3k-ios [role='tab']::after,
-html.t3k-ios [role='radio']::after,
-html.t3k-ios a[href]::after,
-html.t3k-ios .knob::after {
+html.t3k-touch button::after,
+html.t3k-touch [role='button']::after,
+html.t3k-touch [role='switch']::after,
+html.t3k-touch [role='tab']::after,
+html.t3k-touch [role='radio']::after,
+html.t3k-touch a[href]::after,
+html.t3k-touch .knob::after {
   content: '';
   position: absolute;
   left: 50%;
@@ -357,7 +358,7 @@ html.t3k-ios .knob::after {
    drag handle that really is a <button> (the preset rows' grip, 14 px) keeps
    its expander: dnd-kit adds `role` only when the activator is not a button,
    and `aria-roledescription` on every activator. */
-html.t3k-ios [role='button'][aria-roledescription='draggable']::after {
+html.t3k-touch [role='button'][aria-roledescription='draggable']::after {
   content: none;
 }
 
@@ -366,8 +367,8 @@ html.t3k-ios [role='button'][aria-roledescription='draggable']::after {
    name, save name, preset search, MIDI CC) take the class, while the inline
    editors that live inside a fixed chrome slot (a knob's label slot, an EQ
    band chip) deliberately do not - there a 44 px box would spill out of the
-   slot it is centred in. Those are reached by a double tap on a control that
-   already meets the floor. */
-html.t3k-ios .t3k-touch-field {
+   slot it is centred in. Those are reached from a control that already meets
+   the floor. */
+html.t3k-touch .t3k-touch-field {
   min-height: 44px;
 }

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { IS_IOS } from '../hooks/useUiScale';
+import { IS_COARSE_POINTER } from '../hooks/useUiScale';
 
 /**
  * Central help system: every control publishes a one-line hint here while
@@ -61,13 +61,14 @@ const installDelegation = () => {
     emit();
   };
 
-  // WebKit replays a mouse event pair (mouseover, mousemove, mousedown,
-  // mouseup, click) after every touch, aimed at the element just tapped.
-  // The replay lands *after* pointerup, so it would restore the hint the
-  // release below has just cleared: the bar kept captioning the last thing
-  // touched, exactly the behaviour the release is there to remove. Ignoring
-  // it for a beat is narrower than dropping `mouseover` on iOS, which would
-  // also kill the genuine hover an iPad trackpad produces.
+  // Touch engines replay a mouse event pair (mouseover, mousemove,
+  // mousedown, mouseup, click) after a tap, aimed at the element just
+  // tapped. The replay lands *after* pointerup, so it would restore the hint
+  // the release below has just cleared: the bar kept captioning the last
+  // thing touched, exactly the behaviour the release is there to remove.
+  // Ignoring it for a beat is narrower than dropping `mouseover` on touch
+  // devices, which would also kill the genuine hover an iPad trackpad
+  // produces.
   const MOUSE_REPLAY_MS = 700;
   let lastTouchRelease = -Infinity;
 
@@ -91,15 +92,13 @@ const installDelegation = () => {
   // On `window` in the capture phase: a control that took pointer capture
   // (knobs, the tile lift) retargets its release, and a bubbling document
   // listener can miss it entirely.
-  if (IS_IOS) {
-    const releaseTouch = (e: PointerEvent) => {
-      if (e.pointerType !== 'touch') return;
-      lastTouchRelease = performance.now();
-      update(null);
-    };
-    window.addEventListener('pointerup', releaseTouch, true);
-    window.addEventListener('pointercancel', releaseTouch, true);
-  }
+  const releaseTouch = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') return;
+    lastTouchRelease = performance.now();
+    update(null);
+  };
+  window.addEventListener('pointerup', releaseTouch, true);
+  window.addEventListener('pointercancel', releaseTouch, true);
   // Pointer left the window entirely.
   document.addEventListener('mouseout', (e) => {
     if (e.relatedTarget === null) update(null);
@@ -162,20 +161,20 @@ const shift = chord('\u21e7', 'Shift');
 const alt = chord('\u2325', 'Alt');
 
 /** Shared legend for every KnobControl (they all support these gestures).
-    Touch has no modifier keys and no separate click button, so iOS gets the
-    two gestures it actually has: drag and double tap (see KnobControl). */
-const KNOB_KEYS = IS_IOS
-  ? 'drag up or down: adjust · double tap: reset'
+    Touch has no modifier keys and no separate click button, so it gets the
+    gestures it actually has (see KnobControl). */
+const KNOB_KEYS = IS_COARSE_POINTER
+  ? 'drag up or down: adjust · double tap: reset · tap the name: type'
   : `${shift('drag')}: fine · double-click: type · ${alt('click')}: reset`;
 
 export const knobHelp = (name: string, desc: string) => `${name}: ${desc} ${KNOB_KEYS}`;
 
 /**
- * Desktop copy. iOS re-words it through `touchify` below rather than
- * branching every line: only the entries whose *gesture* differs (knobs, EQ
- * faders and dots, the tile and slot menus) are branched by hand above, and
- * everything else differs only in the noun for "press this", which one pass
- * can do without letting the two platforms' wording drift apart.
+ * Desktop copy. Touch devices re-word it through `touchify` below rather
+ * than branching every line: only the entries whose *gesture* differs
+ * (knobs, EQ faders and dots) are branched by hand, and everything else
+ * differs only in the noun for "press this", which one pass can do without
+ * letting the two wordings drift apart.
  */
 const HELP_DESKTOP = {
   // Faceplate: gains
@@ -237,41 +236,24 @@ const HELP_DESKTOP = {
   presetNew: 'New: clear the chain and reset every control to its default.',
   presetRename: 'Rename: edit name. Enter: commit · Esc: cancel.',
   presetDelete: 'Delete: remove this preset.',
-  // The gesture differs, so these two are branched by hand rather than left
-  // to `touchify` (which only swaps the noun for "press this"). Verified on
-  // the iPad: the grip is the only drag handle, so a swipe anywhere in the
-  // list scrolls it, and the grip itself lifts after dnd-kit's 250 ms hold.
-  presetReorder: IS_IOS
-    ? 'Reorder: touch and hold a preset’s grip, then drag. Prev/Next and MIDI follow the order.'
-    : 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',
-  presetDrag: IS_IOS
-    ? 'Grip: touch and hold, then drag to move this preset within its section.'
-    : 'Drag: move this preset within its section.',
+  presetReorder: 'Reorder: drag presets into a custom order. Prev/Next and MIDI follow it.',
+  presetDrag: 'Drag: move this preset within its section.',
   presetPcToggle:
     'MIDI PC: show each preset\u2019s program change number. Prev/Next and PC follow the list order.',
   presetPc: 'PC: the MIDI program change number that loads this preset.',
 
   // Chain gallery
-  addTile: IS_IOS
-    ? 'Add Tone: browse TONE3000 for this slot, or use On this iPad, Load files, for local .nam or IR .wav files. Touch and hold: slot menu.'
-    : 'Add Tone: browse TONE3000 for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.',
+  addTile:
+    'Add Tone: browse TONE3000 for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.',
   closeToneBrowser: 'Close: back to the chain.',
   copyBlock: 'Copy: copy this block (tone, model and all settings).',
   pasteBlock: 'Paste: add a copy of the copied block in this slot.',
   loadFileTile: 'Load File: pick a local .nam or IR .wav file to load here. No account needed.',
-  // iOS only: the single row that replaces Load File and Load Folder.
-  loadFilesTile:
-    'Load files: pick .nam or IR .wav files from Files. One file loads a single model, several load as one multi-model block. No account needed.',
   loadFolderTile:
     'Load Folder: pick a folder of .nam or .wav files; loads as one multi-model block.',
   blockPower: 'Power: bypass this block.',
   retryLoad: 'Retry: re-download this model.',
   swapTone: 'Swap: replace this tone, keeping its slot.',
-  tileMenu: IS_IOS
-    ? 'More: block actions (copy, load files, remove).'
-    : 'More: block actions (copy, load a local file, remove).',
-  moveBlockLeft: 'Move left: swap this block with the one before it.',
-  moveBlockRight: 'Move right: swap this block with the one after it.',
   removeBlock: 'Remove: delete this block.',
   panLeft: knobHelp('Pan L', 'Left chain, hard left ↔ center.'),
   panRight: knobHelp('Pan R', 'Right chain, center ↔ hard right.'),
@@ -316,17 +298,17 @@ const HELP_DESKTOP = {
   backToChain: 'Back: chain overview.',
 
   // EQ editor
-  eqFader: IS_IOS
+  eqFader: IS_COARSE_POINTER
     ? 'Band Fader: gain, ±15 dB. drag: adjust · double tap: reset.'
     : `Band Fader: gain, ±15 dB. ${shift('drag')}: fine · double-click / ${alt('click')}: reset.`,
   eqFaderPass: 'Pass Band: no gain. Shape it in Curve view.',
-  eqDot: IS_IOS
+  eqDot: IS_COARSE_POINTER
     ? 'Band Dot: drag: freq + gain · double tap: reset. Q: use the Q chip.'
     : `Band Dot: drag: freq + gain · scroll: Q · ${shift('drag')}: fine · ${alt('click')}: reset.`,
   eqFreqChip:
     'Freq: click to type (\u201c800\u201d, \u201c1.2k\u201d). Enter: commit · Esc: cancel.',
   eqGainChip: 'Gain: click to type, ±15 dB. Enter: commit · Esc: cancel.',
-  eqQChip: IS_IOS
+  eqQChip: IS_COARSE_POINTER
     ? 'Q: tap to type. Enter: commit · Esc: cancel.'
     : `Q: scroll the graph (${shift('scroll')}: fine) or click to type.`,
 
@@ -340,9 +322,8 @@ const HELP_DESKTOP = {
 
 /**
  * Desktop pointer vocabulary rewritten for touch. `Right-click` first, since
- * it contains `click`; the advanced Spread/Align decks answer a touch and
- * hold on iOS exactly as they answer a right-click on desktop (see
- * SpreadControls / AlignControls).
+ * it contains `click`; everything a right-click reaches (context menus, the
+ * advanced Spread/Align decks) answers a touch and hold on a touch screen.
  */
 const TOUCH_WORDING: readonly (readonly [RegExp, string])[] = [
   [/Right-click/g, 'Touch and hold'],
@@ -362,17 +343,15 @@ const touchify = (copy: Record<string, string>): Record<string, string> =>
     ])
   );
 
-export const HELP = (IS_IOS ? touchify(HELP_DESKTOP) : HELP_DESKTOP) as Record<
+export const HELP = (IS_COARSE_POINTER ? touchify(HELP_DESKTOP) : HELP_DESKTOP) as Record<
   keyof typeof HELP_DESKTOP,
   string
 >;
 
 /** Gallery tile: leads with the tone's own name. */
 export const toneTileHelp = (title: string) =>
-  IS_IOS
-    ? // The gesture rule, stated where the user is looking (HIG asks for a
-      // visible explanation rather than a discoverable-by-accident gesture).
-      `${title}. Tap: open · touch and hold, then drag: reorder · hold and release: menu · swipe: scroll the chain.`
+  IS_COARSE_POINTER
+    ? `${title}. Tap: open · drag: reorder · touch and hold: menu.`
     : `${title}. Click: open · drag: reorder · ${alt('drag')}: duplicate · right-click: copy / load file.`;
 
 /** Curve-type selector buttons in the EQ editor. */

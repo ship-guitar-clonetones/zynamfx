@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { KnobHeadless } from 'react-knob-headless';
 import { KnobInner } from './KnobInner';
 import type { KnobThumb, KnobVariant } from './KnobInner';
 import type { KnobScale } from './knobScale';
 import { percentScale } from './knobScale';
 import { helpProps, pinHelp, unpinHelp } from './helpText';
-import { BORDER, BLACK, GRAY, KNOB_LABEL_GAP, SURFACE_RAISED, WHITE } from './theme';
-import { getUiScale, IS_IOS, rem } from '../hooks/useUiScale';
+import { GRAY, KNOB_LABEL_GAP, SURFACE_RAISED, WHITE } from './theme';
+import { getUiScale, rem } from '../hooks/useUiScale';
 
 /**
  * Knob interaction conventions (matching typical plugin UX):
@@ -21,15 +21,15 @@ import { getUiScale, IS_IOS, rem } from '../hooks/useUiScale';
  * scrolling chain view, and hijacking wheel events there hurts more than it
  * helps.
  *
- * On iOS the two mouse-only gestures are replaced rather than dropped:
- * - Double tap resets to the default (there is no Alt key on a touch screen,
- *   and the type-in editor it opens on desktop would put the iOS keyboard
- *   over the knob you are editing). Detected from the pointer stream, not
- *   from `dblclick`, which WKWebView ties to its own double-tap handling.
- * - The value is mirrored in a bubble above the knob while dragging: the
- *   readout under the knob is exactly where the finger is, so on touch it is
- *   the one place the value cannot be read from.
- * Both are `IS_IOS`-gated; desktop behaviour is byte-identical.
+ * On a touch screen the two mouse-only gestures are replaced rather than
+ * dropped:
+ * - Double tap resets to the default (there is no Alt key). Detected from
+ *   the pointer stream, not from `dblclick`, which WKWebView ties to its
+ *   own double-tap handling.
+ * - Tapping the label under the knob opens the type-in editor (double tap
+ *   is taken by the reset).
+ * Both key off the gesture's own pointerType, so a mouse keeps desktop
+ * behavior even on a hybrid device.
  */
 interface KnobControlProps {
   label: string;
@@ -95,8 +95,8 @@ const roundKnobValue = (x: number, snapCenter: boolean, fine: boolean) => {
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
-/** iOS double tap: the system's own recognizer window, and a slop wide
-    enough for two taps by the same finger without being a drag. */
+/** Touch double tap: the usual recognizer window, and a slop wide enough
+    for two taps by the same finger without being a drag. */
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_SLOP_PX = 24;
 
@@ -135,11 +135,15 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   const emittedRef = useRef(value);
   const lastYRef = useRef(0);
   const fineRef = useRef(false);
-  // iOS double-tap recognizer state (time + position of the previous tap).
+  // Touch double-tap recognizer state (time + position of the previous tap).
   const lastTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
   // Where the current press went down, so a gesture that turns into a drag
   // can withdraw its tap candidate (see handleDragPointerMove).
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  // Pointer type of the last press anywhere in the control, recorded in the
+  // capture phase. The dblclick guard and the label tap read it to tell a
+  // finger from a mouse.
+  const lastPointerTypeRef = useRef('');
 
   const [dragging, setDragging] = useState(false);
   const [fine, setFine] = useState(false);
@@ -264,10 +268,10 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       e.stopPropagation();
       knobElement.focus();
 
-      // iOS: second tap of a double tap resets, and ends the gesture there.
+      // Touch: second tap of a double tap resets, and ends the gesture there.
       // Engaging the drag as well would let the few pixels of finger travel
       // between the two taps move the value straight back off the default.
-      if (IS_IOS && e.pointerType === 'touch') {
+      if (e.pointerType === 'touch') {
         const previous = lastTapRef.current;
         const isDoubleTap =
           previous !== null &&
@@ -376,7 +380,10 @@ export const KnobControl: React.FC<KnobControlProps> = ({
     setEditText(scale.editText(shownValue));
   }, [scale, shownValue]);
 
-  useEffect(() => {
+  // Layout effect so the focus lands in the same call stack as the tap or
+  // double-click that opened the editor; WKWebView only raises the on-screen
+  // keyboard for focus inside a user gesture.
+  useLayoutEffect(() => {
     if (editing) {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -409,38 +416,6 @@ export const KnobControl: React.FC<KnobControlProps> = ({
 
   const showReadout = !editing && readoutVisible;
   const slotHeight = Math.round(LABEL_SIZE * 1.2);
-
-  /** Touch value bubble: the same string the label readout shows, floated
-      clear of the finger. Mounted on iOS while the readout is up, so it
-      lingers with it for READOUT_HOLD_MS after release. Absolutely
-      positioned, so it never affects layout, and never mounts on desktop. */
-  const valueBubble =
-    IS_IOS && showReadout ? (
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          bottom: '100%',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          marginBottom: '10rem',
-          padding: '4rem 8rem',
-          borderRadius: '6rem',
-          background: BLACK,
-          border: BORDER,
-          color: WHITE,
-          fontSize: '14rem',
-          fontWeight: 400,
-          lineHeight: 1.2,
-          whiteSpace: 'nowrap',
-          fontVariantNumeric: 'tabular-nums',
-          pointerEvents: 'none',
-          zIndex: 40,
-        }}
-      >
-        {scale.format(shownValue)}
-      </div>
-    ) : null;
 
   const labelText = (
     <span
@@ -491,6 +466,7 @@ export const KnobControl: React.FC<KnobControlProps> = ({
   return (
     <div
       {...(help ? helpProps(help) : {})}
+      onPointerDownCapture={(e) => (lastPointerTypeRef.current = e.pointerType)}
       style={{
         display: 'flex',
         flexDirection: labelBottom ? 'column' : 'column-reverse',
@@ -512,9 +488,11 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         valueRawRoundFn={(x) => roundKnobValue(x, variant === 'bipolar', fine)}
         valueRawDisplayFn={(x) => scale.format(x)}
         onValueRawChange={() => {}}
-        // iOS owns the double tap (reset, see handlePointerDown); letting
-        // WKWebView's dblclick also open the type-in editor would fire both.
-        onDoubleClick={IS_IOS ? undefined : openEditor}
+        // A touch double tap resets (see handlePointerDown); the dblclick
+        // some engines synthesize for it must not also open the editor.
+        onDoubleClick={() => {
+          if (lastPointerTypeRef.current !== 'touch') openEditor();
+        }}
         className="knob"
         style={{
           width: rem(size),
@@ -528,10 +506,14 @@ export const KnobControl: React.FC<KnobControlProps> = ({
         }}
       >
         <KnobInner value={shownValue} size={size} variant={variant} thumb={thumb} />
-        {valueBubble}
       </KnobHeadless>
 
       <div
+        // Touch route into the type-in editor: tap the label. Desktop keeps
+        // the double-click on the knob face and ignores clicks here.
+        onClick={() => {
+          if (lastPointerTypeRef.current === 'touch' && !editing) openEditor();
+        }}
         style={{
           width: rem(size),
           height: rem(slotHeight),

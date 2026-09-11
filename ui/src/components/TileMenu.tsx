@@ -2,8 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { helpProps } from './helpText';
 import { useDismissable } from '../hooks/useDismissable';
-import { BORDER, BRAND_RED, DISABLED_OPACITY, HIGHLIGHT, MUTED, WHITE } from './theme';
-import { IS_IOS } from '../hooks/useUiScale';
+import { BORDER, DISABLED_OPACITY, HIGHLIGHT, MUTED, WHITE } from './theme';
 
 /**
  * Right-click action sheet for gallery tiles, in the house floating-panel
@@ -22,10 +21,6 @@ export interface TileMenuItem {
   /** One-line hint for the faceplate help readout. */
   help: string;
   disabled?: boolean;
-  /** Destructive action (Remove). Rendered in the brand red and, by the
-      caller's ordering, last in the sheet - the HIG's shape for a context
-      menu's dangerous row. */
-  destructive?: boolean;
   onSelect: () => void;
 }
 
@@ -56,11 +51,6 @@ export const TileMenu: React.FC<{
     return () => window.removeEventListener('resize', onClose);
   }, [onClose]);
 
-  // On iOS every row can be filtered out (an empty slot with nothing copied):
-  // an empty panel is worse than no panel.
-  const shown = items.filter((item) => !(IS_IOS && item.disabled));
-  if (shown.length === 0) return null;
-
   return createPortal(
     <div
       ref={rootRef}
@@ -88,12 +78,7 @@ export const TileMenu: React.FC<{
       }}
     >
       <style>{`.tile-menu-item:hover:not(:disabled) { background-color: ${HIGHLIGHT}; }`}</style>
-      {/* HIG: "unavailable items are hidden, not dimmed" in a touch context
-          menu, where there is no hover to explain why a row is grey and the
-          sheet should stay as short as possible. Desktop keeps the dimmed
-          row, which is the platform convention there and the behaviour this
-          menu has always had. */}
-      {shown.map((item) => (
+      {items.map((item) => (
         <button
           key={item.label}
           type="button"
@@ -113,7 +98,7 @@ export const TileMenu: React.FC<{
             background: 'transparent',
             border: 'none',
             borderRadius: '8rem',
-            color: item.disabled ? MUTED : item.destructive ? BRAND_RED : WHITE,
+            color: item.disabled ? MUTED : WHITE,
             opacity: item.disabled ? DISABLED_OPACITY : 1,
             fontSize: '13rem',
             fontWeight: 400,

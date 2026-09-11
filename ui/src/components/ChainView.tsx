@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { getUiScale, IS_IOS, rem } from '../hooks/useUiScale';
+import { getUiScale, rem } from '../hooks/useUiScale';
 import { DragDropProvider } from '@dnd-kit/react';
 import { isSortable } from '@dnd-kit/react/sortable';
 import { KeyboardSensor, PointerActivationConstraints, PointerSensor } from '@dnd-kit/dom';
@@ -24,11 +24,7 @@ import {
   EDGE_FADE_WIDTH,
   gapCenterX,
 } from './GalleryLane';
-// Lives with the tile it applies to, where the touch long-press menu reads it
-// too; importing it from here would cycle (ChainView -> GalleryLane -> GalleryBlock).
-import { GALLERY_DRAG_DISTANCE_PX } from './GalleryBlock';
 import { useChainActions } from '../hooks/useChainActions';
-import { useEdgeSwipeBack } from '../hooks/useTouchGestures';
 import { useHorizontalWheelScroll } from '../hooks/useHorizontalWheelScroll';
 import { FONT_MONO, WHITE } from './theme';
 import type { ChainBranch, ChainItem, ChainSide, ToneBlock } from '../types/chain';
@@ -88,33 +84,21 @@ interface ChainViewProps {
   returnToGallery?: number;
 }
 
+/** Design-px of travel before a drag engages, so tap/click stays a click.
+    Scaled to real px per gesture so the feel tracks the rendered tile size. */
+const GALLERY_DRAG_DISTANCE_PX = 6;
+
 const sensors: Sensors = [
   // Distance-only activation (the stock constraints add a 200ms hold trigger,
   // which would turn a slow click-to-open into a drag). The sensor's default
   // guard already keeps buttons and other interactive chrome from starting
   // drags, so power/swap/trash stay clicks.
   PointerSensor.configure({
-    activationConstraints: (event) => {
-      // Touch: the iOS Home screen gesture. A hold lifts the tile, and only
-      // then does moving reorder it, which leaves a plain swipe free to scroll
-      // the lane (the tile face opts back into panning on iOS; see
-      // TileSurface). This is dnd-kit's own touch default, restored: the
-      // override below is written for pointer devices and would otherwise
-      // apply to touch as well.
-      //
-      // Desktop deliberately drags straight off the tile face, which is right
-      // for a mouse, where there is no competing scroll gesture on the element
-      // itself. Apple's HIG asks for the opposite on iPad, so the two platforms
-      // genuinely want different rules here rather than one shared one.
-      if (IS_IOS && event.pointerType === 'touch')
-        return [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })];
-
-      return [
-        new PointerActivationConstraints.Distance({
-          value: GALLERY_DRAG_DISTANCE_PX * getUiScale(),
-        }),
-      ];
-    },
+    activationConstraints: () => [
+      new PointerActivationConstraints.Distance({
+        value: GALLERY_DRAG_DISTANCE_PX * getUiScale(),
+      }),
+    ],
   }),
   // Stock keyboard sorting: Space or Enter on a focused tile picks it up,
   // arrows snap it one slot per press (the sortable's SortableKeyboardPlugin
@@ -123,39 +107,6 @@ const sensors: Sensors = [
   // anywhere else still falls through to the host DAW (see keyPassthrough.ts).
   KeyboardSensor,
 ];
-
-/** Design-space margin kept above and below the tile row on iOS. Clears the
-    absolutely positioned SIGNAL CHAIN label (16 px) and matches the gap the
-    design leaves under it. */
-const LANE_MARGIN = 40;
-/** Tiles fully visible across the lane on iOS. Three, not four: four needs a
-    182 px tile between the meter columns, i.e. smaller than the design's own
-    224, so it would shrink the row rather than fill it. The fourth peeks and
-    the lane scrolls, exactly as it does today. */
-const TILES_ACROSS = 3;
-
-/** Tile size for the lane band. The design's size everywhere except iOS,
-    where the tile grows into the band's spare height, capped by the width
-    TILES_ACROSS need and never smaller than the design.
-
-    `rows` is the number of lanes sharing the band's height: 1 in mono, 2 in
-    stereo, where the two lanes and the gap between them come out of the same
-    budget. Stereo's design size (160) is the floor there, so the rule can
-    only grow the tile, exactly as in mono. The width term is unchanged
-    between the two: the observed box already excludes the pan rail, since
-    the ResizeObserver sits on the scroll area, not on the whole band. */
-const laneTileSize = (
-  lane: { w: number; h: number } | null,
-  rows: 1 | 2,
-  design: number
-): number => {
-  if (!IS_IOS || lane == null) return design;
-  const scale = getUiScale();
-  const byWidth =
-    (lane.w / scale - 2 * EDGE_FADE_WIDTH - (TILES_ACROSS - 1) * TILE_GAP) / TILES_ACROSS;
-  const byHeight = (lane.h / scale - 2 * LANE_MARGIN - (rows - 1) * LANE_GAP) / rows;
-  return Math.max(design, Math.floor(Math.min(byWidth, byHeight)));
-};
 
 type Lanes = Record<ChainSide, ChainItem[]>;
 
@@ -200,18 +151,6 @@ export const ChainView: React.FC<ChainViewProps> = ({
     },
     [wheelScrollRef]
   );
-  // iOS only: the lane band is far taller than the 224 px design tile, so the
-  // row floats in black. Measured rather than derived, because the width left
-  // for tiles is whatever the two dB meter columns do not take.
-  const [laneBox, setLaneBox] = useState<{ w: number; h: number } | null>(null);
-  const laneRef = useCallback((el: HTMLDivElement | null) => {
-    if (!IS_IOS || el == null) return;
-    const observer = new ResizeObserver(([entry]) =>
-      setLaneBox({ w: entry.contentRect.width, h: entry.contentRect.height })
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
   // Persisted so the detail takeover survives this component unmounting: a
   // swap from the detail view opens the tone browser (which replaces the whole
   // chain view, and may bounce through the tone3000.com OAuth redirect). The
@@ -432,11 +371,6 @@ export const ChainView: React.FC<ChainViewProps> = ({
     if (detailBlockId != null && detailBlock == null) setDetailBlockId(null);
   }, [detailBlockId, detailBlock]);
 
-  // Left-edge swipe is a shortcut out of BLOCK, never the only way: the
-  // 44 pt back arrow in the card header stays exactly where it was. Called
-  // before the early return below so the hook order never changes.
-  useEdgeSwipeBack(detailBlock != null, () => setDetailBlockId(null));
-
   if (detailBlock) {
     // Another enabled+loaded NAM after this block in its lane. This mirrors the
     // DSP's lastNamIndex scan (Processor.cpp): with calibration on, such a
@@ -482,9 +416,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
   }
 
   const stereo = chainRight != null;
-  const tileSize = stereo
-    ? laneTileSize(laneBox, 2, STEREO_TILE_SIZE)
-    : laneTileSize(laneBox, 1, TILE_SIZE);
+  const tileSize = stereo ? STEREO_TILE_SIZE : TILE_SIZE;
 
   // Branched layout: the branch lane starts at the trunk's tap gap, so its
   // row is indented past the whole trunk prefix (matching the signal flow:
@@ -539,7 +471,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
         padding: '0 24rem',
       }}
     >
-      {stereo && <StereoPanRail monoSum={monoSum} tileSize={tileSize} />}
+      {stereo && <StereoPanRail monoSum={monoSum} />}
       <DragDropProvider
         sensors={sensors}
         onDragStart={handleDragStart}
@@ -548,7 +480,7 @@ export const ChainView: React.FC<ChainViewProps> = ({
       >
         {/* One shared scroll area: both lanes pan together, fading out under
             the edge gradients as they scroll. */}
-        <div ref={laneRef} style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 0, display: 'flex' }}>
           {/* Mono-only section title. Absolutely positioned so it sits in the
               top-left dead space without shifting the vertically/horizontally
               centered lane. left matches the lane's EDGE_FADE_WIDTH inset so
