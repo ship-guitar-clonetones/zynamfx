@@ -283,8 +283,6 @@ export const KnobControl: React.FC<KnobControlProps> = ({
       // which is harmless: releasing without moving stays at the default.
       // onReset runs after so owners can restore sibling defaults (e.g. the
       // Spread/Align advanced deck) in the same gesture.
-      // Alt/Option-click resets; the drag still engages beneath, which is
-      // harmless (releasing without moving stays at the default).
       if (!(e.altKey && resetToDefault())) {
         liveRef.current = valueRef.current;
         emittedRef.current = valueRef.current;

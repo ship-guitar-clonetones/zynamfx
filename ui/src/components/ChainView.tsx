@@ -102,11 +102,10 @@ const sensors: Sensors = [
       // override below is written for pointer devices and would otherwise
       // apply to touch as well.
       //
-      // Note for the upstream reviewer: desktop deliberately drags straight
-      // off the tile face, which is right for a mouse, where there is no
-      // competing scroll gesture on the element itself. Apple's HIG asks for
-      // the opposite on iPad, so the two platforms genuinely want different
-      // rules here rather than one shared one.
+      // Desktop deliberately drags straight off the tile face, which is right
+      // for a mouse, where there is no competing scroll gesture on the element
+      // itself. Apple's HIG asks for the opposite on iPad, so the two platforms
+      // genuinely want different rules here rather than one shared one.
       if (IS_IOS && event.pointerType === 'touch')
         return [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })];
 

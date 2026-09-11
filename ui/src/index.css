@@ -300,8 +300,8 @@ html.t3k-ios #root {
 }
 
 /* ---------------------------------------------------------------------------
-   iOS touch floor (P7 item 4). The class is set on <html> only in the iOS
-   app (see useUiScale), so every rule below is inert in every other build.
+   iOS touch floor. The class is set on <html> only in the iOS app (see
+   useUiScale), so every rule below is inert in every other build.
 
    Apple's 44 pt minimum applies to the *hit* area, not the glyph, so rather
    than redraw the chrome bigger on one platform each control gets an

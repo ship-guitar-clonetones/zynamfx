@@ -145,8 +145,9 @@ of flow, so no layout changes.
 ## Local import
 
 One entry, not two. Desktop offers **Load File** and **Load Folder**; iOS
-offers **Load files**, in both places local loading is reachable from: the
-**On this iPad** section in SELECT TONE and the tile's `...` menu.
+offers a single **Load files**, in both of the places local loading is
+reachable from: the **On this iPad** section in SELECT TONE and the tile's
+`...` menu.
 
 The collapse is not a simplification, it is what the platform gives. iOS has a
 single document picker and it is multi-select, so the two desktop entries are
@@ -173,8 +174,8 @@ behind `IS_IOS`.
 ## Touch verification
 
 Everything below was driven on the iPad Simulator against a Release build.
-Local `.nam` models only: the catalogue needs a sign-in the port cannot
-complete (see Known gaps).
+Local `.nam` models only: loading a catalogue tone needs a signed-in
+TONE3000 session and this Simulator run was signed out.
 
 | Area | Verdict |
 | ---- | ------- |
@@ -210,7 +211,7 @@ complete (see Known gaps).
   already inset (1366x999 in a 1024 pt screen), so the faceplate clears the
   home indicator without the page doing anything.
 - **`100vh` is not the viewport, and the document scrolled because of it.**
-  The owner reported an unwanted vertical scroll that hurt navigation. It was
+  An unwanted vertical scroll that hurt navigation was reported. It was
   real and it was global. This WKWebView lays out in a 1366x999 box, but
   `100vh`, `100dvh`, `innerHeight` and `visualViewport.height` all report 1024,
   the screen height: measured in the running app,
@@ -230,7 +231,6 @@ complete (see Known gaps).
   the Tuner: `scrollHeight` now equals `clientHeight` at 999, zero document
   scroll events fired on any screen, the Select Tone and Settings lists still
   scroll on their own, and swipe down still dismisses the Tuner.
-
 - **The app data container's UUID rotates on every reinstall and every app
   update.** Any absolute path the plugin persisted then names a directory
   that no longer exists, and the only path it persists is a local model's
@@ -304,9 +304,8 @@ complete (see Known gaps).
 
 ## Desktop CI evidence
 
-Nothing on this branch reaches a desktop build. The C++ side is one
-`withUserScript` call inside `#if JUCE_IOS`, so every other platform's
-injected script is byte-identical to before; everything else is TypeScript
-and CSS gated on `IS_IOS` / `html.t3k-ios`, which is false and absent in
-every desktop build. macOS Release was rebuilt locally on this branch as the
-regression check, and the shared `ui` bundle builds and lints clean.
+Nothing on this branch reaches a desktop build. There is no C++ and no
+CMake here: the `window.__T3K_PLATFORM__` flag the UI reads already lives in
+main (PR 111), so this diff is TypeScript and CSS gated on `IS_IOS` /
+`html.t3k-ios`, which is false and absent in every desktop build. The shared
+`ui` bundle builds, lints, type-checks and tests clean.

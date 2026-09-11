@@ -56,11 +56,11 @@ export const useTouchHold = (onHold: () => void): TouchHoldProps => {
     onPointerDown: (e: PointerEvent) => {
       if (e.pointerType !== 'touch') return;
       // A hold on an icon-only control belongs to that control: the section
-      // power button, and everything in the panel this opens. ponytail: "no
-      // text" is the discriminator because the advert button is the only
-      // labelled control in the group, and it must stay holdable since it is
-      // the whole group while the feature is off. If a labelled control is
-      // ever added there, mark the ones to skip instead.
+      // power button, and everything in the panel this opens. "No text" is
+      // the discriminator because the advert button is the only labelled
+      // control in the group, and it must stay holdable since it is the whole
+      // group while the feature is off. If a labelled control is ever added
+      // there, mark the ones to skip instead.
       // A knob is never a hold target either: a finger resting on it before a
       // turn is the most common touch pattern there, and it has no text, so
       // it needs its own entry (role="slider", not role="button").
