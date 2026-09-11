@@ -144,8 +144,8 @@ Three gates, from narrowest reach to widest:
 | ------- | ------ |
 | tap a tile | open the block |
 | drag a tile | reorder (the same distance rule as desktop) |
-| hold a tile 500 ms, release without moving | tile menu at that point |
-| hold on the Spread / Align group | the advanced deck (desktop: right-click) |
+| hold a tile 500 ms | tile menu, while the finger is still down |
+| hold the Spread / Align Offset knob | the advanced deck (desktop: right-click the group) |
 | press a control | its help in the info bar; release clears it |
 | drag a knob up or down | adjust |
 | double tap a knob | reset to default |
@@ -183,6 +183,10 @@ tap, the centered layout, and no document scroll.
   state on release has to ignore that replay (see helpText.ts).
 - **A control that takes pointer capture retargets its release**, so a release
   that must be seen regardless is watched on `window` in the capture phase.
+- **Pressing and holding an `<img>` raises WKWebView's own image callout**
+  (Copy / Save to Photos) and cancels the pointer stream under it, which
+  silently killed the tiles' long-press menu on any tile with artwork.
+  `-webkit-touch-callout: none` on img/svg (index.css) suppresses it.
 - **`env(safe-area-inset-*)` is 0 on all sides** here: the WKWebView is
   already inset (1366x999 in a 1024 pt screen), so the faceplate clears the
   home indicator without the page doing anything.

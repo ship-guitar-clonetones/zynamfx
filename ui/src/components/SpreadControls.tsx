@@ -117,15 +117,15 @@ export const SpreadGroup: React.FC = () => {
   // close the panel. primaryOnly keeps the contextmenu toggle working.
   useDismissable(open, panelRef, close, { primaryOnly: true });
 
-  // Touch and hold is the right-click of the platform: WKWebView never
-  // fires contextmenu for a long press, so without this the advanced deck
-  // has no route at all on iPad. Renders nothing off iOS.
+  // Touch and hold on the Offset knob is the right-click of the platform:
+  // WKWebView never fires contextmenu for a long press, so without this the
+  // advanced deck has no route at all on iPad. On the knob, not the group,
+  // so the power button stays a plain tap. Renders nothing off iOS.
   const toggle = useCallback(() => setOpen((prev) => !prev), []);
   const holdProps = useTouchHold(toggle);
 
   return (
     <div
-      {...holdProps}
       onContextMenu={(e) => {
         e.preventDefault();
         setOpen((prev) => !prev);
@@ -147,20 +147,24 @@ export const SpreadGroup: React.FC = () => {
         >
           <div style={{ width: `${ICON_BOX_SIZE}rem`, flexShrink: 0 }} />
           {/* Panel anchors to the Offset knob so left:100% is the knob's
-              right edge, not the group's. */}
+              right edge, not the group's. The hold wrapper covers the knob
+              alone: the panel hangs in the same box, and a hold on its own
+              knobs must not toggle the deck under the finger. */}
           <div style={{ position: 'relative' }}>
-            <KnobControl
-              label="Offset"
-              value={offset}
-              onChange={setOffset}
-              variant="bipolar"
-              size={KNOB_SIZE_PRIMARY}
-              scale={offsetMsScale}
-              defaultValue={SPREAD_OFFSET_DEFAULT}
-              onReset={resetDeck}
-              help={HELP.spreadOffset}
-              onDragStateChange={onOffsetDrag}
-            />
+            <div {...holdProps}>
+              <KnobControl
+                label="Offset"
+                value={offset}
+                onChange={setOffset}
+                variant="bipolar"
+                size={KNOB_SIZE_PRIMARY}
+                scale={offsetMsScale}
+                defaultValue={SPREAD_OFFSET_DEFAULT}
+                onReset={resetDeck}
+                help={HELP.spreadOffset}
+                onDragStateChange={onOffsetDrag}
+              />
+            </div>
             {open && <ImageDeckPanel feature="spread" ref={panelRef} fromKnob />}
           </div>
           <ChromeIconButton

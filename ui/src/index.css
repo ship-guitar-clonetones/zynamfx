@@ -48,11 +48,15 @@ textarea,
 }
 
 /* No ghost-image dragging of artwork/icons (also prevents drag-initiated
-   navigation attempts). */
+   navigation attempts). No iOS touch callout either: pressing and holding
+   artwork raised WKWebView's own image sheet (Copy / Save to Photos), which
+   preempted the tile's long-press menu and cancelled the pointer stream
+   under it. */
 img,
 svg {
   -webkit-user-drag: none;
   user-drag: none;
+  -webkit-touch-callout: none;
 }
 
 #root {

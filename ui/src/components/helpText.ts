@@ -201,7 +201,12 @@ const HELP_DESKTOP = {
   spreadCrossoverPower: 'Crossover Power: off doubles the full band (lows lose mono safety).',
   spreadDiffuse: 'Diffuse Power: phase-decorrelates the lagged side. Off: a pure delay.',
   spreadAdvert: 'Spread: mono-to-stereo double via a wobbling short lag. Click: enable.',
-  spreadPower: 'Spread Power: spread off; collapses its controls. Right-click: advanced.',
+  // On touch the advanced deck answers a hold on the Offset knob only (see
+  // SpreadControls / AlignControls), so the power rows drop the tail that
+  // touchify would otherwise turn into a false "touch and hold" promise.
+  spreadPower: IS_COARSE_POINTER
+    ? 'Spread Power: spread off; collapses its controls.'
+    : 'Spread Power: spread off; collapses its controls. Right-click: advanced.',
   imageCorrelation: 'Mono safety: dim: safe · yellow: caution · red: cancellation on mono sum.',
   spreadMonoOutput:
     'Spread: unavailable, the output is mono (mono track or one-channel output device).',
@@ -215,7 +220,9 @@ const HELP_DESKTOP = {
   alignCrossoverPower: 'Crossover Power: on keeps lows out of the delay and diffusion.',
   alignDiffuse: 'Diffuse Power: phase-decorrelates the delayed chain for width.',
   alignAdvert: 'Align: corrective chain time alignment. Click: enable.',
-  alignPower: 'Align Power: align off; collapses its controls. Right-click: advanced.',
+  alignPower: IS_COARSE_POINTER
+    ? 'Align Power: align off; collapses its controls.'
+    : 'Align Power: align off; collapses its controls. Right-click: advanced.',
   autoAlign:
     'Auto Align: a ½ s internal sweep time-aligns the chains and fixes inverted polarity. Click again: cancel.',
 
