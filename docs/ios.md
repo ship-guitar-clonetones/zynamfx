@@ -1,10 +1,11 @@
 # iOS (iPad) build
 
 Standalone-only iPad port of the plugin: the same C++ and the same React UI,
-with every difference behind `#if JUCE_IOS` (C++),
-`window.__T3K_PLATFORM__ === 'ios'` / `pointerType === 'touch'` (UI) or the
-`html.t3k-ios` class (CSS). Desktop behaviour is unchanged. AUv3 is out of
-scope; iPhone is untested.
+with every difference gated. `#if JUCE_IOS` covers the C++. The UI gates on
+three levels (see Touch adaptation below): `IS_IOS` / `html.t3k-ios` for the
+app shell, `IS_COARSE_POINTER` / `html.t3k-touch` for touch-first ergonomics
+on any device, and each event's own `pointerType` for behaviors. Desktop
+behaviour is unchanged. AUv3 is out of scope; iPhone is untested.
 
 Deployment target iOS 16. Landscape only.
 
@@ -119,80 +120,58 @@ Simulator build.
   pinned to an older Xcode builds and signs fine and is then refused at upload,
   which reads as a signing problem and is not one.
 
-## Touch rules
+## Touch adaptation
+
+The adaptation is deliberately minimal: the desktop UI at the desktop aspect,
+letterboxed and vertically centered, with only the touch-ups a finger needs.
+Three gates, from narrowest reach to widest:
+
+- `IS_IOS` / `html.t3k-ios`: the app shell only. The document-scroll fix and
+  the vertical centering (both in `index.css`), and the long-press
+  recognizers that stand in for `contextmenu`, which WKWebView never fires
+  for a touch hold (`useTileMenu` in GalleryBlock, `useTouchHold`). Every
+  other engine fires the native event and takes the desktop `onContextMenu`
+  path.
+- `IS_COARSE_POINTER` / `html.t3k-touch` (`pointer: coarse`, see useUiScale):
+  static ergonomics for any touch-first device, iPad or Android or Windows
+  tablet. The 44 pt hit floor, the touch-field growth, the touch help copy,
+  and render-time nudges that follow them.
+- `pointerType === 'touch'` per event: behaviors (the knob double tap and
+  label tap, the help-bar release). A hybrid device gets touch behavior from
+  its touchscreen and desktop behavior from its mouse.
 
 | gesture | result |
 | ------- | ------ |
 | tap a tile | open the block |
-| swipe over a tile | scroll the chain lane |
-| hold 250 ms, then drag | reorder |
-| hold, release without moving | tile menu at that point |
-| `...` on a tile | the same menu, visibly |
+| drag a tile | reorder (the same distance rule as desktop) |
+| hold a tile 500 ms, release without moving | tile menu at that point |
 | hold on the Spread / Align group | the advanced deck (desktop: right-click) |
 | press a control | its help in the info bar; release clears it |
-| drag a knob | adjust, with the value in a bubble above it |
+| drag a knob up or down | adjust |
 | double tap a knob | reset to default |
-| swipe in from the left edge | back, on BLOCK and SELECT TONE |
-| swipe down | dismiss the Tuner and Settings |
+| tap a knob's label | type the value |
 
-No gesture is the only route to anything: every action above also has a
-visible control, per the HIG.
+The tile face claims the gesture for dragging (`touch-action: none`, as on
+desktop), so lanes scroll from the space around the tiles, not across them.
+The info bar teaches each control's touch gestures: the help copy branches on
+`IS_COARSE_POINTER` in helpText.ts.
 
 Every touch target meets 44 pt through one rule in `index.css` under
-`html.t3k-ios`: an invisible `::after` at `max(100%, 44px)`, centred and out
+`html.t3k-touch`: an invisible `::after` at `max(100%, 44px)`, centred and out
 of flow, so no layout changes.
 
-## Local import
-
-One entry, not two. Desktop offers **Load File** and **Load Folder**; iOS
-offers a single **Load files**, in both of the places local loading is
-reachable from: the **On this iPad** section in SELECT TONE and the tile's
-`...` menu.
-
-The collapse is not a simplification, it is what the platform gives. iOS has a
-single document picker and it is multi-select, so the two desktop entries are
-the same picker with the multi-select flag on or off. With it on, both desktop
-outcomes are already reachable:
-
-| picked | result | desktop equivalent |
-| ------ | ------ | ------------------ |
-| one file | a tone with one model, titled after the file | Load File |
-| several files | one tone with a model each, natural-name ordered | Load Folder |
-
-A separate "Load file" row would therefore open the same sheet with a
-restriction and no new capability, and the HIG's shortest-sheet rule argues
-against carrying it.
-
-A folder cannot be the unit here: the picker can return a folder URL, but a
-security-scoped directory has no listing API behind its bookmark, so a picked
-folder is an unreadable handle. Native already reflects this: on iOS
-`pickLocalToneFile(pickFolder = true)` asks for files with multi-select and
-`loadLocalToneUrls` titles the result from the single file's name when exactly
-one comes back. Only the UI changed; desktop's two entries are untouched,
-behind `IS_IOS`.
+Local import is desktop's two rows, **Load File** and **Load Folder**, in the
+tile menus. On iOS the folder row opens the platform's multi-select file
+picker instead (see Known gaps).
 
 ## Touch verification
 
-Everything below was driven on the iPad Simulator against a Release build.
-Local `.nam` models only: loading a catalogue tone needs a signed-in
-TONE3000 session and this Simulator run was signed out.
-
-| Area | Verdict |
-| ---- | ------- |
-| Tap a chain tile; power / `...` / swap / trash on it | fixed and passing. A 44 pt hit expander was landing on the tile wrapper, which dnd-kit marks `role="button"`, and swallowing every tap |
-| Preset prev / next | steps and wraps |
-| Preset name popover | opens under the pill, above the keyboard it raises |
-| Save preset | popover and its field stay clear of the keyboard; saves |
-| New | clears the chain, greys out once at the default |
-| Preset reorder on touch | swipe scrolls the list; hold the grip, then drag, moves the row |
-| Tuner | opens; closes by `X` and by swipe down |
-| Undo / redo | covers reorder (both ways), remove and paste |
-| Mono / stereo toggle | switches; two lanes, pan rail, ALIGN and Balance appear |
-| Stereo two-lane layout | tiles scale with the same three-across rule as mono |
-| Spread / Align, hold for the advanced deck | both decks open on a touch and hold |
-| Per-block EQ | faders and curve dots both drag; the response redraws |
-| Block swap / remove | swap opens SELECT TONE for that block; remove takes it out |
-| Block info / share | **not tested**: both controls exist only for a catalogue tone |
+An earlier, larger revision of this branch was driven end to end on the iPad
+Simulator and on an iPad Pro (presets, tuner, undo/redo, mono/stereo, EQ,
+Spread/Align decks, block swap/remove, keyboard avoidance). After the
+slim-down the Simulator build was smoke-checked; the gesture set above needs
+one hardware pass: long-press menu, drag reorder, knob double tap and label
+tap, the centered layout, and no document scroll.
 
 ## Platform notes worth knowing
 
@@ -201,10 +180,7 @@ TONE3000 session and this Simulator run was signed out.
   the file *inside* the container passes and proves nothing.
 - **WebKit replays a mouse event pair after every touch**, aimed at the
   element just tapped and landing after `pointerup`. Anything that clears
-  state on release has to ignore that replay.
-- **`pointercancel` is reported at 0,0.** The page opts into panning, so
-  WKWebView takes swipes over and ends them with a cancel carrying no useful
-  position, and no `pointerup`. Swipe gestures use touch events instead.
+  state on release has to ignore that replay (see helpText.ts).
 - **A control that takes pointer capture retargets its release**, so a release
   that must be seen regardless is watched on `window` in the capture phase.
 - **`env(safe-area-inset-*)` is 0 on all sides** here: the WKWebView is
@@ -225,12 +201,11 @@ TONE3000 session and this Simulator run was signed out.
   is `height: 100%` (which chains from the initial containing block, i.e. the
   999 the engine actually laid out) plus `overflow: hidden` on html and body,
   so a document scroll is impossible rather than merely unnecessary. Inner
-  containers keep their own scrollers and the swipe gestures are window-level
-  touch listeners, so neither is affected. Verified on the Simulator with a
-  vertical swipe on the chain, BLOCK, SELECT TONE with results, Settings and
-  the Tuner: `scrollHeight` now equals `clientHeight` at 999, zero document
-  scroll events fired on any screen, the Select Tone and Settings lists still
-  scroll on their own, and swipe down still dismisses the Tuner.
+  containers keep their own scrollers and are not affected. Verified on the
+  Simulator with a vertical swipe on the chain, BLOCK, SELECT TONE with
+  results, Settings and the Tuner: `scrollHeight` now equals `clientHeight`
+  at 999, zero document scroll events fired on any screen, and the Select
+  Tone and Settings lists still scroll on their own.
 - **The app data container's UUID rotates on every reinstall and every app
   update.** Any absolute path the plugin persisted then names a directory
   that no longer exists, and the only path it persists is a local model's
@@ -288,12 +263,14 @@ TONE3000 session and this Simulator run was signed out.
 
 ## Known gaps
 
-- There is no folder import on iOS: a security-scoped *directory* cannot be
-  enumerated, so the one **Load files** entry multi-selects the files instead
-  (see Local import).
-- The double-tap knob reset is proved in a browser against the same bundle,
-  not on a device: two taps cannot be driven inside 300 ms through the
-  Simulator automation bridge.
+- There is no true folder import on iOS: a security-scoped *directory* cannot
+  be enumerated, so **Load Folder** opens the platform's multi-select file
+  picker instead. Several files still land as one multi-model block, and
+  native titles a single pick from the file's name, so both desktop outcomes
+  are reachable; only the row's wording is approximate on iOS.
+- The double-tap knob reset and the label tap into the type-in editor are
+  proved in a browser against the same bundle, not on a device: two taps
+  cannot be driven inside 300 ms through the Simulator automation bridge.
 - Dragging a `.nam` from Files onto a tile is untested. The receiving code is
   the same HTML5 drop path the desktop uses, and the app does window alongside
   Files, but the drag could not be driven from the automation.
@@ -306,6 +283,9 @@ TONE3000 session and this Simulator run was signed out.
 
 Nothing on this branch reaches a desktop build. There is no C++ and no
 CMake here: the `window.__T3K_PLATFORM__` flag the UI reads already lives in
-main (PR 111), so this diff is TypeScript and CSS gated on `IS_IOS` /
-`html.t3k-ios`, which is false and absent in every desktop build. The shared
-`ui` bundle builds, lints, type-checks and tests clean.
+main (PR 111), so this diff is TypeScript and CSS gated as described under
+Touch adaptation. `IS_IOS` / `html.t3k-ios` is false and absent in every
+desktop build; `IS_COARSE_POINTER` / `html.t3k-touch` engages only where the
+primary pointer is coarse, which on a desktop means a touch-first machine
+like a Windows tablet, and that is the intent. The shared `ui` bundle builds,
+lints, type-checks and tests clean.
