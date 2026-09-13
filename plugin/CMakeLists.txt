@@ -392,6 +392,21 @@ if (NOT HEADLESS)
     endif()
 endif()
 
+# Factory presets. Desktop installers lay these down outside the app: a shared
+# location on macOS and Windows (script/create-pkg.sh, the Inno Setup script),
+# the per-user Factory folder on Linux (script/installer/linux/install.sh).
+# iOS has no installer, so the app bundle carries them itself and
+# PresetManager::defaultSystemFactoryDir points at them there.
+if (T3K_IOS AND TARGET ${PROJECT_NAME}_Standalone)
+    file(GLOB _t3k_factory_presets "${CMAKE_CURRENT_SOURCE_DIR}/../resources/factory-presets/*.t3kpreset")
+    if (_t3k_factory_presets)
+        target_sources(${PROJECT_NAME}_Standalone PRIVATE ${_t3k_factory_presets})
+        set_source_files_properties(${_t3k_factory_presets} PROPERTIES
+            MACOSX_PACKAGE_LOCATION "Resources/FactoryPresets"
+            HEADER_FILE_ONLY TRUE)
+    endif()
+endif()
+
 target_include_directories(${PROJECT_NAME}
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
