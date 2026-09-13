@@ -264,6 +264,17 @@ tap, the centered layout, and no document scroll.
   `$<PLATFORM_ID:...>` reports `iOS`, not `Darwin`, when cross-compiling, so
   without both the linker strips the model-architecture registrations and
   loads fail with "No config parser registered for ...".
+- **Factory presets ride in the app bundle.** Desktop installers lay the
+  `.t3kpreset` files down outside the app: a shared directory on macOS and
+  Windows, the per-user Factory folder on Linux. iOS has no installer,
+  so the Standalone target carries them as bundle resources and
+  `PresetManager::defaultSystemFactoryDir` points there (`plugin/CMakeLists.txt`
+  and `plugin/src/PresetManager.cpp`). iOS bundles are flat, so they land at
+  `TONE3000.app/FactoryPresets`. The bundle is read-only, which is the contract
+  that directory already has, and a file with the same uuid stem in
+  `Library/TONE3000/Presets/Factory` inside the app container still overrides a
+  bundled entry in `list()`. The glob runs at configure time, so a
+  new preset file needs a reconfigure.
 
 ## Known gaps
 
@@ -285,9 +296,9 @@ tap, the centered layout, and no document scroll.
 
 ## Desktop CI evidence
 
-Nothing on this branch reaches a desktop build. There is no C++ and no
-CMake here: the `window.__T3K_PLATFORM__` flag the UI reads already lives in
-main (PR 111), so this diff is TypeScript and CSS gated as described under
+The touch adaptation reached no desktop build: it carried no C++ and no
+CMake, because the `window.__T3K_PLATFORM__` flag the UI reads already lived
+in main (PR 111), so its diff was TypeScript and CSS gated as described under
 Touch adaptation. `IS_IOS` / `html.t3k-ios` is false and absent in every
 desktop build; `IS_COARSE_POINTER` / `html.t3k-touch` engages only where the
 primary pointer is coarse, which on a desktop means a touch-first machine
