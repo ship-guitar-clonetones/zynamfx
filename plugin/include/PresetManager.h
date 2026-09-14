@@ -14,7 +14,8 @@
  *   <system data dir>/TONE3000/Presets/Factory/…        (installer-shipped)
  *
  * The system Factory folder is where installers drop shipped presets
- * (macOS /Library/Application Support, Windows ProgramData). Both Factory
+ * (macOS /Library/Application Support, Windows ProgramData); on iOS there is
+ * no installer, so it is FactoryPresets inside the app bundle. Both Factory
  * dirs are scanned; a user-Factory file with the same stem wins so local
  * overrides of a shipped preset are possible.
  *
