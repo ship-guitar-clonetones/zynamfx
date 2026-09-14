@@ -43,7 +43,10 @@
  *     drop that last kind entirely.
  *   - Note-on on any target → toggle (continuous flips 0 ↔ 1).
  *   - Program change n → onProgramChange(n), no mapping needed (the
- *     processor loads the nth preset in list order).
+ *     processor loads the nth preset in list order). Only raw-MIDI formats
+ *     deliver PC here (Standalone, AU, LV2, CLAP): VST3 strips PC from the
+ *     event stream, so there it arrives through the processor's host
+ *     program API (setCurrentProgram) instead, same list-order load.
  *
  * Threading: the audio thread applies mappings under a SpinLock try-lock
  * (skipping one buffer on the rare contended edit) and never mutates the map.

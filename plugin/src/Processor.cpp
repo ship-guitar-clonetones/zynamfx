@@ -286,6 +286,11 @@ void TONE3000Processor::parameterChanged(const juce::String& parameterID, float 
 
 void TONE3000Processor::handleAsyncUpdate() {
   applyOversamplingSettings();
+
+  // A host called setCurrentProgram off the message thread: apply the
+  // deferred program change here (last one wins, like MidiMapper's PC path).
+  if (const int program = pendingHostProgram.exchange(-1); program >= 0)
+    applyHostProgram(program);
 }
 
 // Message thread. Re-rates the whole chain domain after an osEnabled/osFactor
@@ -396,22 +401,9 @@ double TONE3000Processor::getTailLengthSeconds() const {
   return std::max(irTailSeconds, dcBlockerTailSeconds);
 }
 
-int TONE3000Processor::getNumPrograms() {
-  return 1;
-}
-int TONE3000Processor::getCurrentProgram() {
-  return 0;
-}
-void TONE3000Processor::setCurrentProgram(int index) {
-  juce::ignoreUnused(index);
-}
-const juce::String TONE3000Processor::getProgramName(int index) {
-  juce::ignoreUnused(index);
-  return {};
-}
-void TONE3000Processor::changeProgramName(int index, const juce::String& newName) {
-  juce::ignoreUnused(index, newName);
-}
+// The host program API (getNumPrograms and friends) lives in
+// ProcessorPresets.cpp: it exposes the internal preset list as host programs,
+// which is the only route MIDI program changes can take in VST3 hosts.
 
 // #############################
 // PREPARE A SINGLE CHAIN
