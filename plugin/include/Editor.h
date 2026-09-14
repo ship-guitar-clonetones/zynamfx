@@ -67,6 +67,10 @@ private:
   double currentScale() const { return getWidth() / static_cast<double>(kWidth); }
   void applyScaledSize(double scale);
   void updateResizeConstraints();
+  // Ceiling for the scale the editor opens with: kMaxScale in hosts, capped
+  // in the standalone so the restored window fits the screen's usable area
+  // (GitHub issue #43; see the implementation for the full rationale).
+  double maxStartScale() const;
 
   // Guards resized() below against persisting a size we didn't choose:
   // parentHierarchyChanged() reasserts our size after flipping the native

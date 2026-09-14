@@ -141,20 +141,50 @@ TONE3000Editor::TONE3000Editor(TONE3000Processor& p) : AudioProcessorEditor(&p),
   setResizable(false, false);
 #else
   setResizable(true, true);
-  // Read the persisted scale before touching the constraints: installing the
-  // resize limits already snaps the editor to the 1x minimum, and resized()
-  // writes that back through processor.editorScale.
-  const double savedScale = juce::jlimit(1.0, kMaxScale, processor.editorScale.load());
   // Pre-size for the persistent chrome the UI renders on first paint (the
   // hint bar preference survives sessions). Without this the window opens at
   // the bare design height, the first React commit overflows it, and the
   // post-paint height report grows the window a beat later: a visible
   // two-step launch jank. The banner is excluded (it's genuinely dynamic and
-  // animates in when its state resolves).
+  // animates in when its state resolves). Assigned before the scale is read
+  // so maxStartScale() below fits the height the window will actually open
+  // with.
   extraContentHeight = juce::jlimit(0, 160, processor.editorExtraHeight.load());
+  // Read the persisted scale before touching the constraints: installing the
+  // resize limits already snaps the editor to the 1x minimum, and resized()
+  // writes that back through processor.editorScale.
+  const double savedScale = juce::jlimit(1.0, maxStartScale(), processor.editorScale.load());
   updateResizeConstraints();
   applyScaledSize(savedScale);
 #endif  // JUCE_IOS
+}
+
+double TONE3000Editor::maxStartScale() const {
+  // In a DAW the host owns the plugin window (scroll views, floating panels,
+  // multi-monitor spans), so the persisted scale is restored as-is there.
+  if (!StandaloneAudioSettings::isAvailable())
+    return kMaxScale;
+
+  const auto* display = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+  if (display == nullptr)
+    return kMaxScale;
+
+  // userArea is in JUCE logical units (physical pixels / display scale) with
+  // docks and taskbars excluded. A scale persisted on a larger or
+  // differently-scaled display could otherwise open a window bigger than the
+  // desktop: on Linux, desktops running fractional scaling advertise a 2x
+  // window scale, halving the logical area the 1024x614 design box has to fit
+  // into (GitHub issue #43). The native title bar sits outside the editor's
+  // bounds, so leave it headroom (Mutter's 2x title bar is 37 logical px).
+  // The window is created on the primary display before any persisted
+  // position is applied, so that is the screen fitted against. Floor at 1.0:
+  // the design box is the hard minimum, screens smaller than it get the 1x
+  // window and the letterboxing web UI absorbs whatever the WM does next.
+  constexpr int titleBarAllowance = 40;
+  const double fitW = display->userArea.getWidth() / static_cast<double>(kWidth);
+  const double fitH = (display->userArea.getHeight() - titleBarAllowance) /
+                      static_cast<double>(totalHeight());
+  return juce::jlimit(1.0, kMaxScale, juce::jmin(fitW, fitH));
 }
 
 void TONE3000Editor::applyScaledSize(double scale) {
