@@ -55,6 +55,9 @@ public:
   bool acceptsMidi() const override;
   bool producesMidi() const override;
   bool isMidiEffect() const override;
+  // Host program API, backed by the internal preset list. Not cosmetic:
+  // this is the only route a MIDI program change can take in a VST3 host
+  // (see the HOST PROGRAM API section in ProcessorPresets.cpp).
   int getNumPrograms() override;
   int getCurrentProgram() override;
   void setCurrentProgram(int) override;
@@ -383,6 +386,15 @@ public:
   // mute-spliced like a preset load. Returns false (leaving the audio
   // untouched) when the state is already at default.
   bool resetToDefault();
+
+  // Re-root the internal preset store at an explicit directory (tests use a
+  // temp dir so preset/program behavior can be driven without touching the
+  // user's shared preset folder; see PresetManager's baseDir constructor).
+  // Message thread only, before any preset call.
+  void setPresetStoreForTesting(const juce::File& baseDir) {
+    presetManager = PresetManager(baseDir);
+    hostProgramInfoCache.clear();
+  }
 
   // Tuner: enabled by the UI while the tuner screen is visible. Reads the raw
   // (pre-gain, pre-gate) input so gating never starves the pitch detector.
@@ -755,6 +767,28 @@ private:
   // thread, read by getChainState).
   juce::String activePresetId;
   juce::String activePresetName;
+
+  // Host program API internals (ProcessorPresets.cpp). The count is a hard
+  // constant: JUCE's VST3 wrapper sizes its program parameter once at
+  // construction, and a count that tracked the user-editable preset list
+  // would leave hosts stale (or kill the mechanism outright below two
+  // presets). 128 covers the MIDI program range; slots past the list end
+  // are inert.
+  static constexpr int kNumHostPrograms = 128;
+  // Message-thread work for a setCurrentProgram call from another thread
+  // (-1 = none, last one wins); drained in handleAsyncUpdate.
+  std::atomic<int> pendingHostProgram{-1};
+  // Load the program's preset (message thread). Empty slots are ignored;
+  // re-selecting the already-active preset is a no-op (hosts echo the
+  // program parameter back after every change and on session restore, and a
+  // reload would wipe knob tweaks made since the preset loaded).
+  void applyHostProgram(int index);
+  // Short-lived preset-list snapshot for getProgramName: hosts ask for all
+  // 128 names in a row and list() reads every preset file (factory presets
+  // embed model bytes), so names must not cost a folder scan each. Message
+  // thread only; preset mutations clear it so fresh names show immediately.
+  std::vector<PresetManager::Info> hostProgramInfoCache;
+  juce::uint32 hostProgramInfoCacheTime{0};
 
   // True when running as the standalone app with a mono input device selected.
   // Detected in prepareToPlay (device changes re-trigger it); processBlock then
