@@ -1,8 +1,12 @@
 #include "StandaloneStateAutosave.h"
 
-// For JUCE_IOS in the guard below; JucePlugin_Build_Standalone is a target
-// compile definition from juce_add_plugin, so it needs no header.
+// The standalone filter window header expects the full GUI/audio module set
+// to be visible first (same include order as StandaloneAudioSettings.cpp).
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_gui_basics/juce_gui_basics.h>
+#include <juce_gui_extra/juce_gui_extra.h>
+#include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_audio_plugin_client/juce_audio_plugin_client.h>
 
 #if JUCE_IOS && JucePlugin_Build_Standalone && ! JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP
 
