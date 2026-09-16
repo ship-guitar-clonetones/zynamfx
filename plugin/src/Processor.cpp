@@ -2,6 +2,7 @@
 #if !HEADLESS
 #include "Editor.h"
 #endif
+#include "StandaloneStateAutosave.h"
 #include <cmath>
 #include <random>
 #include <cstring>
@@ -85,6 +86,12 @@ TONE3000Processor::TONE3000Processor()
   chainStageFunc = [this](float** inputs, float** outputs, int numFrames) {
     processOversampledChainStage(inputs, outputs, numFrames);
   };
+
+  // iOS standalone only: nothing else on that platform ever saves the plugin
+  // state, so the signal chain would not survive a relaunch (see
+  // StandaloneStateAutosave.h). A no-op everywhere else.
+  StandaloneStateAutosave::install();
+
   DBG("TONE3000Processor constructed");
 }
 
