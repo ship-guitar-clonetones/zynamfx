@@ -54,6 +54,11 @@ target_sources(DspTests PRIVATE
     ../plugin/src/ProcessorPresets.cpp
     ../plugin/src/ProcessorState.cpp
     ../plugin/src/Spread.cpp
+    # Processor.cpp's constructor calls StandaloneStateAutosave::install().
+    # Always the portable no-op stub here, never the .mm: the real observer
+    # is iOS-standalone-only and this suite never runs there (the stub is
+    # also what the plugin itself compiles to everywhere but iOS).
+    ../plugin/src/StandaloneStateAutosave.cpp
     ../plugin/src/StereoOffset.cpp
     ../plugin/src/TunerDetector.cpp
 )
