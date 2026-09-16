@@ -392,6 +392,23 @@ if (NOT HEADLESS)
     endif()
 endif()
 
+# iOS standalone state autosave. Apple-only because it is ObjC++; it compiles
+# to an empty stub on macOS and in headless builds, and Processor.cpp calls it
+# unconditionally, so it sits outside the GUI block above.
+if (APPLE)
+    target_sources(${PROJECT_NAME}
+        PRIVATE
+            include/StandaloneStateAutosave.h
+            src/StandaloneStateAutosave.mm
+    )
+else()
+    target_sources(${PROJECT_NAME}
+        PRIVATE
+            include/StandaloneStateAutosave.h
+            src/StandaloneStateAutosave.cpp
+    )
+endif()
+
 # Factory presets. Desktop installers lay these down outside the app: a shared
 # location on macOS and Windows (script/create-pkg.sh, the Inno Setup script),
 # the per-user Factory folder on Linux (script/installer/linux/install.sh).
