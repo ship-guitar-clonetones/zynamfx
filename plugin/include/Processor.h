@@ -130,6 +130,21 @@ public:
   // over an hour (the age guard protects a concurrent instance's in-flight
   // file). Returns how many files it deleted.
   static int sweepLeakedIrTempFiles(const juce::File& tempDir);
+  // Make `dir` a directory this process can write to, healing the one
+  // app-data wound we can't chown away: the folder (or a file squatting on
+  // its path) existing but not being writable. A sudo'd run of an older
+  // script/install-plugin.sh (macOS sudo keeps $HOME) or a restored backup
+  // leaves ~/Library/Application Support/TONE3000 root-owned; every settings
+  // save and drop-stash write then fails while reads keep working (github
+  // issue #76, every drop answering "Couldn't store the dropped file"). The
+  // one fix an unprivileged process can make: the parent folder does belong
+  // to the user, so the broken node is renamed aside to a "<name>.unwritable"
+  // sibling (kept for manual recovery, never deleted) and recreated fresh.
+  // Returns true when `dir` is a writable directory on exit; failures log
+  // their reason. No-op (two stats) on a healthy folder. Run once per
+  // process on the app-data root (see the constructor) and defensively from
+  // the stash and preset write paths.
+  static bool ensureWritableDir(const juce::File& dir);
   // Resolve a persisted local-model `file://` URL to the stash file that
   // actually holds those bytes, given the current stash root. The URL stored
   // in a block's tone JSON is absolute, and that JSON is persisted in

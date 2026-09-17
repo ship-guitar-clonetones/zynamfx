@@ -13,6 +13,11 @@
 
 #include <gtest/gtest.h>
 
+#if !JUCE_WINDOWS
+#include <sys/stat.h>  // chmod, for the unwritable-directory heal test
+#include <unistd.h>    // geteuid: root ignores permission bits, so that leg skips
+#endif
+
 namespace {
 
 juce::String base64Of(const juce::File& file) {
@@ -383,4 +388,68 @@ TEST(LocalLoadTest, UrlsSingleFileTitlesFromNameAndRejectBadInputs) {
 
   EXPECT_TRUE(firstToneBlock(rejecting).isVoid());
   dir.deleteRecursively();
+}
+
+// ensureWritableDir heals the app-data wound behind github issue #76: a
+// folder left root-owned (sudo'd install script, restored backup) fails
+// every stash and settings write while reads keep working. The plugin can't
+// chown it back; it renames the broken node aside (the parent belongs to
+// the user) and starts fresh, deleting nothing.
+TEST(LocalLoadTest, EnsureWritableDirCreatesHealsAndPreservesEvidence) {
+  const juce::File tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("t3k-ensure-" + juce::Uuid().toString());
+  ASSERT_TRUE(tmp.createDirectory().wasOk());
+
+  // Missing: created outright.
+  const juce::File fresh = tmp.getChildFile("data");
+  EXPECT_TRUE(TONE3000Processor::ensureWritableDir(fresh));
+  EXPECT_TRUE(fresh.isDirectory());
+
+  // Healthy: untouched, contents kept, nothing moved aside.
+  ASSERT_TRUE(fresh.getChildFile("keep.bin").replaceWithText("bytes"));
+  EXPECT_TRUE(TONE3000Processor::ensureWritableDir(fresh));
+  EXPECT_TRUE(fresh.getChildFile("keep.bin").existsAsFile());
+  EXPECT_EQ(tmp.findChildFiles(juce::File::findFilesAndDirectories, false).size(), 1);
+
+  // A file squatting on the path: moved aside with its bytes, a directory
+  // takes its place.
+  const juce::File squat = tmp.getChildFile("squat");
+  ASSERT_TRUE(squat.replaceWithText("old"));
+  EXPECT_TRUE(TONE3000Processor::ensureWritableDir(squat));
+  EXPECT_TRUE(squat.isDirectory());
+  bool asideKeptBytes = false;
+  for (const auto& sibling : tmp.findChildFiles(juce::File::findFiles, false))
+    if (sibling.getFileName().startsWith("squat") && sibling.loadFileAsString() == "old")
+      asideKeptBytes = true;
+  EXPECT_TRUE(asideKeptBytes);
+
+#if !JUCE_WINDOWS
+  // The reported case, minus the root ownership a test can't set up: an
+  // existing directory access(W_OK) rejects. Renamed aside with its contents
+  // intact, recreated writable. Root sails past permission bits (making the
+  // dir look healthy), so this leg only means something unprivileged.
+  if (geteuid() != 0) {
+    const juce::File locked = tmp.getChildFile("locked");
+    ASSERT_TRUE(locked.createDirectory().wasOk());
+    ASSERT_TRUE(locked.getChildFile("old.t3kpreset").replaceWithText("preset"));
+    ASSERT_EQ(::chmod(locked.getFullPathName().toRawUTF8(), 0555), 0);
+    ASSERT_FALSE(locked.hasWriteAccess());
+
+    EXPECT_TRUE(TONE3000Processor::ensureWritableDir(locked));
+    EXPECT_TRUE(locked.isDirectory());
+    EXPECT_TRUE(locked.hasWriteAccess());
+    EXPECT_FALSE(locked.getChildFile("old.t3kpreset").exists());
+
+    juce::File aside;
+    for (const auto& sibling : tmp.findChildFiles(juce::File::findDirectories, false))
+      if (sibling != locked && sibling.getFileName().startsWith("locked"))
+        aside = sibling;
+    ASSERT_TRUE(aside.isDirectory());
+    EXPECT_TRUE(aside.getChildFile("old.t3kpreset").existsAsFile());
+    // Re-open the moved-aside dir so the teardown below can delete it.
+    ::chmod(aside.getFullPathName().toRawUTF8(), 0755);
+  }
+#endif
+
+  EXPECT_TRUE(tmp.deleteRecursively());
 }

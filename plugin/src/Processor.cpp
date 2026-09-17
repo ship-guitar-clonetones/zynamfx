@@ -4,6 +4,7 @@
 #endif
 #include "StandaloneStateAutosave.h"
 #include <cmath>
+#include <mutex>
 #include <random>
 #include <cstring>
 #include <tuple>
@@ -39,14 +40,25 @@ TONE3000Processor::TONE3000Processor()
     juce::Logger::setCurrentLogger(new juce::FileLogger(getLogFile(), "TONE3000 JUCE Log"));
   }
 
+  // Heal the per-user app-data folder before anything writes to it: a
+  // root-owned folder fails every settings save and drop-stash write while
+  // reads keep working (github issue #76; see ensureWritableDir, which logs
+  // whatever it does). Once per process, like the stash GC below.
+  static std::once_flag appDataHealFlag;
+  std::call_once(appDataHealFlag,
+                 [] { ensureWritableDir(getSettingsFile().getParentDirectory()); });
+
   // One-line snapshot of everything read from the shared machine-wide
-  // settings file at construction, plus the file's own path: the first
-  // thing to check when a "settings/login don't persist" report comes in
-  // (wrong/unwritable path, or the file simply isn't there yet).
+  // settings file at construction, plus the file's own path and whether its
+  // folder can be written at all: the first things to check when a
+  // "settings/login don't persist" or "can't store dropped files" report
+  // comes in (wrong/unwritable path, or the file simply isn't there yet).
   juce::Logger::writeToLog(
       "[Processor] Settings file: " + getSettingsFile().getFullPathName() +
       " (exists=" + juce::String(getSettingsFile().existsAsFile() ? "yes" : "no") +
-      ") | multiCore=" + juce::String(multiCoreEnabled.load() ? "on" : "off"));
+      ") | multiCore=" + juce::String(multiCoreEnabled.load() ? "on" : "off") +
+      " | dataDir=" +
+      (getSettingsFile().getParentDirectory().hasWriteAccess() ? "writable" : "NOT WRITABLE"));
 
   resolveParamRefs();
 

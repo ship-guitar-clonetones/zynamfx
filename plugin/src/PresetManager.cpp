@@ -1,4 +1,8 @@
 #include "PresetManager.h"
+// For TONE3000Processor::ensureWritableDir: preset saves share the app-data
+// folder whose permissions a sudo'd install script can mangle (github
+// issue #76).
+#include "Processor.h"
 #include <algorithm>
 #include <cstring>
 #include <limits>
@@ -233,7 +237,10 @@ juce::ValueTree PresetManager::load(const juce::String& id) const {
 }
 
 PresetManager::Info PresetManager::save(const juce::String& name, juce::ValueTree preset) const {
-  if (!userDir.createDirectory()) {
+  // ensureWritableDir rather than a bare createDirectory: the folder can
+  // exist and still be unwritable (root-owned after a sudo'd script), and
+  // that state used to fail every save with this same log line forever.
+  if (!TONE3000Processor::ensureWritableDir(userDir)) {
     juce::Logger::writeToLog("[Presets] Failed to create presets directory: " +
                              userDir.getFullPathName());
     return {};

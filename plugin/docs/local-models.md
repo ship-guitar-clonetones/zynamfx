@@ -87,3 +87,13 @@ Its lifecycle is self-maintaining:
   such a load hits the embedded cache and the stash copy is missing (GC'd,
   or a different machine), `refreshLocalStashCopy` writes it back, so undo
   and retry keep working there too.
+- **A writable root, even after damage.** The app-data folder can exist
+  without being writable: a sudo'd run of an older `install-plugin.sh`
+  (it wrote the user Factory folder, and macOS sudo keeps `$HOME`) or a
+  restored backup leaves it root-owned, and every stash write then failed as
+  "Couldn't store the dropped file" while reads kept working
+  ([issue #76](https://github.com/tone-3000/tone3000-plugin/issues/76)).
+  `ensureWritableDir` (constructor, once per process, plus the stash and
+  preset write paths) renames such a folder aside to an `.unwritable`
+  sibling (the parent belongs to the user even when the folder doesn't) and
+  recreates it fresh; nothing is deleted, and the log names what moved.

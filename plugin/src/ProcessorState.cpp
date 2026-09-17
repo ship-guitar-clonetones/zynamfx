@@ -48,6 +48,17 @@ juce::PropertiesFile::Options userSettingsOptions() {
   return options;
 }
 
+// Save now and say so when it fails: an unwritable app-data folder used to
+// make settings silently vanish on every relaunch, and the log's startup
+// snapshot ("exists=no" forever) was the only trace (github issue #76). The
+// constructor heals the folder (see ensureWritableDir); this keeps the
+// write itself honest.
+void saveSettingsOrLog(juce::PropertiesFile& settings) {
+  if (!settings.saveIfNeeded())
+    juce::Logger::writeToLog("[Processor] Couldn't write the settings file: " +
+                             settings.getFile().getFullPathName());
+}
+
 }  // namespace
 
 juce::File TONE3000Processor::getSettingsFile() {
@@ -82,7 +93,7 @@ bool TONE3000Processor::readPersistedWebInspectorEnabled() {
 void TONE3000Processor::persistWebInspectorEnabled(bool enabled) {
   juce::PropertiesFile settings(userSettingsOptions());
   settings.setValue(kWebInspectorKey, enabled);
-  settings.saveIfNeeded();
+  saveSettingsOrLog(settings);
   juce::Logger::writeToLog(juce::String("[Processor] Web Inspector ") +
                            (enabled ? "enabled" : "disabled"));
 }
@@ -97,7 +108,7 @@ void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {
   if (persist) {
     juce::PropertiesFile settings(userSettingsOptions());
     settings.setValue(kMultiCoreKey, enabled);
-    settings.saveIfNeeded();
+    saveSettingsOrLog(settings);
   }
 
   juce::Logger::writeToLog(juce::String("[Processor] Multi-core processing ") +
@@ -114,7 +125,7 @@ void TONE3000Processor::setNamSlimSizeDefault(double slimSize) {
   namSlimSizeDefault.store(slimSize);
   juce::PropertiesFile settings(userSettingsOptions());
   settings.setValue(kNamSlimSizeDefaultKey, slimSize);
-  settings.saveIfNeeded();
+  saveSettingsOrLog(settings);
 
   juce::Logger::writeToLog("[Processor] Default NAM A2 size set to " + juce::String(slimSize));
   bumpChainRevision();

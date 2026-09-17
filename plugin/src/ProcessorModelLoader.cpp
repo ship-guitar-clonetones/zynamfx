@@ -201,7 +201,13 @@ juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream
       juce::String::toHexString(static_cast<juce::int64>(hash)) + "-" +
       juce::String(static_cast<juce::int64>(decoded.getDataSize())) + "." + extension);
   if (!stash.existsAsFile()) {
-    stash.getParentDirectory().createDirectory();
+    // The stash folder can exist without being writable (root-owned after a
+    // sudo'd install script or a restored backup; github issue #76 saw every
+    // drop fail here while validation kept passing). ensureWritableDir heals
+    // what it can; a folder that stays unwritable gets its own message so
+    // the report names the disease, not the symptom.
+    if (!TONE3000Processor::ensureWritableDir(stash.getParentDirectory()))
+      return fail("TONE3000's data folder isn't writable");
     if (!stash.replaceWithData(decoded.getData(), decoded.getDataSize()))
       return fail("Couldn't store the dropped file");
   } else {
@@ -570,6 +576,34 @@ void TONE3000Processor::cleanLeakedIrTempFiles() {
   });
 }
 
+bool TONE3000Processor::ensureWritableDir(const juce::File& dir) {
+  if (dir.isDirectory() && dir.hasWriteAccess())
+    return true;
+
+  if (dir.exists()) {
+    // A file squatting on the path, or a directory whose permission bits
+    // this user can't satisfy (root-owned after a sudo'd install script or a
+    // restored backup). chown-ing it back needs privileges we don't have,
+    // but the parent belongs to the user, so *renaming* the broken node
+    // aside works. Nothing is deleted: the sibling keeps whatever is inside
+    // for manual recovery, and the log names it.
+    const juce::File aside =
+        dir.getSiblingFile(dir.getFileName() + ".unwritable").getNonexistentSibling();
+    if (dir.moveFileTo(aside))
+      juce::Logger::writeToLog("[AppData] Moved unusable " + dir.getFullPathName() +
+                               " aside to " + aside.getFileName());
+    else
+      juce::Logger::writeToLog("[AppData] " + dir.getFullPathName() +
+                               " is not writable and couldn't be moved aside");
+  }
+
+  const juce::Result created = dir.createDirectory();
+  if (created.failed())
+    juce::Logger::writeToLog("[AppData] Couldn't create " + dir.getFullPathName() + ": " +
+                             created.getErrorMessage());
+  return dir.isDirectory() && dir.hasWriteAccess();
+}
+
 int TONE3000Processor::sweepLeakedIrTempFiles(const juce::File& tempDir) {
   // Builds through v0.0.2 wrote one "<uuid>_ir.wav" per IR engine build into
   // the OS temp dir and never deleted it (github issue #25: hundreds of MB
@@ -640,9 +674,11 @@ void TONE3000Processor::refreshLocalStashCopy(const juce::String& modelUrl,
   // The bytes came from an embedded cache but the stash copy is gone (GC'd,
   // or a preset from another machine): put it back so paths that need the
   // file (undo of a remove, retry) keep working.
-  stash.getParentDirectory().createDirectory();
-  if (stash.replaceWithData(bytes.data(), bytes.size()))
+  if (ensureWritableDir(stash.getParentDirectory()) &&
+      stash.replaceWithData(bytes.data(), bytes.size()))
     juce::Logger::writeToLog("[LocalLoad] Restored stash copy " + stash.getFileName());
+  else
+    juce::Logger::writeToLog("[LocalLoad] Couldn't restore stash copy " + stash.getFileName());
 }
 
 std::vector<uint8_t> TONE3000Processor::fetchModelFromUrl(const juce::String& modelUrl) {

@@ -88,6 +88,6 @@ private:
   bool writeOrder(const juce::StringArray& ids) const;
 
   juce::File userDir;
-  juce::File factoryDir;        // user-local Factory/ (dev drops, Linux install)
+  juce::File factoryDir;        // user-local Factory/ (user overrides; the Linux tarball installs here)
   juce::File systemFactoryDir;  // installer-shipped Factory/ (invalid when absent)
 };

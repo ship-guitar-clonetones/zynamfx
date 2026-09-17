@@ -143,10 +143,13 @@ To see `DBG()` output in Debug builds, run the binary directly so
 stdout/stderr reach your terminal (on macOS that is
 `TONE3000.app/Contents/MacOS/TONE3000`).
 
-**In a DAW:** copy the built plugin to your user plugin folder and rescan.
-`./script/install-plugin.sh VST3` (or `AU` / `AAX`) does the copy on macOS
-and Linux; pass `Debug` as the second argument for the Debug build. Artefacts
-land in `build/plugin/TONE3000_artefacts/<config>/<format>/`.
+**In a DAW:** `./script/install-plugin.sh VST3` (or `AU` / `AAX`) installs
+the built plugin and the factory presets on macOS and Linux to the same
+folders the official installers use (the macOS preset copy goes to
+`/Library` and asks for sudo); pass `Debug` as the second argument for the
+Debug build, then rescan in your DAW. Artefacts land in
+`build/plugin/TONE3000_artefacts/<config>/<format>/`; to copy one by hand
+instead, the usual folders are:
 
 | OS      | Format | Install to                                              |
 | ------- | ------ | ------------------------------------------------------- |
