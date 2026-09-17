@@ -424,10 +424,11 @@ TEST(LocalLoadTest, EnsureWritableDirCreatesHealsAndPreservesEvidence) {
   EXPECT_TRUE(asideKeptBytes);
 
 #if !JUCE_WINDOWS
-  // The reported case, minus the root ownership a test can't set up: an
-  // existing directory access(W_OK) rejects. Renamed aside with its contents
-  // intact, recreated writable. Root sails past permission bits (making the
-  // dir look healthy), so this leg only means something unprivileged.
+  // The restored-backup shape: a directory the user still owns, write bits
+  // stripped. Healed in place by putting the mode back, so its contents
+  // never move. The root-owned variant takes the rename-aside path instead;
+  // a test can't stage that unprivileged, and root sails past permission
+  // bits anyway, so this leg is unprivileged-only.
   if (geteuid() != 0) {
     const juce::File locked = tmp.getChildFile("locked");
     ASSERT_TRUE(locked.createDirectory().wasOk());
@@ -438,16 +439,10 @@ TEST(LocalLoadTest, EnsureWritableDirCreatesHealsAndPreservesEvidence) {
     EXPECT_TRUE(TONE3000Processor::ensureWritableDir(locked));
     EXPECT_TRUE(locked.isDirectory());
     EXPECT_TRUE(locked.hasWriteAccess());
-    EXPECT_FALSE(locked.getChildFile("old.t3kpreset").exists());
-
-    juce::File aside;
+    EXPECT_TRUE(locked.getChildFile("old.t3kpreset").existsAsFile());
+    // Nothing moved aside: the fix happened in place.
     for (const auto& sibling : tmp.findChildFiles(juce::File::findDirectories, false))
-      if (sibling != locked && sibling.getFileName().startsWith("locked"))
-        aside = sibling;
-    ASSERT_TRUE(aside.isDirectory());
-    EXPECT_TRUE(aside.getChildFile("old.t3kpreset").existsAsFile());
-    // Re-open the moved-aside dir so the teardown below can delete it.
-    ::chmod(aside.getFullPathName().toRawUTF8(), 0755);
+      EXPECT_TRUE(sibling == locked || !sibling.getFileName().startsWith("locked"));
   }
 #endif
 

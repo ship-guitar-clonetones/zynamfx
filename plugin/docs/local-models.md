@@ -94,6 +94,7 @@ Its lifecycle is self-maintaining:
   "Couldn't store the dropped file" while reads kept working
   ([issue #76](https://github.com/tone-3000/tone3000-plugin/issues/76)).
   `ensureWritableDir` (constructor, once per process, plus the stash and
-  preset write paths) renames such a folder aside to an `.unwritable`
+  preset write paths) puts the write bits back in place when the user still
+  owns the folder; otherwise it renames the folder aside to an `.unwritable`
   sibling (the parent belongs to the user even when the folder doesn't) and
-  recreates it fresh; nothing is deleted, and the log names what moved.
+  recreates it fresh. Nothing is deleted, and the log names what it did.

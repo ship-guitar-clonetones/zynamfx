@@ -580,13 +580,23 @@ bool TONE3000Processor::ensureWritableDir(const juce::File& dir) {
   if (dir.isDirectory() && dir.hasWriteAccess())
     return true;
 
+  // A folder the user still owns with stripped write bits (restored backup)
+  // is fixable in place with a chmod, which keeps its contents where they
+  // are. chmod is owner-only, so this quietly does nothing to a root-owned
+  // folder, which falls through to the rename below.
+  if (dir.isDirectory() && dir.setReadOnly(false) && dir.hasWriteAccess()) {
+    juce::Logger::writeToLog("[AppData] Restored write permission on " + dir.getFullPathName());
+    return true;
+  }
+
   if (dir.exists()) {
-    // A file squatting on the path, or a directory whose permission bits
-    // this user can't satisfy (root-owned after a sudo'd install script or a
-    // restored backup). chown-ing it back needs privileges we don't have,
-    // but the parent belongs to the user, so *renaming* the broken node
-    // aside works. Nothing is deleted: the sibling keeps whatever is inside
-    // for manual recovery, and the log names it.
+    // What chmod can't fix: a file squatting on the path, or a directory
+    // owned by someone else (root, after a sudo'd install script). chown-ing
+    // it back needs privileges we don't have, but the parent belongs to the
+    // user, so *renaming* the broken node aside works (though older macOS,
+    // seen on the macos-14 CI runner, refuses to rename an unwritable
+    // directory; current macOS allows it). Nothing is deleted: the sibling
+    // keeps whatever is inside for manual recovery, and the log names it.
     const juce::File aside =
         dir.getSiblingFile(dir.getFileName() + ".unwritable").getNonexistentSibling();
     if (dir.moveFileTo(aside))

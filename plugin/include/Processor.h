@@ -136,10 +136,12 @@ public:
   // script/install-plugin.sh (macOS sudo keeps $HOME) or a restored backup
   // leaves ~/Library/Application Support/TONE3000 root-owned; every settings
   // save and drop-stash write then fails while reads keep working (github
-  // issue #76, every drop answering "Couldn't store the dropped file"). The
-  // one fix an unprivileged process can make: the parent folder does belong
-  // to the user, so the broken node is renamed aside to a "<name>.unwritable"
-  // sibling (kept for manual recovery, never deleted) and recreated fresh.
+  // issue #76, every drop answering "Couldn't store the dropped file"). Two
+  // unprivileged fixes cover it: a folder the user still owns gets its write
+  // bits chmod'd back in place (contents stay put); anything else (root
+  // owned, or a file squatting on the path) is renamed aside to a
+  // "<name>.unwritable" sibling (kept for manual recovery, never deleted)
+  // and recreated fresh, the parent folder being the user's own.
   // Returns true when `dir` is a writable directory on exit; failures log
   // their reason. No-op (two stats) on a healthy folder. Run once per
   // process on the app-data root (see the constructor) and defensively from
