@@ -917,6 +917,67 @@ if (EXISTS "${_juce_peer_mm}")
     endif()
 endif()
 
+# T3K_X11_HINT_OVERFLOW: fix the Linux standalone opening as a bare title bar
+# over a full-width, 1px-high window on scaled X11 desktops (GitHub issue #43).
+# JUCE publishes WM_NORMAL_HINTS min/max from the peer's constrainer multiplied
+# by the display scale. The standalone window's DecoratorConstrainer reports
+# the unset ComponentBoundsConstrainer defaults (max 0x3FFFFFFF), and on any
+# desktop that advertises a window scale of 2 (real HiDPI, or Cinnamon/GNOME
+# fractional scaling at 125%/150%, which round up to 2 in XSettings
+# Gdk/WindowScalingFactor) the published PMaxSize lands within a title-bar's
+# height of INT_MAX. Mutter-family window managers (Muffin on Mint, Mutter on
+# GNOME) add the frame border back onto those hints, overflow int, and clamp
+# the window to the PMinSize floor instead: the window maps at full width but
+# 1px high, showing only its title bar, and the WebKitGTK view (still
+# full-size, but clipped inside the 1px parent) never becomes visible.
+# Clamp the published hints to a bound no real display can reach (1e7 px) so
+# WM-side arithmetic stays finite; genuine limits (this editor publishes
+# 1x..2x of its design box) pass through unchanged. Computing in doubles also
+# keeps the scaled default from overflowing the int cast itself (UB at a
+# scale factor of 3+ in stock JUCE). script/test-linux-window-scale.sh
+# reproduces the collapse against a stock build (hints reach the WM as max
+# 2147483646x2147483609, the window maps at 2048x1) and verifies this fix.
+# Idempotent configure-time patch, same rationale as the patches above;
+# applied on every platform (the file only compiles on Linux, patching it
+# elsewhere is harmless and keeps the libs/juce tree identical everywhere).
+# The file ships with CRLF line endings; file(READ) normalizes them to LF,
+# so the anchor matches as written and the patched file is written back
+# LF-only.
+set(_juce_x11_cpp "${LIB_DIR}/juce/modules/juce_gui_basics/native/juce_XWindowSystem_linux.cpp")
+if (EXISTS "${_juce_x11_cpp}")
+    file(READ "${_juce_x11_cpp}" _juce_x11_src)
+    if (NOT _juce_x11_src MATCHES "T3K_X11_HINT_OVERFLOW")
+        set(_juce_x11_hints_old
+[=[            hints->min_width  = jmax (1, (int) (factor * c->getMinimumWidth())  - leftAndRight);
+            hints->max_width  = jmax (1, (int) (factor * c->getMaximumWidth())  - leftAndRight);
+            hints->min_height = jmax (1, (int) (factor * c->getMinimumHeight()) - topAndBottom);
+            hints->max_height = jmax (1, (int) (factor * c->getMaximumHeight()) - topAndBottom);]=])
+        set(_juce_x11_hints_new
+[=[            // T3K_X11_HINT_OVERFLOW (see the CMakeLists patch comment): the
+            // standalone's unset constrainer maximums (0x3FFFFFFF) times a 2x
+            // display scale put PMaxSize within a title-bar's height of
+            // INT_MAX; mutter-family WMs re-add the frame border, overflow
+            // int, and clamp the window to a full-width, 1px-high strip
+            // (GitHub issue #43). Bound the hints below any real display size
+            // so WM-side arithmetic stays finite; genuine limits pass through
+            // unchanged.
+            const auto boundedHint = [] (double v) { return (int) jlimit (1.0, 1.0e7, v); };
+            hints->min_width  = boundedHint (factor * c->getMinimumWidth()  - leftAndRight);
+            hints->max_width  = boundedHint (factor * c->getMaximumWidth()  - leftAndRight);
+            hints->min_height = boundedHint (factor * c->getMinimumHeight() - topAndBottom);
+            hints->max_height = boundedHint (factor * c->getMaximumHeight() - topAndBottom);]=])
+        string(REPLACE "${_juce_x11_hints_old}" "${_juce_x11_hints_new}" _juce_x11_src "${_juce_x11_src}")
+        if (NOT _juce_x11_src MATCHES "T3K_X11_HINT_OVERFLOW")
+            message(FATAL_ERROR
+                "T3K_X11_HINT_OVERFLOW: failed to patch ${_juce_x11_cpp}. "
+                "The JUCE source layout likely changed in this version. Update the patch "
+                "anchors in CMakeLists.txt.")
+        endif()
+        file(WRITE "${_juce_x11_cpp}" "${_juce_x11_src}")
+        message(STATUS "Patched JUCE XWindowSystem: WM size hints bounded (no 1px window on scaled X11 desktops)")
+    endif()
+endif()
+
 # Download GoogleTest Framework using CPM
 CPMAddPackage(
     NAME GOOGLETEST
