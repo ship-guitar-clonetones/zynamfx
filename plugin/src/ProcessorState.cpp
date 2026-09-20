@@ -16,7 +16,9 @@ namespace {
 
 constexpr auto kMultiCoreKey = "multiCore";
 constexpr auto kNamSlimSizeDefaultKey = "namSlimSizeDefault";
+#if !T3K_NATIVE_UI
 constexpr auto kWebInspectorKey = "webInspector";
+#endif
 
 // Magic prefix for the binary ValueTree state format (see getStateInformation).
 constexpr char kStateMagic[] = {'T', '3', 'K', 'B'};
@@ -37,7 +39,7 @@ juce::PropertiesFile::Options userSettingsOptions() {
 #if JUCE_LINUX || JUCE_BSD
   // PropertiesFile puts a bare folderName directly under ~ on Linux, so pass
   // the XDG config location as an absolute path instead (same root as
-  // PresetManager, the logs and the WebKit storage).
+  // PresetManager and the logs).
   options.folderName =
       juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
           .getChildFile("TONE3000")
@@ -54,6 +56,15 @@ juce::File TONE3000Processor::getSettingsFile() {
   return userSettingsOptions().getDefaultFile();
 }
 
+juce::PropertiesFile::Options TONE3000Processor::uiPreferencesOptions() {
+  // Same folder as the shared settings, own file: the native UI's per-machine
+  // preferences get written by the editor on every toggle, and two
+  // PropertiesFile instances must never share a file.
+  auto options = userSettingsOptions();
+  options.applicationName = "ui-preferences";
+  return options;
+}
+
 bool TONE3000Processor::readPersistedMultiCoreEnabled() {
   return juce::PropertiesFile(userSettingsOptions()).getBoolValue(kMultiCoreKey, true);
 }
@@ -65,6 +76,7 @@ double TONE3000Processor::readPersistedNamSlimSizeDefault() {
       juce::PropertiesFile(userSettingsOptions()).getDoubleValue(kNamSlimSizeDefaultKey, 0.0));
 }
 
+#if !T3K_NATIVE_UI
 bool TONE3000Processor::readPersistedWebInspectorEnabled() {
   // Debug builds already get the inspector from stock JUCE; default on so a
   // fresh debug install still has Inspect Element / Reload. Release stays off
@@ -86,6 +98,7 @@ void TONE3000Processor::persistWebInspectorEnabled(bool enabled) {
   juce::Logger::writeToLog(juce::String("[Processor] Web Inspector ") +
                            (enabled ? "enabled" : "disabled"));
 }
+#endif
 
 void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {
   if (multiCoreEnabled.load() == enabled)

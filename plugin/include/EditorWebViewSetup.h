@@ -1,6 +1,8 @@
 #pragma once
 #include <juce_gui_extra/juce_gui_extra.h>
 
+#include "WindowKeyEvents.h"
+
 class TONE3000Editor;
 
 namespace EditorWebViewSetup {
@@ -66,21 +68,6 @@ void applyBlackWebViewBackground(void* nsViewPtr);
 void setWebInspectorEnabled(void* nsViewPtr, bool enabled);
 #endif
 
-/** Transport key the UI hands back to the host (see forwardKeyToHost). */
-enum class HostKey { space, enter };
-
-/**
- * Re-dispatch a transport keypress to the host DAW.
- *
- * Backs the `forwardKeyToHost` native function: the UI swallows Space and
- * Enter presses it has no use for and hands them here so the DAW's play/stop
- * and return-to-start shortcuts keep working while the plugin has keyboard
- * focus. Hands keyboard focus back to the host, then delivers synthesized
- * key events to it. Takes the editor's peer native handle. Best effort per
- * host; implemented in WindowKeyEvents.mm (macOS) and WindowKeyEvents.cpp
- * (Windows/Linux).
- */
-void forwardKeyToHost(void* nativeHandle, HostKey key);
 
 /**
  * Main-UI WebView with a navigation allowlist.

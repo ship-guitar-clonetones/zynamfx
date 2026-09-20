@@ -78,8 +78,8 @@ public:
 
   // Chain management methods
   // Load a tone into an insert slot. `targetInsertId` is the insert block the
-  // user clicked (it survives the OAuth redirect in the UI's sessionStorage);
-  // the new tone block takes that slot's position. When the id is absent or
+  // user clicked (the UI remembers it across the tone-select flow); the new
+  // tone block takes that slot's position. When the id is absent or
   // stale (undone away mid-flow), the active lane's first insert is used.
   std::string loadTone(const juce::String& toneJsonString,
                        const std::string& targetInsertId = {});
@@ -97,9 +97,9 @@ public:
   // message.
   juce::var loadLocalTone(const juce::String& title, const juce::var& files,
                           const std::string& targetInsertId = {});
-  // Path-based sibling of loadLocalTone for files native already has on
-  // disk: the tile menus' Load File / Load Folder pickers (the webview
-  // drop path can't hand over paths, so it ships base64 instead). A
+  // Path-based sibling of loadLocalTone for files already on disk: the
+  // native UI's drops and Load File / Load Folder pickers (loadLocalTone's
+  // byte-array form serves the webview build and the DSP tests). A
   // directory loads as one multi-model tone by the same rules as a folder
   // drop in the UI: majority extension picks NAM vs IR, capped at 300
   // files / 50 MB each, models in natural name order, title from the
@@ -217,9 +217,8 @@ public:
   // poll loop stays cheap.
   juce::var getChainState(int knownRevision) const;
   // Current chain revision, promoting any settled continuous-gesture edit
-  // into a real bump first. The editor's push timer watches this to emit a
-  // `chainChanged` event to the webview, so the UI resyncs immediately after
-  // mutations instead of fast-polling.
+  // into a real bump first. The UI's ChainStore polls this (an atomic read)
+  // and refetches getChainState only when it moved.
   juce::uint32 getCurrentChainRevision() const;
   // Single entry point for all per-block user params. Supported params:
   // "enabled" (0/1), "normalize" (0/1), "inputGain", "outputGain", "mix"
@@ -287,7 +286,7 @@ public:
   // when disabled the audio thread does no analyzer work for that block.
   bool setBlockSpectrumEnabled(const std::string& blockId, bool enabled);
   juce::var getBlockSpectrum(const std::string& blockId);
-  // Editor teardown: the webview can't send per-block disables while dying.
+  // Editor teardown: one call instead of one per open EQ view.
   void disableAllBlockSpectrums();
 
   // Stereo mode: two independent Left/Right chains.
@@ -351,9 +350,9 @@ public:
   std::atomic<int> editorExtraHeight{36};
 
   // Which lane loadTone falls back to ("left"/"right") when no valid target
-  // insert id is supplied. The UI sets this before launching the Select flow
-  // so the choice survives the OAuth redirect. Not a view mode and not part
-  // of undo history.
+  // insert id is supplied. The UI sets it when an Add starts, so a tone
+  // picked later lands in the lane the user was working in. Not a view mode
+  // and not part of undo history.
   void setActiveEditChain(const juce::String& side);
   // Swap the Left and Right chains wholesale (stereo mode only). Undoable.
   bool swapChains();
@@ -437,13 +436,19 @@ public:
   // log instead of guessed at.
   static juce::File getSettingsFile();
 
-  // Web Inspector preference (macOS): right-click -> Inspect Element on the
-  // plugin UI, off by default in release builds and flipped from Settings ->
-  // Diagnostics. Machine-wide (it's a debugging aid, not tone state), so it
-  // lives in the shared settings file. Applied to the live WKWebView by the
-  // editor (see EditorWebViewSetup::setWebInspectorEnabled).
+  // PropertiesFile options for the native UI's per-machine preferences
+  // (hint bar, PC numbers, cached session…); see plugin/ui/services/UiPrefs.h.
+  static juce::PropertiesFile::Options uiPreferencesOptions();
+
+#if !T3K_NATIVE_UI
+  // Webview build only. Web Inspector preference (macOS): right-click ->
+  // Inspect Element on the plugin UI, off by default in release builds and
+  // flipped from Settings -> Diagnostics. Machine-wide (it's a debugging
+  // aid, not tone state), so it lives in the shared settings file. Applied
+  // to the live WKWebView by the editor (EditorWebViewSetup::setWebInspectorEnabled).
   static bool readPersistedWebInspectorEnabled();
   static void persistWebInspectorEnabled(bool enabled);
+#endif
 
 private:
   // One chain of blocks. Two of these make up `lanes` (declared below).
@@ -812,8 +817,8 @@ private:
   const Lane& lane(ChainSide side) const { return lanes[static_cast<size_t>(laneIndex(side))]; }
 
   std::atomic<bool> stereoEnabled{false};
-  // Which lane loadTone inserts into. Set by the UI before launching the
-  // Select flow (the choice must survive the OAuth redirect); not a view mode.
+  // Which lane loadTone inserts into when the target insert id is stale.
+  // Set by the UI when an Add starts; not a view mode.
   ChainSide pendingAddSide{ChainSide::Left};
   juce::CriticalSection chainMutex;
 

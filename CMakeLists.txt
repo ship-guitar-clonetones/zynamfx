@@ -16,9 +16,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(T3K_IOS TRUE)
 endif()
 
+# Native JUCE editor (plugin/ui, see plugin/docs/native-ui.md). OFF builds the
+# legacy webview UI (ui/, needs `npm run build` and WebView2 on Windows) for
+# side-by-side QA. HEADLESS wins over both. Declared here because the JUCE
+# webview patches below only apply to the webview build.
+option(T3K_NATIVE_UI "Native JUCE editor instead of the webview" ON)
+
 if(T3K_IOS)
-    # iOS 16 is the floor JUCE 9 / WKWebView / AVAudioSession are exercised
-    # against here, and covers every iPad that can run this at all.
+    # iOS 16 is the floor JUCE 9 / AVAudioSession are exercised against here,
+    # and covers every iPad that can run this at all.
     if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
         set(CMAKE_OSX_DEPLOYMENT_TARGET "16.0" CACHE STRING "Minimum iOS version" FORCE)
     endif()
@@ -74,18 +80,15 @@ CPMAddPackage(
     SOURCE_DIR ${LIB_DIR}/juce
 )
 
-# The macOS WKWebView Web Inspector is no longer force-enabled at build time.
-# Debug builds get it from stock JUCE (gated on JUCE_DEBUG); release builds
-# expose it behind the Web Inspector toggle in Settings -> Diagnostics, applied
-# at runtime (see EditorWebViewSetup::setWebInspectorEnabled). A previously
-# patched JUCE copy in libs/ is harmless: its added gate rides an undefined
-# macro (T3K_ENABLE_DEVTOOLS) and compiles back to stock behavior.
+# Webview-build JUCE patches (idempotent, configure time; JUCE lives in the
+# gitignored libs/). The patched files only compile with JUCE_WEB_BROWSER=1,
+# so the native build skips them.
+if (NOT T3K_NATIVE_UI)
 
 # macOS: WKWebView paints an opaque white background until the first page paint,
 # which shows as a white flash when the editor opens. JUCE (still true in 9.0.1)
 # only exposes a background-colour option for Windows (WinWebView2), so patch the WKWebView to
 # not draw its own background; the editor's black paint() shows through instead.
-# Idempotent configure-time patch, same rationale as the devtools patch above.
 if (APPLE)
     set(_juce_webview_mm "${LIB_DIR}/juce/modules/juce_gui_extra/native/juce_WebBrowserComponent_mac.mm")
     if (EXISTS "${_juce_webview_mm}")
@@ -106,6 +109,8 @@ if (APPLE)
         endif()
     endif()
 endif()
+
+endif()  # NOT T3K_NATIVE_UI (WKWebView patch)
 
 # macOS: when Thread::startRealtimeThread's time-constraint upgrade is
 # rejected by the kernel (thread_policy_set fails, e.g. for very long
@@ -151,6 +156,8 @@ if (EXISTS "${_juce_threads_mac}")
         message(STATUS "Patched JUCE Thread (macOS): stale handle cleared when realtime start fails")
     endif()
 endif()
+
+if (NOT T3K_NATIVE_UI)  # WebKitGTK patches, webview build only
 
 # Linux: JUCE dlopens WebKitGTK/GTK by their UNVERSIONED .so names
 # (libwebkit2gtk-4.1.so etc.), but distros only ship those symlinks in the
@@ -300,11 +307,13 @@ if (EXISTS "${_juce_webview_linux}")
     endif()
 endif()
 
+endif()  # NOT T3K_NATIVE_UI (WebKitGTK patches)
+
 # StandaloneFilterWindow patches (idempotent; JUCE lives in gitignored libs/).
 #
 # T3K_NO_MUTE_BANNER: never show JUCE's native "Audio input is muted" strip.
-# The plugin surfaces mute/feedback state in its own web UI (AppBanner); the
-# native bar would double up and fight over window height.
+# The plugin surfaces mute/feedback state in its own AppBanner; the native
+# bar would double up and fight over window height.
 #
 # T3K_DARK_MUTE_BANNER: leftover restyle of that strip (kept so a missed hide
 # patch doesn't flash the stock lightgoldenrodyellow bar). Harmless when hidden.
@@ -334,7 +343,7 @@ if (EXISTS "${_juce_standalone_h}")
 "        void inputMutedChanged (bool newInputMutedValue)
         {
             // T3K_NO_MUTE_BANNER: the muted-input state is surfaced by the
-            // plugin's own web UI banner (see AppBanner \"auto-muted\"), which
+            // plugin's own AppBanner (\"input-muted\"), which
             // grows the window instead of overlaying the editor. Never show
             // JUCE's native strip so the two can't double up or fight over
             // the window height.
@@ -455,7 +464,7 @@ endif()
 # ~/Library/Application Support on macOS; Windows already resolves to
 # %APPDATA%/TONE3000 and is unchanged). Linux resolves through
 # userApplicationDataDirectory so XDG_CONFIG_HOME is honoured, the same root
-# as presets, logs and the WebKit storage. The processor's own machine-wide
+# as presets and logs. The processor's own machine-wide
 # store in the same folder is named preferences.settings (see
 # ProcessorState.cpp), so the two files cannot collide. Idempotent
 # configure-time patch, same rationale as the patches above.
@@ -928,8 +937,8 @@ endif()
 # height of INT_MAX. Mutter-family window managers (Muffin on Mint, Mutter on
 # GNOME) add the frame border back onto those hints, overflow int, and clamp
 # the window to the PMinSize floor instead: the window maps at full width but
-# 1px high, showing only its title bar, and the WebKitGTK view (still
-# full-size, but clipped inside the 1px parent) never becomes visible.
+# 1px high, showing only its title bar, and the editor (still full-size,
+# but clipped inside the 1px parent) never becomes visible.
 # Clamp the published hints to a bound no real display can reach (1e7 px) so
 # WM-side arithmetic stays finite; genuine limits (this editor publishes
 # 1x..2x of its design box) pass through unchanged. Computing in doubles also

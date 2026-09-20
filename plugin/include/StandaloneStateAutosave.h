@@ -15,8 +15,8 @@
  *
  * The result is that the standalone app on iOS never writes "filterState":
  * the signal chain lives in RAM only and is gone on the next launch, while
- * user presets (their own files) and the login session (the WKWebView data
- * store) survive, which is what makes the loss look selective.
+ * user presets (their own files) and the login session (its own
+ * preferences file) survive, which is what makes the loss look selective.
  *
  * reloadPluginState() is already called from StandalonePluginHolder::init(),
  * so restoring needs nothing new - only a trigger for the save. Backgrounding

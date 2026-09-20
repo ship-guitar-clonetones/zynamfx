@@ -12,7 +12,7 @@ class TONE3000Processor;
 
 /**
  * Bespoke replacement for JUCE's AudioDeviceSelectorComponent / standalone
- * audio-settings dialog, exposed to the WebView settings UI as one JSON state
+ * audio-settings dialog, exposed to the settings UI as one JSON state
  * snapshot plus imperative setters. It mirrors the selector's semantics
  * exactly (device types, linked ASIO I/O, channel masks, control panel, test
  * tone) and layers the product's auto-setup policy on top:
@@ -33,8 +33,8 @@ class TONE3000Processor;
  *   the old processor-side Input 1 / Input 2 / Stereo picker. Legacy saved
  *   modes are migrated into the channel mask once.
  *
- * Everything runs on the message thread (native bridge functions and device
- * manager change callbacks both arrive there); the only audio-thread code is
+ * Everything runs on the message thread (the UI's calls and device manager
+ * change callbacks both arrive there); the only audio-thread code is
  * the lock-free input level tap used by the channel picker's meters.
  *
  * In hosted builds (or when the standalone holder doesn't exist) none of this
@@ -43,8 +43,8 @@ class TONE3000Processor;
 class StandaloneAudioSettings : private juce::ChangeListener {
 public:
   /** @param onDeviceStateChanged Fired (message thread) whenever the device
-      manager broadcasts a change; the editor forwards it to the WebView as
-      an `audioDeviceChanged` event so the UI can re-pull state. */
+      manager broadcasts a change; the editor forwards it to the UI
+      (Backend::Listener::audioDeviceChanged) so it re-pulls state. */
   StandaloneAudioSettings(TONE3000Processor& processor,
                           std::function<void()> onDeviceStateChanged);
   ~StandaloneAudioSettings() override;

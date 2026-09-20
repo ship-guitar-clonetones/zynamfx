@@ -21,9 +21,11 @@ install, load tones, and use it.
 - **Build a signal chain.** Multiple NAM and IR blocks, per-block EQ and
   gain/mix, drag to reorder, dual chains in stereo mode with branching,
   undo/redo, and presets.
-- **Cross-platform.** One plugin on macOS, Windows, and Linux. The UI is a
-  React app rendered in a native WebView (WebView2 on Windows, WebKit
-  elsewhere).
+- **Cross-platform.** One plugin on macOS, Windows, Linux, and iOS
+  (Standalone). The UI is native JUCE/C++ (`plugin/ui/`); no web runtime
+  on any platform. The legacy React/WebView UI stays buildable behind
+  `-DT3K_NATIVE_UI=OFF` as a QA reference (see
+  [`plugin/docs/native-ui.md`](plugin/docs/native-ui.md)).
 
 NAM processing comes from **NeuralAmpModelerCore** (in-tree), resampling from
 **AudioDSPTools** (in-tree), and tone browsing/loading from the
@@ -32,14 +34,12 @@ NAM processing comes from **NeuralAmpModelerCore** (in-tree), resampling from
 ## Prerequisites
 
 - [CMake](https://cmake.org/download/) 3.22+ and Git
-- Node.js and npm (the React UI is built after CMake has fetched JUCE)
 - **JUCE** is fetched automatically by CMake into `libs/`; no manual install
-- **Windows only:** the Microsoft.Web.WebView2 SDK NuGet package
-  (`script/install-webview2.ps1` installs it), needed at build time to
-  statically link the WebView2 loader. At run time the plugin UI needs the
-  [WebView2 Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/):
-  Windows 11 ships it, dev machines get it with Edge, and the release
-  installer bootstraps it when missing (typically clean Windows 10).
+- Only for the legacy webview UI (`-DT3K_NATIVE_UI=OFF`): Node.js and npm,
+  and on Windows the Microsoft.Web.WebView2 SDK NuGet package
+  (`script/install-webview2.ps1` installs it) plus the
+  [WebView2 Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
+  at run time. The native UI needs neither.
 
 ## Quick start
 
@@ -51,17 +51,16 @@ git submodule update --init --recursive
 
 ### 2. Configure CMake
 
-CMake downloads JUCE into `libs/` on first configure. The UI's
-`@juce-framework/webview` package is a `file:` dependency on that tree, so
-this step has to happen **before** `npm install`. Configure uses a
-placeholder for the embedded UI until you build it in the next step.
+CMake downloads JUCE into `libs/` on first configure.
 
 The default build includes the GUI targets (Standalone, VST3, AU, AAX, LV2,
-CLAP). Add `-DHEADLESS=ON` for headless/embedded builds; switch individual
-formats off with `-DBUILD_AAX=OFF`, `-DBUILD_LV2=OFF`, `-DBUILD_CLAP=OFF`.
-CLAP support comes from
+CLAP) with the native JUCE UI. Add `-DHEADLESS=ON` for headless/embedded
+builds; switch individual formats off with `-DBUILD_AAX=OFF`,
+`-DBUILD_LV2=OFF`, `-DBUILD_CLAP=OFF`. CLAP support comes from
 [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions),
-fetched at configure time.
+fetched at configure time. `-DT3K_BUILD_UI_TESTBED=ON` adds the UI testbed
+(`UiTestbed`: scenario captures, pixel compare, `--selftest`) and registers
+its self-tests with ctest.
 
 ```sh
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release   # or Debug
@@ -77,55 +76,39 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
 If you switch CMake presets later, remove the `build` directory and
 reconfigure.
 
-### 3. Build the UI
+### 3. TONE3000 publishable key
 
-The plugin embeds the built React UI as binary data:
-
-```sh
-cd ui
-npm install
-npm run build
-cd ..
-```
-
-If `npm install` warns that esbuild's install script is not approved
-(`npm warn install-scripts ... esbuild`), run
-`npm install-scripts approve esbuild` and then `npm install` again. Vite
-needs that postinstall to download the esbuild binary.
-
-#### TONE3000 publishable key and redirect URIs
-
-The webview reads your TONE3000 publishable key at build time. Set it before
-the first build (or before running the dev server):
+The plugin reads your TONE3000 publishable key at configure time from
+`ui/.env` (the same file the legacy web UI reads; `ui/.env.local` overrides
+it and a variable in the configure environment overrides both). Set it before
+the first build:
 
 ```sh
-# ui/.env (or pass on the command line for a single build)
+# ui/.env
 VITE_T3K_PUBLISHABLE_KEY=t3k_pub_your_key_here
 # Optional: point at staging or self-hosted TONE3000
 # VITE_T3K_API_DOMAIN=https://staging.tone3000.com
 ```
 
-Then, in TONE3000 > Settings > API Keys, register the redirect URIs the
-WebView uses. The OAuth flows run in the same single WebView that serves the
-main UI, so the redirect URI is just the page React already loads from:
-
-| Build         | Redirect URI                      |
-| ------------- | --------------------------------- |
-| Vite dev      | `http://localhost:5173/`          |
-| macOS / Linux | `juce://juce.backend/index.html`  |
-| Windows       | `https://juce.backend/index.html` |
-
-Localhost origins are auto-allowed during development, so only the JUCE
-entries need to be registered for release builds.
+Sign-in and the Select flow open in the system browser and return to the
+plugin through a loopback redirect on an ephemeral port
+(`http://localhost:<port>/`). Localhost redirect URIs are auto-allowed for
+publishable keys, so nothing needs registering in TONE3000 > Settings > API
+Keys for the native UI. (The legacy webview UI uses the
+`juce://juce.backend/index.html` / `https://juce.backend/index.html`
+redirects described in [ui/README.md](ui/README.md).)
 
 ### 4. Build the plugin
-
-Re-run the same `cmake -B build ...` command from step 2 so CMake picks up
-`plugin/webview/`, then compile:
 
 ```sh
 cmake --build build
 ```
+
+To build the legacy webview UI instead, configure with
+`-DT3K_NATIVE_UI=OFF`, run `npm install && npm run build` in `ui/` (after the
+first configure has fetched JUCE, which the UI's `@juce-framework/webview`
+`file:` dependency points at), reconfigure so CMake picks up
+`plugin/webview/`, then build. See [ui/README.md](ui/README.md).
 
 ### 5. Run it
 
@@ -162,16 +145,13 @@ land in `build/plugin/TONE3000_artefacts/<config>/<format>/`.
 
 ## Linux runtime dependencies
 
-Windows statically links only the WebView2 loader (the Evergreen Runtime is
-a system component; the installer bootstraps it when missing) and macOS uses
-the OS WKWebView, but the Linux build renders its UI in the system WebKitGTK,
-loaded dynamically at runtime. If it's missing, the plugin window is a black
-screen.
-
-Required: WebKitGTK 4.1 (or 4.0), GTK3, ALSA, FreeType.
+Required: GTK3 (file dialogs), ALSA, FreeType, X11. The legacy webview build
+(`-DT3K_NATIVE_UI=OFF`) additionally renders its UI in the system WebKitGTK
+4.1 (or 4.0), loaded dynamically at runtime; without it that build's plugin
+window is a black screen.
 
 ```sh
-sudo apt install libwebkit2gtk-4.1-0      # Ubuntu / Debian
+sudo apt install libwebkit2gtk-4.1-0      # Ubuntu / Debian (webview build only)
 sudo dnf install webkit2gtk4.1            # Fedora
 sudo pacman -S webkit2gtk-4.1             # Arch
 sudo zypper install libwebkit2gtk-4_1-0   # openSUSE
@@ -340,9 +320,10 @@ Debug`.
 
 | Path            | Contents                                              |
 | --------------- | ----------------------------------------------------- |
-| `plugin/`       | C++ plugin: processor, DSP, editor, webview bridge; vendors NeuralAmpModelerCore and AudioDSPTools |
-| `plugin/docs/`  | Design docs (spread, oversampling, multi-core, local models) |
-| `ui/`           | React/TypeScript UI (see [ui/README.md](ui/README.md))|
+| `plugin/`       | C++ plugin: processor, DSP, legacy webview bridge; vendors NeuralAmpModelerCore and AudioDSPTools |
+| `plugin/ui/`    | Native JUCE UI: views, widgets, services, testbed (see [plugin/ui/README.md](plugin/ui/README.md)) |
+| `plugin/docs/`  | Design docs (native UI, spread, oversampling, multi-core, local models) |
+| `ui/`           | Legacy React/TypeScript webview UI, the QA reference (see [ui/README.md](ui/README.md)) |
 | `test/`         | GoogleTest DSP suite + test assets                    |
 | `script/`       | Build, packaging, and install helpers                 |
 | `libs/`         | CPM-fetched dependencies (JUCE, GoogleTest, ...)      |
@@ -376,7 +357,7 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   allpass coefficients are adapted from its AudioDSPTools fork (MIT). See
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
 - [JUCE](https://juce.com): plugin framework, DSP building blocks, and the
-  WebView UI bridge.
+  native UI toolkit.
 - [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions):
   the CLAP wrapper.
 - O. Das, ["An Open-Source Stereo Widening Plugin"](https://www.dafx.de/paper-archive/2024/papers/DAFx24_paper_92.pdf)
@@ -386,9 +367,10 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   (108th AES Convention, 2000) and C. Knapp & G. Carter, "The Generalized
   Correlation Method for Estimation of Time Delay" (IEEE TASSP, 1976): the
   sweep probe and GCC-PHAT estimator behind auto-align.
-- [dnd-kit](https://dndkit.com), [lucide](https://lucide.dev), and
+- [lucide](https://lucide.dev) icons (ported to paths in
+  `plugin/ui/core/Icons`); [dnd-kit](https://dndkit.com) and
   [react-knob-headless](https://github.com/satelllte/react-knob-headless) in
-  the UI.
+  the legacy web UI.
 
 ## Links
 

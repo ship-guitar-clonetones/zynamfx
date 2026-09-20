@@ -1,8 +1,17 @@
-# TONE3000 Plugin UI
+# TONE3000 Plugin UI (legacy webview)
 
-React + TypeScript frontend for the TONE3000 plugin. The build output goes to
-`../plugin/webview/`, where CMake embeds it as JUCE binary data and the plugin
-serves it in a native WebView (WebView2 on Windows, WebKit elsewhere).
+React + TypeScript frontend for the TONE3000 plugin, superseded by the native
+JUCE UI in [`../plugin/ui/`](../plugin/ui/README.md), which is what the
+default build ships. This app is kept as the pixel and behaviour reference
+for that port: its screenshot suite (`local/screenshots`, local-only)
+produces the PNGs the native testbed diffs against, and a plugin configured
+with `-DT3K_NATIVE_UI=OFF` still embeds it for side-by-side QA. See
+[`../plugin/docs/native-ui.md`](../plugin/docs/native-ui.md) for the plan
+and the component map between the two.
+
+When built, the output goes to `../plugin/webview/`, where CMake embeds it as
+JUCE binary data and the plugin serves it in a native WebView (WebView2 on
+Windows, WebKit elsewhere).
 
 ## Development
 
@@ -21,7 +30,16 @@ npm run format     # prettier
 ```
 
 Set `VITE_T3K_PUBLISHABLE_KEY` in `ui/.env` before building or running the
-dev server (see the root README for redirect URI setup).
+dev server. The same file configures the native UI (read at CMake configure
+by `plugin/ui/NativeUi.cmake`). The webview's OAuth flows redirect back into
+the WebView itself, so its redirect URIs must be registered in TONE3000 >
+Settings > API Keys:
+
+| Build         | Redirect URI                      |
+| ------------- | --------------------------------- |
+| Vite dev      | `http://localhost:5173/`          |
+| macOS / Linux | `juce://juce.backend/index.html`  |
+| Windows       | `https://juce.backend/index.html` |
 
 The dev server is useful for layout and TONE3000 browsing work, but anything
 that calls into the plugin (parameters, chain state, meters) needs the real

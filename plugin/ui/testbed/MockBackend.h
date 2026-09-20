@@ -1,0 +1,132 @@
+// Fixture-driven ui::Backend for the testbed: the native twin of
+// ui/local/screenshots/juce-mock.js. State comes from one scenario entry of
+// fixtures/scenarios.json; mutations behave like the JS mock (acknowledge,
+// bump the revision where the mock did) so drive steps produce the same
+// screens the reference PNGs show.
+#pragma once
+
+#include "backend/Backend.h"
+
+namespace t3k::ui::testbed {
+
+class MockBackend : public Backend {
+public:
+  explicit MockBackend(const juce::var& scenario);
+  ~MockBackend() override;
+
+  // Live pokes for drive steps.
+  void setChain(juce::var chain);
+  void setTuner(juce::var tuner) { tuner_ = std::move(tuner); }
+  void setAutoMeasure(juce::var state) { autoMeasure_ = std::move(state); }
+  void setDevice(juce::var device);
+
+  juce::RangedAudioParameter* parameter(const juce::String& id) override;
+
+  juce::var getChainState(int knownRevision) override;
+  juce::uint32 chainRevision() override;
+  bool undoChain() override { return true; }
+  bool redoChain() override { return true; }
+  bool resetToDefault() override { return true; }
+
+  std::string loadTone(const juce::String&, const std::string&) override { return {}; }
+  juce::var loadLocalTonePath(const juce::File&, const std::string&) override;
+  juce::var loadLocalToneUrls(const juce::Array<juce::URL>&, const std::string&) override;
+  bool swapTone(const std::string&, const juce::String&) override { return true; }
+  bool refreshToneMetadata(const juce::String&) override { return true; }
+  bool switchModel(const std::string&, int, const juce::var&) override { return true; }
+  bool retryModelLoad(const std::string&) override { return true; }
+  bool removeChainBlock(const std::string&) override { return true; }
+  bool reorderChainBlocks(const std::vector<std::string>&) override { return true; }
+  bool moveBlockToChain(const std::string&, const juce::String&, int) override { return true; }
+  std::string duplicateChainBlock(const std::string&, const juce::String&, int) override { return {}; }
+  bool copyChainBlock(const std::string&) override { return true; }
+  std::string pasteChainBlock(const juce::String&, int) override { return {}; }
+  bool swapChains() override { return true; }
+  bool setChainBranch(const juce::String&, const std::string&) override { return true; }
+  bool clearChainBranch() override { return true; }
+  void setStereoMode(bool) override {}
+  void setInputMode(const juce::String& mode) override;
+  void setActiveEditChain(const juce::String&) override {}
+  void setNamSlimSizeDefault(double slimSize) override;
+  void setMultiCore(bool enabled) override;
+
+  bool setBlockParam(const std::string&, const juce::String&, double) override { return true; }
+  bool setBlockSlimSize(const std::string&, double) override { return true; }
+  bool setBlockEqBand(const std::string&, int, const juce::var&) override { return true; }
+  bool setBlockEqEnabled(const std::string&, bool) override { return true; }
+  bool setBlockEqPre(const std::string&, bool) override { return true; }
+  bool resetBlockEq(const std::string&) override { return true; }
+  bool setBlockSpectrumEnabled(const std::string&, bool) override { return true; }
+  juce::var getBlockSpectrum(const std::string&) override;
+
+  juce::var getPresetList() override;
+  juce::var savePreset(const juce::String& name) override;
+  bool loadPreset(const juce::String& presetId) override;
+  bool renamePreset(const juce::String&, const juce::String&) override { return true; }
+  bool deletePreset(const juce::String&) override { return true; }
+  bool movePreset(const juce::String&, int) override { return true; }
+
+  juce::var getAudioDeviceState() override { return device_; }
+  juce::var setAudioDeviceType(const juce::String&) override { return okResult(); }
+  juce::var setAudioDevice(const juce::String&, const juce::String&) override { return okResult(); }
+  juce::var setAudioInputChannels(const juce::Array<juce::var>&) override { return okResult(); }
+  juce::var setAudioOutputPair(int) override { return okResult(); }
+  juce::var setAudioSampleRate(double) override { return okResult(); }
+  juce::var setAudioBufferSize(int) override { return okResult(); }
+  juce::var setHearYourself(bool) override { return okResult(); }
+  juce::var playTestTone() override { return okResult(); }
+  juce::var openAudioControlPanel() override { return okResult(); }
+  juce::var restartAudioDevice() override { return okResult(); }
+  juce::var openMicSettings() override { return okResult(); }
+  juce::var setMidiInputEnabled(const juce::String&, bool) override { return okResult(); }
+  juce::var openBluetoothMidiPairing() override { return okResult(); }
+  void setAudioInputMetering(bool) override {}
+  juce::var getAudioInputLevels() override;
+
+  juce::var getMidiMapState() override { return midiMap_; }
+  void setMidiChannelFilter(int channel) override;
+  void startMidiLearn(const juce::String& targetId) override;
+  void cancelMidiLearn() override;
+  bool removeMidiMapping(const juce::String& targetId) override;
+  bool setMidiCcMapping(const juce::String&, int) override { return true; }
+
+  juce::var getMeterLevels() override;
+  void setTunerEnabled(bool) override {}
+  juce::var getTunerReading() override { return tuner_; }
+  void startAutoBalance() override {}
+  void cancelAutoBalance() override {}
+  juce::var pollAutoBalance() override { return autoMeasure_; }
+  void startAutoOffset() override {}
+  void cancelAutoOffset() override {}
+  juce::var pollAutoOffset() override { return autoMeasure_; }
+
+  juce::String pluginVersion() override { return version_; }
+  juce::String uniqueDeviceId() override { return "testbed-device"; }
+  void setAccessToken(const juce::String&) override {}
+  void copyToClipboard(const juce::String&) override {}
+  bool copyLogs() override { return true; }
+  juce::String revealLogs() override { return "/tmp/TONE3000.log"; }
+  bool canOpenDateTimeSettings() override { return true; }
+  bool openDateTimeSettings() override { return true; }
+  bool forwardKeyToHost(HostKey) override { return false; }
+
+private:
+  static juce::var okResult();
+  void bumpChain();
+  void notifyMidiMapChanged();
+
+  // Parameters need a processor for change gestures; this one has no audio.
+  struct Params;
+  std::unique_ptr<Params> params_;
+
+  juce::var chain_;
+  juce::var device_;
+  juce::var midiMap_;
+  juce::var presets_;
+  juce::var meters_;
+  juce::var tuner_;
+  juce::var autoMeasure_;
+  juce::String version_;
+};
+
+}  // namespace t3k::ui::testbed

@@ -11,12 +11,12 @@
  * post-EQ output into a lock-free ring buffer, but only while `enabled` is
  * set, i.e. only while a UI EQ view for this block is actually open. All FFT /
  * smoothing work happens lazily on the message thread inside getSpectrum()
- * (the polled native function), throttled by a small cache interval.
+ * (polled by the UI's SpectrumFeed), throttled by a small cache interval.
  *
  * getSpectrum() returns kNumBins floats in dB (clamped kMinDb..0),
  * log-spaced from kMinFreqHz to kMaxFreqHz, the exact frequency mapping the
  * EQ graph uses for its x axis, so the UI can plot bins at uniform x spacing.
- * Constants are mirrored in ui/src/hooks/useBlockSpectrum.ts.
+ * Constants are mirrored in plugin/ui/services/SpectrumFeed.h.
  */
 class BlockSpectrum {
 public:

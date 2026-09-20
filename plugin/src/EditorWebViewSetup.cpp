@@ -715,9 +715,9 @@ juce::WebBrowserComponent::Options buildMainWebViewOptions(TONE3000Editor* edito
           "forwardKeyToHost", guarded(1, false, [editor](const juce::Array<juce::var>& args) {
             if (juce::JUCEApplicationBase::isStandaloneApp())
               return juce::var(false);
-            const HostKey key = args[0].toString() == "Enter" ? HostKey::enter : HostKey::space;
+            const auto key = args[0].toString() == "Enter" ? HostKeys::HostKey::enter : HostKeys::HostKey::space;
             if (auto* peer = editor->getPeer())
-              forwardKeyToHost(peer->getNativeHandle(), key);
+              HostKeys::forwardKeyToHost(peer->getNativeHandle(), key);
             return juce::var(true);
           }))
       .withNativeFunction(

@@ -144,10 +144,9 @@ bool wavMissingRiffPadByte(const void* data, size_t size) {
   return declared + 8 == static_cast<juce::uint64>(size) + 1;
 }
 
-// Caps for local file loads, mirroring the web UI's drop limits
-// (useToneLoadFlow.ts): the same rules must hold whether the bytes arrive
-// as base64 over the bridge (drops) or straight from disk (the tile menus'
-// Load File / Load Folder pickers).
+// Caps for local file loads, the same whether the bytes arrive as a
+// base64 array (webview drops, tests) or straight from disk (the native
+// UI's drops and pickers, plugin/ui/services/LocalFiles).
 constexpr juce::int64 kMaxLocalFileBytes = 50 * 1024 * 1024;
 constexpr int kMaxFolderModels = 300;
 
@@ -220,9 +219,8 @@ juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream
   return juce::var(model.get());
 }
 
-// A dropped file as shipped by the webview: { name, data } with base64
-// bytes (the DOM never exposes file paths, so drops ride the bridge as
-// base64; see useToneLoadFlow.ts).
+// A file shipped as { name, data } with base64 bytes: the webview build's
+// drops (the DOM never exposes file paths) and the DSP tests.
 juce::var stashLocalFile(const juce::String& filename, const juce::String& base64Data,
                          juce::String& error) {
   juce::MemoryOutputStream decoded;
