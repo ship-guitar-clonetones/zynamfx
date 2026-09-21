@@ -29,13 +29,12 @@ juce::String authorizeUrl(const juce::String& origin, const juce::String& client
 // stored state (the web's handleOAuthCallback up to the token exchange).
 struct Callback {
   enum class Kind {
-    code,      // exchange `code` (with `toneId` when a tone was picked)
-    canceled,  // the user closed the catalog without signing in: back to idle
+    code,      // exchange `code`
+    canceled,  // the user backed out without signing in: back to idle
     error      // `error` names it: state_mismatch, missing_code, or the server's
   };
   Kind kind = Kind::error;
   juce::String code;
-  juce::String toneId;
   juce::String error;
 
   // `query` is the redirect URL's query string (with or without the '?').

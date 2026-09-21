@@ -605,6 +605,10 @@ BlockEqView::BlockEqView(Services& services, std::string blockId)
       graph_(std::make_unique<Graph>(*this)),
       sliders_(std::make_unique<Sliders>(*this)) {
   feed_.onChange = [this] { repaint(); };
+  // The spectrum repaints this view 30x a second; the curve and slider
+  // layers above it only change on interaction, so they blit from a cache.
+  graph_->setBufferedToImage(true);
+  sliders_->setBufferedToImage(true);
   addChildComponent(*graph_);
   addAndMakeVisible(*sliders_);
   setSize(kGraphW, eq::kBodyH);

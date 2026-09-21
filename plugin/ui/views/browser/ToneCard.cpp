@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/Brand.h"
 #include "core/Design.h"
 #include "core/Fonts.h"
 #include "core/Icons.h"
@@ -11,6 +12,14 @@
 #include "core/Theme.h"
 
 namespace t3k::ui {
+
+namespace {
+const juce::String kDotSeparator = juce::String::fromUTF8(" \xC2\xB7 ");
+// The verified badge beside the creator's name: 14px tall at its 17.5:20.
+constexpr float kBadgeHeight = 14;
+constexpr float kBadgeWidth = kBadgeHeight * 17.5f / 20.0f;
+constexpr float kBadgeGap = 6;
+}  // namespace
 
 ToneCard::ToneCard(ImageLoader& images, const Tone& tone)
     : juce::Button(tone.title), images_(images), tone_(tone), image_(images) {
@@ -150,18 +159,32 @@ void ToneCard::paintButton(juce::Graphics& g, bool, bool) {
       x += paint::cssLine(g, count, x, textTop, line, 200, body, theme::kMuted) + kStatsGap;
     };
     stat(Icon::Download, labels::count(tone_.downloadsCount));
-    stat(Icon::Bookmark, labels::count(tone_.favoritesCount));
     stat(Icon::FolderClosed, labels::count(tone_.catalogModelCount()));
   }
 
-  // Creator: avatar, username · time ago, one ellipsised line.
+  // Creator: avatar, name, the verified badge for verified creators, and the
+  // time ago (dot-separated when there is no badge between), one line: the
+  // name ellipsises first, the rest keeps its width.
   if (tone_.user) {
-    juce::String creator = tone_.user->username;
+    const auto& user = *tone_.user;
     const auto ago = labels::timeAgoShort(tone_.publishedAt);
-    if (ago.isNotEmpty()) creator += juce::String::fromUTF8(" \xC2\xB7 ") + ago;
-    const float x = creatorRow_.getX() + kAvatar + kCreatorGap;
-    paint::cssLine(g, creator, x, creatorRow_.getY() + (creatorRow_.getHeight() - line) / 2, line, creatorRow_.getRight() - x, body,
-                   theme::kMuted);
+    const float lineTop = creatorRow_.getY() + (creatorRow_.getHeight() - line) / 2;
+    float x = creatorRow_.getX() + kAvatar + kCreatorGap;
+    const float agoW = ago.isNotEmpty() ? Fonts::width(body, ago) : 0.0f;
+    const float badgeW = user.isVerified ? kBadgeGap + kBadgeWidth : 0.0f;
+    const float sepW = !user.isVerified && ago.isNotEmpty() ? Fonts::width(body, kDotSeparator) : 0.0f;
+    const float nameMax = creatorRow_.getRight() - x - badgeW - sepW - agoW - (ago.isNotEmpty() ? kBadgeGap : 0.0f);
+    x += paint::cssLine(g, user.name(), x, lineTop, line, std::max(0.0f, nameMax), body, theme::kMuted);
+    if (user.isVerified) {
+      x += kBadgeGap;
+      Brand::drawVerifiedBadge(g, juce::Rectangle<float>(kBadgeWidth, kBadgeHeight).withCentre({x + kBadgeWidth / 2, creatorRow_.getCentreY()}));
+      x += kBadgeWidth;
+    }
+    if (ago.isNotEmpty()) {
+      if (!user.isVerified) x += paint::cssLine(g, kDotSeparator, x, lineTop, line, sepW + 1, body, theme::kMuted);
+      else x += kBadgeGap;
+      paint::cssLine(g, ago, x, lineTop, line, agoW + 1, body, theme::kMuted);
+    }
   }
 }
 

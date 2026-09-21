@@ -17,6 +17,22 @@ constexpr const char* kA2MarkSvg = R"svg(<svg xmlns="http://www.w3.org/2000/svg"
 <defs><linearGradient id="a2g" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="white"/><stop offset="1" stop-color="#434343"/></linearGradient></defs>
 </svg>)svg";
 
+// The web badge is one check polyline stroked three times with an inside
+// stroke via SVG masks, which JUCE's parser doesn't support. This is the same
+// geometry flattened to three filled polygons (one per colour, 2.94 units
+// apart), painted blue, red, yellow like the source so the overlaps match.
+constexpr const char* kVerifiedBadgeSvg = R"svg(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 17.5 20">
+<polygon points="17.50,5.88 5.47,20.00 0.00,12.96 2.83,11.81 5.58,15.34 11.60,8.27" fill="#0000ff"/>
+<polygon points="17.50,0.00 5.47,14.12 0.00,7.08 2.83,5.93 5.58,9.46 11.60,2.38" fill="#ff0000"/>
+<polygon points="17.50,2.94 5.47,17.06 0.00,10.02 2.83,8.87 5.58,12.40 11.60,5.32" fill="#ffff00"/>
+</svg>)svg";
+
+std::unique_ptr<juce::Drawable> parseString(const char* svg) {
+  auto drawable = juce::Drawable::createFromSVGString(svg);
+  jassert(drawable != nullptr);
+  return drawable;
+}
+
 }  // namespace
 
 const juce::Drawable& Brand::logo() {
@@ -30,11 +46,12 @@ const juce::Drawable& Brand::mark() {
 }
 
 const juce::Drawable& Brand::a2Mark() {
-  static const auto d = [] {
-    auto drawable = juce::Drawable::createFromSVGString(kA2MarkSvg);
-    jassert(drawable != nullptr);
-    return drawable;
-  }();
+  static const auto d = parseString(kA2MarkSvg);
+  return *d;
+}
+
+const juce::Drawable& Brand::verifiedBadge() {
+  static const auto d = parseString(kVerifiedBadgeSvg);
   return *d;
 }
 
@@ -51,6 +68,10 @@ void Brand::drawMark(juce::Graphics& g, juce::Rectangle<float> box) {
 
 void Brand::drawA2Mark(juce::Graphics& g, juce::Rectangle<float> box) {
   paint::svg(g, a2Mark(), box);
+}
+
+void Brand::drawVerifiedBadge(juce::Graphics& g, juce::Rectangle<float> box) {
+  paint::svg(g, verifiedBadge(), box);
 }
 
 }  // namespace t3k::ui

@@ -46,17 +46,11 @@ endfunction()
 _t3k_read_env(VITE_T3K_PUBLISHABLE_KEY "" T3K_PUBLISHABLE_KEY)
 _t3k_read_env(VITE_T3K_API_DOMAIN "https://www.tone3000.com" T3K_API_DOMAIN)
 _t3k_read_env(VITE_T3K_UPDATE_NOTICE "false" T3K_UPDATE_NOTICE)
-_t3k_read_env(VITE_T3K_PREVIEW "true" T3K_PREVIEW)
 string(REGEX REPLACE "/+$" "" T3K_API_DOMAIN "${T3K_API_DOMAIN}")
 if (T3K_UPDATE_NOTICE STREQUAL "true")
     set(T3K_UPDATE_NOTICE 1)
 else()
     set(T3K_UPDATE_NOTICE 0)
-endif()
-if (T3K_PREVIEW STREQUAL "false")
-    set(T3K_PREVIEW 0)
-else()
-    set(T3K_PREVIEW 1)
 endif()
 configure_file("${T3K_UI_DIR}/core/T3kConfig.h.in" "${CMAKE_BINARY_DIR}/t3k_ui/T3kConfig.h" @ONLY)
 
@@ -74,4 +68,9 @@ function(t3k_add_native_ui target)
     target_sources(${target} PRIVATE ${T3K_UI_SOURCES})
     target_include_directories(${target} PRIVATE "${T3K_UI_DIR}" "${CMAKE_BINARY_DIR}/t3k_ui")
     target_link_libraries(${target} PRIVATE NativeUiAssets juce::juce_animation juce::juce_cryptography)
+    # macOS: paint through a Metal-backed layer so each dirty rect is drawn
+    # on its own. Plain CoreGraphics gets one merged rect per frame, so the
+    # two meters ticking together would repaint the whole plate between them.
+    target_compile_definitions(${target} PRIVATE
+        $<$<PLATFORM_ID:Darwin>:JUCE_COREGRAPHICS_RENDER_WITH_MULTIPLE_PAINT_CALLS=1>)
 endfunction()

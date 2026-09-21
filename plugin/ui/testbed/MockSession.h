@@ -23,10 +23,13 @@ public:
   void listToneModels(int toneId, const juce::String& format,
                       Reply<std::vector<Model>> reply) override;
   void setToneFavorite(int toneId, bool favorite, Done done) override;
-  // Trending answers from `apiTones` (`api.trending`), the gated streams
-  // with the suite's 3-page slice of them (`api.gated`).
-  void listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) override;
-  void listStream(Stream stream, int page, int pageSize, const juce::String& gear, Reply<TonePage> reply) override;
+  // The catalog search filters and pages `apiTones` the way the API would
+  // (`api.search`); a profile filter answers with the suite's 3-page slice
+  // of them (`api.gated`).
+  void searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) override;
+  // The names carried by `apiTones` (their tags, makes and creators),
+  // narrowed by the text (`api.taxonomy`).
+  void listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) override;
   // The tone (`api.tone`) with its first model, then onToneSelected.
   void selectTone(int toneId, Done done) override;
   void ensureNativeAuth(Done done) override;
@@ -37,7 +40,6 @@ public:
   // `?t3k-nav-error=1` as the failed-navigation error, and `?canceled=true`
   // with a `browse` login intent lands in the tone browser.
   void login(LoginIntent intent) override;
-  void startSelectFlow() override { login(LoginIntent::plain); }
   void logout() override;
   const AuthFlow& authFlow() const override { return flow_; }
   void retryFlow() override { login(LoginIntent::plain); }
@@ -58,7 +60,8 @@ private:
   void answer(const char* group, Reply<T> reply, std::function<Result<T>()> fallback);
 
   void setFlow(AuthFlow::Phase phase, juce::String error = {});
-  std::vector<Tone> tonesOf(const juce::var& rows) const;
+  // The fixture tones that satisfy the catalog part of `query`.
+  std::vector<Tone> matching(const ToneQuery& query) const;
 
   JUCE_DECLARE_WEAK_REFERENCEABLE(MockSession)
 

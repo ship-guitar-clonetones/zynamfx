@@ -147,10 +147,136 @@ const std::map<juce::String, Drive>& drives() {
          wait(300);
          unhover(root);
        }},
+      // Tone browser. Chips carry their filter's help copy; menu rows are
+      // buttons named by their label.
       {"browser-picking",
        [](PluginRoot& root, MockBackend&) {
          if (auto* card = buttonNamed(root, "'02 Vox AC30/6 Top Boost")) click(root, *card);
          wait(600);
+         unhover(root);
+       }},
+      {"browser-search-typed",
+       [](PluginRoot& root, MockBackend&) {
+         submit(root, juce::String::fromUTF8("Search\xe2\x80\xa6"), "vox");
+         wait(400);
+         unhover(root);
+       }},
+      {"browser-gear",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* chip = buttonNamed(root, "Pedal")) click(root, *chip);
+         wait(400);
+       }},
+      {"browser-verified",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Verified:");
+         wait(400);
+       }},
+      {"browser-profile-menu",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Profile:");
+         wait(300);
+       }},
+      {"browser-profile-recent",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Profile:");
+         wait(200);
+         if (auto* row = buttonNamed(root, "Recently used")) click(root, *row);
+         wait(400);
+         unhover(root);
+       }},
+      {"browser-profile-empty",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Profile:");
+         wait(200);
+         if (auto* row = buttonNamed(root, "Favorites")) click(root, *row);
+         wait(400);
+         unhover(root);
+       }},
+      {"browser-filters-expanded",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(300);
+         unhover(root);
+       }},
+      {"browser-sort-menu",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Sort:");
+         wait(300);
+       }},
+      {"browser-format-ir",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Format:");
+         wait(200);
+         if (auto* row = buttonNamed(root, "Impulse Response (IR)")) click(root, *row);
+         wait(400);
+         unhover(root);
+       }},
+      {"browser-tags-menu",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Tags:");
+         wait(400);
+       }},
+      {"browser-tags-picked",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Tags:");
+         wait(300);
+         if (auto* row = buttonNamed(root, "rock")) click(root, *row);
+         wait(300);
+         if (auto* chip = buttonNamed(root, "rock")) click(root, *chip);  // the chip reopens the menu, rock ticked
+         wait(400);
+       }},
+      {"browser-scrolled",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* card = buttonNamed(root, "AMS Neve 88R LB")) {
+           scrollIntoView(*card);
+           hover(root, *card);
+         }
+         wait(300);
+       }},
+      {"browser-creators-menu",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Creators:");
+         wait(400);
+       }},
+      {"browser-format-menu",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Format:");
+         wait(300);
+       }},
+      // Leave the browser with a gear chip set and come back: the chip and
+      // its results are as they were, with no fetch.
+      {"browser-return",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* chip = buttonNamed(root, "Pedal")) click(root, *chip);
+         wait(400);
+         clickByHelp(root, "Close:");
+         wait(300);
+         clickByHelp(root, "Add Tone");
+         wait(300);
+         unhover(root);
+       }},
+      {"browser-filters-active-collapsed",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Format:");
+         wait(200);
+         if (auto* row = buttonNamed(root, "Impulse Response (IR)")) click(root, *row);
+         wait(300);
+         clickByHelp(root, "Fewer filters:");
+         wait(400);
          unhover(root);
        }},
       {"chrome-toast-saved",

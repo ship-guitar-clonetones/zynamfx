@@ -1,5 +1,5 @@
 // The toast pill (port of Toast.tsx's view half): white, black bold text,
-// centred horizontally above the faceplate, with a short fade/rise entrance.
+// centred horizontally above the faceplate.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -8,7 +8,7 @@
 
 namespace t3k::ui {
 
-class ToastView : public juce::Component, private Toast::Listener, private juce::Timer {
+class ToastView : public juce::Component, private Toast::Listener {
 public:
   explicit ToastView(Toast& toast);
   ~ToastView() override;
@@ -20,12 +20,10 @@ public:
 
 private:
   void toastChanged() override;
-  void timerCallback() override;
   void layout();
 
   Toast& toast_;
   int bottom_ = 0;
-  juce::int64 shownAtMs_ = 0;
 };
 
 }  // namespace t3k::ui

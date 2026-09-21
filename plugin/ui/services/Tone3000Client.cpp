@@ -206,14 +206,14 @@ void Tone3000Client::fetchOptionalAuth(const juce::String& path, juce::StringPai
   });
 }
 
-void Tone3000Client::getJson(const juce::String& path, const char* label, Reply<juce::var> reply) {
-  fetch(path, "GET", {}, [label, cb = std::move(reply)](Result<HttpResponse> r) {
+void Tone3000Client::getJson(const juce::String& path, juce::String label, Reply<juce::var> reply) {
+  fetch(path, "GET", {}, [what = std::move(label), cb = std::move(reply)](Result<HttpResponse> r) {
     if (!r) {
       cb(Result<juce::var>::fail(r.error));
       return;
     }
     if (!r->ok()) {
-      cb(Result<juce::var>::fail(juce::String(label) + " failed: " + juce::String(r->status)));
+      cb(Result<juce::var>::fail(what + " failed: " + juce::String(r->status)));
       return;
     }
     cb(Result<juce::var>::ok(r->json()));
@@ -236,21 +236,15 @@ void Tone3000Client::setFavorite(int toneId, bool favorite, Reply<bool> reply) {
         });
 }
 
-void Tone3000Client::listTones(const juce::String& endpoint, int page, int pageSize, const juce::String& gear,
-                               Reply<juce::var> reply) {
-  juce::String path = "/api/v1/tones/" + endpoint + "?page=" + juce::String(page) + "&page_size=" + juce::String(pageSize);
-  if (gear.isNotEmpty()) path << "&gear=" << juce::URL::addEscapeChars(gear, true);
-  getJson(path, ("list " + endpoint).toRawUTF8(), std::move(reply));
+void Tone3000Client::listTones(const juce::String& path, Reply<juce::var> reply) {
+  getJson(path, "listTones", std::move(reply));
 }
 
-void Tone3000Client::listTrending(const juce::String& gear, Reply<juce::var> reply) {
-  juce::String path = "/api/v1/tones/trending";
-  if (gear.isNotEmpty()) path << "?gear=" << juce::URL::addEscapeChars(gear, true);
-  fetchOptionalAuth(path, {}, [cb = std::move(reply)](Result<HttpResponse> r) {
-    if (!r) return cb(Result<juce::var>::fail(r.error));
-    if (!r->ok()) return cb(Result<juce::var>::fail("listTrendingTones failed: " + juce::String(r->status)));
-    cb(Result<juce::var>::ok(r->json()));
-  });
+void Tone3000Client::listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply) {
+  const char* endpoint = kind == Taxonomy::tags ? "tags" : kind == Taxonomy::makes ? "makes" : "users";
+  juce::String path = "/api/v1/" + juce::String(endpoint) + "?page=1&page_size=" + juce::String(pageSize);
+  if (query.isNotEmpty()) path << "&query=" << juce::URL::addEscapeChars(query, true);
+  getJson(path, "list " + juce::String(endpoint), std::move(reply));
 }
 
 void Tone3000Client::listModels(int toneId, int pageSize, int architecture, Reply<juce::var> reply) {

@@ -17,36 +17,31 @@
 
 #include "core/Result.h"
 #include "model/Tone.h"
+#include "model/ToneQuery.h"
 
 namespace t3k::ui {
 
-// The tone browser's streams (ToneBrowser.tsx StreamKind). Trending is a
-// public top-10 feed; the other three page through the signed-in user's
-// tones and need a session.
-enum class Stream { trending, downloaded, favorited, created };
-inline constexpr int kStreamCount = 4;
-inline bool streamIsGated(Stream s) { return s != Stream::trending; }
-// The API endpoint / localStorage id ("trending", "downloaded", …).
-inline const char* streamId(Stream s) {
-  switch (s) {
-    case Stream::trending: return "trending";
-    case Stream::downloaded: return "downloaded";
-    case Stream::favorited: return "favorited";
-    case Stream::created: return "created";
-  }
-  return "trending";
-}
-inline std::optional<Stream> streamFromId(const juce::String& id) {
-  for (int i = 0; i < kStreamCount; ++i)
-    if (id == streamId(static_cast<Stream>(i))) return static_cast<Stream>(i);
-  return std::nullopt;
-}
+// One page of tone results (the API's PaginatedResponse<Tone[]>).
+// One option of a taxonomy filter: a tag or make name, or a creator's
+// username with their avatar.
+struct TaxonomyEntry {
+  juce::String name;
+  juce::String avatarUrl;  // creators only
+};
 
-// One page of a paginated stream.
 struct TonePage {
   std::vector<Tone> data;
   int page = 1;
   int totalPages = 1;
+
+  static TonePage parse(const juce::var& payload) {
+    TonePage out;
+    if (const auto* rows = payload["data"].getArray())
+      for (const auto& t : *rows) out.data.push_back(Tone::parse(t));
+    out.page = static_cast<int>(payload.getProperty("page", 1));
+    out.totalPages = static_cast<int>(payload.getProperty("total_pages", 1));
+    return out;
+  }
 };
 
 class ToneSession {
@@ -78,9 +73,9 @@ public:
   // "" = success.
   using Done = std::function<void(const juce::String& error)>;
 
-  // Why the user is being sent to sign in: `browse` (the + / swap flows and
-  // the browser's own sign-in CTAs) reopens the tone browser on return; a
-  // plain sign-in (account menu, info panel) lands on the main screen.
+  // Why the user is being sent to sign in: `browse` (the tone browser's
+  // sign-in gate) reopens the tone browser on return; a plain sign-in
+  // (account menu, info panel) lands on the main screen.
   enum class LoginIntent { plain, browse };
 
   virtual ~ToneSession() = default;
@@ -88,12 +83,11 @@ public:
   void addListener(Listener* l) { listeners_.add(l); }
   void removeListener(Listener* l) { listeners_.remove(l); }
 
-  // A fully resolved tone (first model embedded) landed: from the Select
-  // flow's callback or selectTone(). Native already holds a fresh access
-  // token when this fires. Owned by the load flow.
+  // A fully resolved tone (first model embedded) landed from selectTone().
+  // Native already holds a fresh access token when this fires. Owned by the
+  // load flow.
   std::function<void(const Tone& tone)> onToneSelected;
-  // A browse-intent flow finished without a pick (signed in, or closed the
-  // catalog): the caller opens the tone browser.
+  // A browse-intent login finished: the caller opens the tone browser.
   std::function<void()> onAuthenticated;
 
   virtual bool authenticated() const = 0;
@@ -111,16 +105,15 @@ public:
                               Reply<std::vector<Model>> reply) = 0;
   // PUT / DELETE /tones/{id}/favorite (idempotent).
   virtual void setToneFavorite(int toneId, bool favorite, Done done) = 0;
-  // GET /tones/trending: the public top-10 feed, optionally one gear type;
-  // the Bearer rides along when signed in, and a dead session degrades to
-  // the anonymous request instead of failing.
-  virtual void listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) = 0;
-  // GET /tones/{downloaded|favorited|created}: one page of a gated stream.
-  virtual void listStream(Stream stream, int page, int pageSize, const juce::String& gear,
-                          Reply<TonePage> reply) = 0;
-  // Resolve a tone picked in the browser like a Select callback: the tone,
-  // its first loadable model and a fresh token for native, then
-  // onToneSelected. `done` reports failure (the card shows a pick error).
+  // One page of the browser's results: GET /tones/search for the query, or
+  // the profile filter's GET /tones/{downloaded|favorited|created}.
+  virtual void searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) = 0;
+  // The options a taxonomy filter offers: GET /tags, /makes or /users, the
+  // most-used first, narrowed by `text` when given (up to one page).
+  virtual void listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) = 0;
+  // Resolve a tone picked in the browser: the tone, its first loadable
+  // model and a fresh token for native, then onToneSelected. `done` reports
+  // failure (the card shows a pick error).
   virtual void selectTone(int toneId, Done done) = 0;
 
   // Native downloads
@@ -130,12 +123,9 @@ public:
   virtual void ensureNativeAuth(Done done) = 0;
 
   // Flows
-  // Login-only OAuth flow (no prompt): sign in on tone3000.com and come
-  // straight back.
+  // The OAuth login flow: sign in on tone3000.com in the system browser and
+  // come straight back.
   virtual void login(LoginIntent intent = LoginIntent::plain) = 0;
-  // The Select flow (prompt=select_tone): browse the full catalog on
-  // tone3000.com; the callback carries the picked tone. Always a browse.
-  virtual void startSelectFlow() = 0;
   virtual void logout() = 0;
   virtual const AuthFlow& authFlow() const = 0;
   // Restart whichever flow last left for tone3000.com (the error overlay's
@@ -188,16 +178,15 @@ public:
     reply(Result<std::vector<Model>>::fail(kNotSignedIn));
   }
   void setToneFavorite(int, bool, Done done) override { done(kNotSignedIn); }
-  void listTrending(const juce::String&, Reply<std::vector<Tone>> reply) override {
-    reply(Result<std::vector<Tone>>::fail(kNotSignedIn));
-  }
-  void listStream(Stream, int, int, const juce::String&, Reply<TonePage> reply) override {
+  void searchTones(const ToneQuery&, int, int, Reply<TonePage> reply) override {
     reply(Result<TonePage>::fail(kNotSignedIn));
+  }
+  void listTaxonomy(Taxonomy, const juce::String&, Reply<std::vector<TaxonomyEntry>> reply) override {
+    reply(Result<std::vector<TaxonomyEntry>>::fail(kNotSignedIn));
   }
   void selectTone(int, Done done) override { done(kNotSignedIn); }
   void ensureNativeAuth(Done done) override { done(kNotSignedIn); }
   void login(LoginIntent) override {}
-  void startSelectFlow() override {}
   void logout() override {}
   const AuthFlow& authFlow() const override { return flow_; }
   void retryFlow() override {}

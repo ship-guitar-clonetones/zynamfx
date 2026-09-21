@@ -5,15 +5,14 @@
 //
 // The chrome strips grow the window instead of squishing the 578px core, so
 // the banner's arrival is choreographed against the window resize
-// (useChromeChoreography) so existing content never jumps:
+// (useChromeChoreography) so the content column moves once, not twice:
 //
 //   hidden --banner appears--> waiting: the window grows first (the new
 //     space is at the bottom edge, black on black; content stays put)
-//   waiting --viewport grew (or 400ms)--> entering: the banner slides down
-//     into place over kBannerAnimMs, pushing the content column down into
-//     the space the window already has
-//   entering --> shown; shown --banner clears--> leaving: reverse slide with
-//     the last spec kept rendered; leaving --> hidden: the window shrinks.
+//   waiting --viewport grew (or 400ms)--> shown: the banner takes the top
+//     strip, moving the content column down into the space the window
+//     already has
+//   shown --banner clears--> hidden: the strip goes and the window shrinks.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -28,7 +27,6 @@
 #include "ToastView.h"
 #include "TunerView.h"
 #include "core/DelayedCall.h"
-#include "core/Tween.h"
 #include "modals/ConnectionModal.h"
 #include "modals/OAuthOverlay.h"
 #include "modals/UpdateNotice.h"
@@ -47,8 +45,7 @@ class PluginRoot : public juce::Component,
                    private ToneSession::Listener,
                    private juce::ComponentListener {
 public:
-  static constexpr int kBannerAnimMs = 180;
-  // A host may refuse or delay the resize; slide anyway after a beat.
+  // A host may refuse or delay the resize; show the banner anyway after a beat.
   static constexpr int kBannerWaitMs = 400;
 
   explicit PluginRoot(Services& services);
@@ -82,7 +79,7 @@ public:
   void parentHierarchyChanged() override;
 
 private:
-  enum class BannerPhase { hidden, waiting, entering, shown, leaving };
+  enum class BannerPhase { hidden, waiting, shown };
 
   void hintChanged() override;
   void bannerChanged() override;
@@ -100,8 +97,7 @@ private:
   void updateChromeHeight();
   // Banner phase machine.
   bool viewportFits() const;
-  void bannerEnter();
-  void bannerLeave();
+  void bannerShow();
   void handleBannerAction(BannerAction action);
   // Top-bar actions whose effect lands on the main screen leave the tuner
   // first so the result is visible.
@@ -127,9 +123,6 @@ private:
   bool hintsVisible_ = true;
 
   BannerPhase bannerPhase_ = BannerPhase::hidden;
-  // The slide slot's height (0 → AppBanner::kHeight); the banner hangs from
-  // its bottom edge so it slides down from behind the top.
-  Tween bannerSlot_;
   DelayedCall bannerWait_;
   juce::Component* watchedParent_ = nullptr;
 };

@@ -22,7 +22,15 @@ std::vector<juce::String> names(const juce::var& obj, const char* key) {
 
 }  // namespace
 
-User User::parse(const juce::var& v) { return {str(v, "id"), str(v, "username"), str(v, "avatar_url")}; }
+User User::parse(const juce::var& v) {
+  User u;
+  u.id = str(v, "id");
+  u.username = str(v, "username");
+  u.displayName = str(v, "display_name").trim();  // null → ""
+  u.isVerified = boolean(v, "is_verified");
+  u.avatarUrl = str(v, "avatar_url");
+  return u;
+}
 
 Model Model::parse(const juce::var& v) { return {integer(v, "id"), str(v, "name"), str(v, "model_url"), v}; }
 

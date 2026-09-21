@@ -1,70 +1,57 @@
 // One CSS `transition: <property> Nms ease` for a float: tween from the
 // current value to a target over a duration, applying each frame through a
-// callback. AlphaTween (opacity) and the banner slot (height) are built on
-// it. Owned by the component it drives, so it can never outlive the target.
+// callback. Frames come from the owner's display refresh (juce_animation's
+// VBlankAnimatorUpdater), so a tween can't fire between vsyncs or twice in
+// one; an owner that isn't showing has nothing to animate and snaps. Owned
+// by the component it drives, so it can never outlive the target.
 #pragma once
 
-#include <juce_events/juce_events.h>
+#include <juce_animation/juce_animation.h>
 
-#include <cmath>
 #include <functional>
+#include <optional>
 
 namespace t3k::ui {
 
-class Tween : private juce::Timer {
+class Tween {
 public:
-  explicit Tween(std::function<void(float)> apply, float initial = 0) : apply_(std::move(apply)), value_(initial) {}
-  ~Tween() override { stopTimer(); }
+  Tween(juce::Component& owner, std::function<void(float)> apply, float initial = 0)
+      : owner_(owner), frames_(&owner), apply_(std::move(apply)), value_(initial) {}
 
   float value() const { return value_; }
-  bool running() const { return isTimerRunning(); }
+  bool running() const { return animator_ && !animator_->isComplete(); }
 
-  // Ease to `target`; `done` fires once it lands (not when interrupted).
-  void animateTo(float target, int durationMs, std::function<void()> done = {}) {
-    if (durationMs <= 0) {
+  // Ease to `target` (CSS `ease`); a tween already running restarts from
+  // where it is.
+  void animateTo(float target, int durationMs) {
+    if (durationMs <= 0 || !owner_.isShowing()) {
       snap(target);
-      if (done) done();
       return;
     }
-    from_ = value_;
-    to_ = target;
-    durationMs_ = durationMs;
-    startMs_ = juce::Time::currentTimeMillis();
-    done_ = std::move(done);
-    startTimer(kFrameMs);
+    animator_ = juce::ValueAnimatorBuilder{}
+                    .withDurationMs(durationMs)
+                    .withEasing(juce::Easings::createEase())
+                    .withValueChangedCallback([this, from = value_, target](float t) {
+                      value_ = from + (target - from) * t;
+                      apply_(value_);
+                    })
+                    .build();
+    frames_.addAnimator(*animator_);
+    animator_->start();
   }
 
   void snap(float target) {
-    stopTimer();
-    done_ = nullptr;
-    value_ = to_ = target;
+    animator_.reset();  // the updater drops its expired reference on the next frame
+    value_ = target;
     apply_(value_);
   }
-
-  // CSS `ease` (cubic-bezier(0.25, 0.1, 0.25, 1), close enough as ease-in-out).
-  static float ease(float t) { return t < 0.5f ? 2 * t * t : 1 - std::pow(-2 * t + 2, 2.0f) / 2; }
 
 private:
-  static constexpr int kFrameMs = 16;
-
-  void timerCallback() override {
-    const float t = juce::jlimit(0.0f, 1.0f,
-                                 static_cast<float>(juce::Time::currentTimeMillis() - startMs_) / durationMs_);
-    value_ = from_ + (to_ - from_) * ease(t);
-    apply_(value_);
-    if (t >= 1.0f) {
-      stopTimer();
-      auto done = std::move(done_);
-      done_ = nullptr;
-      if (done) done();
-    }
-  }
-
+  juce::Component& owner_;
+  juce::VBlankAnimatorUpdater frames_;
+  std::optional<juce::Animator> animator_;
   std::function<void(float)> apply_;
-  float value_, from_ = 0, to_ = 0;
-  int durationMs_ = 0;
-  juce::int64 startMs_ = 0;
-  std::function<void()> done_;
+  float value_;
 };
 
 }  // namespace t3k::ui

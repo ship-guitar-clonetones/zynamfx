@@ -5,7 +5,7 @@
 namespace t3k::ui {
 
 // PillToggle
-PillToggle::PillToggle() : juce::Button({}), progress_([this](float) { repaint(); }) {
+PillToggle::PillToggle() : juce::Button({}), progress_(*this, [this](float) { repaint(); }) {
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
   setWantsKeyboardFocus(false);
   setSize(kWidth, kHeight);

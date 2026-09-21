@@ -10,7 +10,6 @@
 namespace t3k::ui {
 
 namespace {
-constexpr int kChromeFadeMs = 150;
 constexpr int kImageFadeMs = 200;
 constexpr float kDimmedImage = 0.35f;
 const juce::Colour kStrip = juce::Colours::black.withAlpha(0.35f);
@@ -50,7 +49,7 @@ ToneTile::ToneTile(Services& services, const ChainItem& block, int size)
   addMouseListener(&hover_, true);
 
   setBlock(block);
-  chromeFade_.snap(design::kCoarsePointer ? 1.0f : 0.0f);
+  chrome_.setAlpha(design::kCoarsePointer ? 1.0f : 0.0f);
   chrome_.setInterceptsMouseClicks(false, design::kCoarsePointer);
   resized();  // the base set the size before these children existed
 }
@@ -113,7 +112,7 @@ void ToneTile::pointerMoved(const juce::MouseEvent& e, bool leaving) {
 void ToneTile::setHovered(bool hovered) {
   hovered_ = hovered;
   const bool shown = design::kCoarsePointer || hovered_ || travelling();
-  chromeFade_.animateTo(shown ? 1.0f : 0.0f, kChromeFadeMs);
+  chrome_.setAlpha(shown ? 1.0f : 0.0f);
   chrome_.setInterceptsMouseClicks(false, shown);
 }
 

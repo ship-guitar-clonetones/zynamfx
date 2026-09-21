@@ -2,6 +2,8 @@
 
 #include <juce_events/juce_events.h>
 
+#include <algorithm>
+
 namespace t3k::ui::testbed {
 
 MockSession::MockSession(const juce::var& scenario, const juce::var& fixtures)
@@ -98,29 +100,84 @@ void MockSession::listToneModels(int toneId, const juce::String&, Reply<std::vec
   });
 }
 
-std::vector<Tone> MockSession::tonesOf(const juce::var& rows) const {
-  std::vector<Tone> tones;
-  if (const auto* arr = rows.getArray())
-    for (const auto& t : *arr) tones.push_back(Tone::parse(t));
-  return tones;
+namespace {
+bool containsIgnoreCase(const std::vector<juce::String>& haystack, const juce::String& needle) {
+  return std::any_of(haystack.begin(), haystack.end(), [&](const auto& s) { return s.equalsIgnoreCase(needle); });
+}
+// Any of the picked names, or nothing picked.
+bool anyPicked(const std::vector<juce::String>& picked, const std::vector<juce::String>& carried) {
+  return picked.empty() || std::any_of(picked.begin(), picked.end(), [&](const auto& p) {
+           return containsIgnoreCase(carried, p);
+         });
+}
+}  // namespace
+
+std::vector<Tone> MockSession::matching(const ToneQuery& q) const {
+  std::vector<Tone> out;
+  const auto text = q.text.trim();
+  const auto* rows = apiTones_.getArray();
+  if (rows == nullptr) return out;
+  for (const auto& row : *rows) {
+    auto tone = Tone::parse(row);
+    if (text.isNotEmpty() && !tone.title.containsIgnoreCase(text)) continue;
+    if (q.gear.isNotEmpty() && !tone.gear.equalsIgnoreCase(q.gear)) continue;
+    if (q.format.isNotEmpty() && !tone.format.equalsIgnoreCase(q.format)) continue;
+    if (!anyPicked(q.tags, tone.tags) || !anyPicked(q.makes, tone.makes)) continue;
+    if (!q.creators.empty() && (!tone.user || !containsIgnoreCase(q.creators, tone.user->username))) continue;
+    if (q.verified && (!tone.user || !tone.user->isVerified)) continue;
+    out.push_back(std::move(tone));
+  }
+  return out;
 }
 
-void MockSession::listTrending(const juce::String&, Reply<std::vector<Tone>> reply) {
-  answer<std::vector<Tone>>("trending", std::move(reply), [this] {
-    const auto spec = override("trending");
-    return Result<std::vector<Tone>>::ok(tonesOf(spec.isObject() ? spec["data"] : apiTones_));
+void MockSession::searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) {
+  if (query.profile != Profile::none) {
+    // The suite's fixed gated page, whatever the page asked for.
+    answer<TonePage>("gated", std::move(reply), [this] {
+      const auto spec = override("gated");
+      return Result<TonePage>::ok(TonePage::parse(spec.isObject() ? spec : gatedPage_));
+    });
+    return;
+  }
+  answer<TonePage>("search", std::move(reply), [this, query, page, pageSize] {
+    const auto spec = override("search");
+    if (spec.isObject()) return Result<TonePage>::ok(TonePage::parse(spec));
+    auto all = matching(query);
+    TonePage out;
+    out.totalPages = std::max(1, (static_cast<int>(all.size()) + pageSize - 1) / pageSize);
+    out.page = juce::jlimit(1, out.totalPages, page);
+    const auto first = static_cast<size_t>((out.page - 1) * pageSize);
+    const auto last = std::min(all.size(), first + static_cast<size_t>(pageSize));
+    out.data.assign(all.begin() + static_cast<std::ptrdiff_t>(first), all.begin() + static_cast<std::ptrdiff_t>(last));
+    return Result<TonePage>::ok(std::move(out));
   });
 }
 
-void MockSession::listStream(Stream, int, int, const juce::String&, Reply<TonePage> reply) {
-  answer<TonePage>("gated", std::move(reply), [this] {
-    const auto spec = override("gated");
-    const auto& payload = spec.isObject() ? spec : gatedPage_;
-    TonePage page;
-    page.data = tonesOf(payload["data"]);
-    page.page = static_cast<int>(payload.getProperty("page", 1));
-    page.totalPages = static_cast<int>(payload.getProperty("total_pages", 1));
-    return Result<TonePage>::ok(std::move(page));
+void MockSession::listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) {
+  answer<std::vector<TaxonomyEntry>>("taxonomy", std::move(reply), [this, kind, text] {
+    const auto spec = override("taxonomy");
+    const char* group = kind == Taxonomy::tags ? "tags" : kind == Taxonomy::makes ? "makes" : "creators";
+    std::vector<TaxonomyEntry> entries;
+    auto add = [&](const juce::String& name, const juce::String& avatarUrl) {
+      const bool seen = std::any_of(entries.begin(), entries.end(),
+                                    [&](const auto& e) { return e.name.equalsIgnoreCase(name); });
+      if (!seen && (text.isEmpty() || name.containsIgnoreCase(text))) entries.push_back({name, avatarUrl});
+    };
+    if (spec.isObject()) {
+      if (const auto* listed = spec[group].getArray())
+        for (const auto& n : *listed) add(n.toString(), {});
+    } else if (const auto* rows = apiTones_.getArray()) {
+      // Every distinct name the fixture tones carry, in first-seen order.
+      for (const auto& row : *rows) {
+        const auto tone = Tone::parse(row);
+        if (kind == Taxonomy::creators) {
+          if (tone.user) add(tone.user->username, tone.user->avatarUrl);
+        } else {
+          for (const auto& name : kind == Taxonomy::tags ? tone.tags : tone.makes) add(name, {});
+        }
+      }
+    }
+    return Result<std::vector<TaxonomyEntry>>::ok(std::move(entries));
   });
 }
 

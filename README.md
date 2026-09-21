@@ -10,10 +10,12 @@ pre-built installer, or see the
 [Plugin Guide](https://www.tone3000.com/guides/tone3000-plugin) for how to
 install, load tones, and use it.
 
-- **Load NAM and IR from TONE3000.** Click **+** to browse the catalog in the
-  plugin (OAuth 2.0 + PKCE via the
-  [TONE3000 Select flow](https://www.tone3000.com/api#select)). Pick a tone
-  and it lands in the chain with the right model or IR.
+- **Load NAM and IR from TONE3000.** Click **+** to search the catalog in
+  the plugin: text search, gear / format / tag / make / creator filters,
+  verified creators, your recently used, favorited and created tones, all
+  over the [TONE3000 API](https://www.tone3000.com/api) after a one-time
+  sign-in (OAuth 2.0 + PKCE). Pick a tone and it lands in the chain with the
+  right model or IR.
 - **Or load local files.** Drag a `.nam` file (A2 architecture), an IR
   `.wav`, or a folder of them onto a **+** slot, or right-click a tile and
   pick **Load File / Load Folder**; no account needed. Design notes in
@@ -90,8 +92,8 @@ VITE_T3K_PUBLISHABLE_KEY=t3k_pub_your_key_here
 # VITE_T3K_API_DOMAIN=https://staging.tone3000.com
 ```
 
-Sign-in and the Select flow open in the system browser and return to the
-plugin through a loopback redirect on an ephemeral port
+Sign-in opens in the system browser and returns to the plugin through a
+loopback redirect on an ephemeral port
 (`http://localhost:<port>/`). Localhost redirect URIs are auto-allowed for
 publishable keys, so nothing needs registering in TONE3000 > Settings > API
 Keys for the native UI. (The legacy webview UI uses the
@@ -379,8 +381,9 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   installers for Mac, Windows, and Linux.
 - [Plugin Guide](https://www.tone3000.com/guides/tone3000-plugin): how to
   install, load tones, and use the plugin.
-- [TONE3000 API](https://www.tone3000.com/api): full API reference, including
-  the Select flow.
+- [TONE3000 API](https://www.tone3000.com/api): full API reference (the
+  browser uses `/tones/search`, `/tones/{downloaded,favorited,created}`,
+  `/tags`, `/makes` and `/users`).
 - [TONE3000 API examples](https://github.com/tone-3000/api): reference
   integrations, including the `tone3000-client.ts` this plugin's client is
   adapted from.

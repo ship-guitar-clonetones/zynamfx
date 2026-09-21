@@ -27,6 +27,13 @@ const juce::Drawable* cached(const char* svg, juce::Colour colour, float strokeW
       return std::tie(svg, argb, stroke) < std::tie(o.svg, o.argb, o.stroke);
     }
   };
+  // Function-local statics are destroyed in reverse order of construction,
+  // JUCE's leak counters included: if the first Drawable in the process were
+  // parsed *into* this map, the counters would be torn down first and report
+  // every cached icon. Construct one of each Drawable a parsed SVG holds
+  // before the map exists so their counters always outlive it.
+  static const bool countersFirst = (juce::DrawablePath{}, juce::DrawableComposite{}, true);
+  juce::ignoreUnused(countersFirst);
   static std::map<Key, std::unique_ptr<juce::Drawable>> cache;
   auto& slot = cache[{svg, colour.getARGB(), strokeWidth}];
   if (slot == nullptr) {

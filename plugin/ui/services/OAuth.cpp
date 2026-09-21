@@ -62,7 +62,6 @@ Callback Callback::parse(const juce::String& query, const juce::String& expected
   const auto params = parseQuery(query);
   Callback cb;
   cb.code = params["code"];
-  cb.toneId = params["tone_id"];
   const bool canceled = params["canceled"] == "true";
   auto fail = [&](juce::String why) {
     cb.kind = Kind::error;

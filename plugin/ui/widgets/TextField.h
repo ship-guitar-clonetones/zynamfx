@@ -7,9 +7,11 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
+#include <memory>
 #include <optional>
 
 #include "core/Icons.h"
+#include "IconButton.h"
 
 namespace t3k::ui {
 
@@ -33,6 +35,10 @@ public:
   // Glyph inside the field at `left` px, vertically centred (the search
   // fields' magnifier); the left padding should leave room for it.
   void setLeadingIcon(Icon icon, float size, int left, juce::Colour colour);
+  // An × `right` px from the right edge while there is text; pressing it
+  // empties the field (onChange) and fires onClear. The right padding
+  // should leave room for it.
+  void setClearButton(int size, int right);
   // Select-all + focus.
   void focus();
   bool hasFocus() const { return editor_.hasKeyboardFocus(true); }
@@ -42,6 +48,7 @@ public:
   std::function<void()> onEscape;
   std::function<void()> onBlur;
   std::function<void()> onFocus;
+  std::function<void()> onClear;
 
   void paint(juce::Graphics& g) override;
   void resized() override;
@@ -66,6 +73,8 @@ private:
     juce::Colour colour;
   };
   std::optional<LeadingIcon> leading_;
+  std::unique_ptr<IconButton> clear_;
+  int clearRight_ = 0;
 };
 
 }  // namespace t3k::ui

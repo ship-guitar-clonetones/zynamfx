@@ -34,7 +34,7 @@ public:
 private:
   void addModel(ChainSide side, const std::string& insertBlockId);
   void swapBlock(const std::string& blockId);
-  // A resolved tone landed (Select callback or a browser pick).
+  // A resolved tone landed (a browser pick).
   void toneSelected(const Tone& tone);
 
   ChainStore& chain_;

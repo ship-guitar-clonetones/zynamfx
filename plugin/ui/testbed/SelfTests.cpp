@@ -13,6 +13,7 @@
 #include "core/Pitch.h"
 #include "core/RichText.h"
 #include "model/Tone.h"
+#include "model/ToneQuery.h"
 #include "services/ConnectionGate.h"
 #include "services/LoopbackServer.h"
 #include "services/OAuth.h"
@@ -120,16 +121,15 @@ struct ScriptedSession : ToneSession {
     reply(Result<std::vector<Model>>::fail("n/a"));
   }
   void setToneFavorite(int, bool, Done done) override { done("n/a"); }
-  void listTrending(const juce::String&, Reply<std::vector<Tone>> reply) override {
-    reply(Result<std::vector<Tone>>::fail("n/a"));
-  }
-  void listStream(Stream, int, int, const juce::String&, Reply<TonePage> reply) override {
+  void searchTones(const ToneQuery&, int, int, Reply<TonePage> reply) override {
     reply(Result<TonePage>::fail("n/a"));
+  }
+  void listTaxonomy(Taxonomy, const juce::String&, Reply<std::vector<TaxonomyEntry>> reply) override {
+    reply(Result<std::vector<TaxonomyEntry>>::fail("n/a"));
   }
   void selectTone(int, Done done) override { done("n/a"); }
   void ensureNativeAuth(Done done) override { done("n/a"); }
   void login(LoginIntent) override {}
-  void startSelectFlow() override {}
   void logout() override {}
   const AuthFlow& authFlow() const override { return flow; }
   void retryFlow() override {}
@@ -224,7 +224,7 @@ struct OAuthTests : juce::UnitTest {
     pkce.challenge = "CH";
     pkce.state = "ST";
     juce::StringPairArray extra;
-    extra.set("select_tone", "true");
+    extra.set("menubar", "true");
     const juce::URL url(oauth::authorizeUrl("https://www.tone3000.com", "pk_x", "http://127.0.0.1:1234/cb", pkce, extra));
     expectEquals(url.toString(false), juce::String("https://www.tone3000.com/api/v1/oauth/authorize"));
     const auto q = url.getParameterNames(), v = url.getParameterValues();
@@ -234,17 +234,16 @@ struct OAuthTests : juce::UnitTest {
     expectEquals(param("code_challenge"), juce::String("CH"));
     expectEquals(param("code_challenge_method"), juce::String("S256"));
     expectEquals(param("state"), juce::String("ST"));
-    expectEquals(param("select_tone"), juce::String("true"));
+    expectEquals(param("menubar"), juce::String("true"));
 
     beginTest("callback parsing");
     using K = oauth::Callback::Kind;
     auto parse = [](const char* query) { return oauth::Callback::parse(query, "ST"); };
     expect(parse("?code=abc&state=ST").kind == K::code);
-    expectEquals(parse("code=abc&state=ST&tone_id=42").toneId, juce::String("42"));
     expect(parse("?code=abc&state=OTHER").kind == K::error);
     expectEquals(parse("?code=abc&state=OTHER").error, juce::String("state_mismatch"));
     expect(parse("?canceled=true&state=ST").kind == K::canceled);
-    expect(parse("?canceled=true&code=abc&state=ST").kind == K::code);  // a pick wins over the flag
+    expect(parse("?canceled=true&code=abc&state=ST").kind == K::code);  // a code wins over the flag
     expectEquals(parse("?error=access_denied&state=ST").error, juce::String("access_denied"));
     expectEquals(parse("?state=ST").error, juce::String("missing_code"));
   }
@@ -404,7 +403,7 @@ struct Tone3000ClientTests : juce::UnitTest {
     http.sent.clear();
     http.answer = [](const HttpRequest&) { return jsonResponse(200, "[]"); };
     HttpResponse anon;
-    client.fetchOptionalAuth("/tones/trending", {}, [&](Result<HttpResponse> r) { anon = r ? *r : HttpResponse(); });
+    client.fetchOptionalAuth("/api/v1/plugin/version", {}, [&](Result<HttpResponse> r) { anon = r ? *r : HttpResponse(); });
     expect(anon.ok());
     expectEquals(static_cast<int>(http.sent.size()), 1);
     expect(http.sent[0].authorization.isEmpty());
@@ -426,6 +425,89 @@ struct ToneModelTests : juce::UnitTest {
     expectEquals(round["models"].size(), 2);
     expectEquals(static_cast<int>(round["models"][0]["id"]), 10);
     expectEquals(static_cast<int>(tone.models.size()), 0);  // the source is untouched
+
+    beginTest("the creator's display name is only ever a verified creator's");
+    const auto verified = User::parse(juce::JSON::parse(
+        R"({"id":7,"username":"amalgamaudio","display_name":"Amalgam Audio","is_verified":true})"));
+    expect(verified.isVerified);
+    expectEquals(verified.name(), juce::String("Amalgam Audio"));
+    const auto plain = User::parse(juce::JSON::parse(R"({"id":8,"username":"staas","display_name":null})"));
+    expect(!plain.isVerified);
+    expectEquals(plain.name(), juce::String("staas"));
+  }
+};
+
+struct ToneQueryTests : juce::UnitTest {
+  ToneQueryTests() : juce::UnitTest("ToneQuery", "ui") {}
+  void runTest() override {
+    beginTest("an empty query is the trending catalog page, scoped to the plugin's architecture");
+    ToneQuery q;
+    expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/search?page=1&page_size=12&architecture=2"));
+    expect(q.effectiveSort() == ToneSort::trending);
+    expect(!q.hasAdvancedFilters());
+
+    beginTest("text defaults the sort to best match; an explicit sort wins and counts as a filter");
+    q.text = " fender twin ";
+    expect(q.effectiveSort() == ToneSort::bestMatch);
+    expect(q.requestPath(2, 12, 2).contains("query=fender%20twin&"));
+    expect(!q.requestPath(2, 12, 2).contains("sort="));
+    q.sort = ToneSort::popular;
+    expect(q.effectiveSort() == ToneSort::popular);
+    expect(q.requestPath(2, 12, 2).contains("&sort=downloads-all-time&"));
+    expect(q.hasAdvancedFilters());
+
+    beginTest("picking the default sort is no pick; an explicit one stops being explicit when the text makes it the default");
+    q = {};
+    q.setSort(ToneSort::trending);
+    expect(!q.sort.has_value());
+    expect(!q.sortIsExplicit() && !q.hasAdvancedFilters());
+    q.text = "vox";
+    q.setSort(ToneSort::trending);  // now explicit: best match is the default
+    expect(q.sort.has_value() && q.sortIsExplicit());
+    q.text.clear();
+    expect(q.effectiveSort() == ToneSort::trending);
+    expect(!q.sortIsExplicit() && !q.hasAdvancedFilters());
+
+    beginTest("list filters use the API's separators with each name escaped on its own");
+    q = {};
+    q.gear = "amp-cab";
+    q.tags = {"metal", "high gain"};
+    q.makes = {"Fender Twin Reverb", "1965 Vox AC30"};
+    q.creators = {"tone3000", "amalgam_audio"};
+    q.calibrated = true;
+    q.verified = true;
+    const auto path = q.requestPath(1, 12, 2);
+    expect(path.contains("&gears=amp-cab&"));
+    expect(path.contains("&tags=metal_high%20gain&"));
+    expect(path.contains("&makes=Fender%20Twin%20Reverb_1965%20Vox%20AC30&"));
+    expect(path.contains("&creators=tone3000,amalgam_audio&"));
+    expect(path.contains("&calibrated=true&verified=true&architecture=2"));
+
+    beginTest("the architecture rides along with every format (the API ignores it for IR); < 0 omits it");
+    q = {};
+    q.format = "ir";
+    expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/search?page=1&page_size=12&format=ir&architecture=2"));
+    q.format = "nam";
+    expect(q.requestPath(1, 12, 2).endsWith("&format=nam&architecture=2"));
+    expect(q.requestPath(1, 12, -1).endsWith("&format=nam"));
+
+    beginTest("a profile filter pages the user's own stream, by gear alone");
+    q = {};
+    q.text = "ignored";
+    q.tags = {"metal"};
+    q.gear = "pedal";
+    q.profile = Profile::favorited;
+    expectEquals(q.requestPath(3, 12, 2), juce::String("/api/v1/tones/favorited?page=3&page_size=12&gear=pedal"));
+    q.profile = Profile::downloaded;
+    q.gear.clear();
+    expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/downloaded?page=1&page_size=12"));
+
+    beginTest("a paginated payload parses to a page");
+    const auto page = TonePage::parse(juce::JSON::parse(
+        R"({"data":[{"id":1,"title":"A"},{"id":2,"title":"B"}],"page":2,"page_size":2,"total":5,"total_pages":3})"));
+    expectEquals(static_cast<int>(page.data.size()), 2);
+    expectEquals(page.page, 2);
+    expectEquals(page.totalPages, 3);
   }
 };
 
@@ -439,6 +521,7 @@ LoopbackServerTests loopbackServerTests;
 PaginatorTests paginatorTests;
 Tone3000ClientTests tone3000ClientTests;
 ToneModelTests toneModelTests;
+ToneQueryTests toneQueryTests;
 
 }  // namespace
 

@@ -37,6 +37,7 @@ void TextField::setPlaceholder(const juce::String& text) {
 
 void TextField::setText(const juce::String& text, bool notify) {
   editor_.setText(text, notify);
+  if (clear_) clear_->setVisible(text.isNotEmpty());
 }
 
 void TextField::setFontSize(float px) { setFont(Fonts::sans(px)); }
@@ -58,6 +59,20 @@ void TextField::setLeadingIcon(Icon icon, float size, int left, juce::Colour col
   repaint();
 }
 
+void TextField::setClearButton(int size, int right) {
+  clear_ = std::make_unique<IconButton>(Icon::X, size, size);
+  clear_->setActive(false);
+  clear_->setHelpText("Clear");
+  clear_->onClick = [this] {
+    editor_.setText({}, /*sendChangeMessage=*/true);
+    if (onClear) onClear();
+  };
+  clearRight_ = right;
+  addChildComponent(*clear_);
+  clear_->setVisible(editor_.getText().isNotEmpty());
+  resized();
+}
+
 void TextField::focus() {
   if (editor_.isShowing()) editor_.grabKeyboardFocus();
   editor_.selectAll();
@@ -76,9 +91,11 @@ void TextField::paint(juce::Graphics& g) {
 
 void TextField::resized() {
   editor_.setBounds(getLocalBounds().withTrimmedLeft(padL_).withTrimmedRight(padR_).reduced(0, padV_));
+  if (clear_) clear_->setCentrePosition(getWidth() - clearRight_ - clear_->getWidth() / 2, getHeight() / 2);
 }
 
 void TextField::textEditorTextChanged(juce::TextEditor&) {
+  if (clear_) clear_->setVisible(editor_.getText().isNotEmpty());
   if (onChange) onChange(editor_.getText());
 }
 void TextField::textEditorReturnKeyPressed(juce::TextEditor&) {

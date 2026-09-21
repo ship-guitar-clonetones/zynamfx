@@ -9,9 +9,6 @@ namespace t3k::ui {
 namespace {
 constexpr int kPadX = 24, kPadY = 14;
 constexpr float kRadius = 16;
-// toast-in: 160ms ease-out from opacity 0 / +6px.
-constexpr int kEnterMs = 160;
-constexpr float kEnterRise = 6;
 }  // namespace
 
 ToastView::ToastView(Toast& toast) : toast_(toast) {
@@ -30,18 +27,7 @@ void ToastView::setBottomOffset(int bottom) {
 void ToastView::toastChanged() {
   const bool showing = toast_.message().isNotEmpty();
   setVisible(showing);
-  if (!showing) {
-    stopTimer();
-    return;
-  }
-  shownAtMs_ = juce::Time::currentTimeMillis();
-  layout();
-  startTimerHz(60);
-}
-
-void ToastView::timerCallback() {
-  if (juce::Time::currentTimeMillis() - shownAtMs_ >= kEnterMs) stopTimer();
-  repaint();
+  if (showing) layout();
 }
 
 void ToastView::layout() {
@@ -55,13 +41,8 @@ void ToastView::layout() {
 }
 
 void ToastView::paint(juce::Graphics& g) {
-  const float t = juce::jlimit(0.0f, 1.0f, (juce::Time::currentTimeMillis() - shownAtMs_) / float(kEnterMs));
-  const float eased = 1.0f - (1.0f - t) * (1.0f - t);  // ease-out
-  const float rise = kEnterRise * (1.0f - eased);
-  g.setOpacity(eased);
-  auto box = getLocalBounds().toFloat().translated(0, rise);
-  paint::fill(g, box, kRadius, theme::kWhite);
-  paint::text(g, toast_.message(), box.toNearestInt(), Fonts::sans(16, true), theme::kBlack,
+  paint::fill(g, getLocalBounds().toFloat(), kRadius, theme::kWhite);
+  paint::text(g, toast_.message(), getLocalBounds(), Fonts::sans(16, true), theme::kBlack,
               juce::Justification::centred);
 }
 

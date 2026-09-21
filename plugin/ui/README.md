@@ -13,7 +13,7 @@ format; nothing extra to install. `-DT3K_NATIVE_UI=OFF` builds the legacy
 webview editor instead (see [`../../ui/README.md`](../../ui/README.md)).
 
 Configuration (`VITE_T3K_PUBLISHABLE_KEY`, `VITE_T3K_API_DOMAIN`,
-`VITE_T3K_UPDATE_NOTICE`, `VITE_T3K_PREVIEW`) is read at CMake configure time
+`VITE_T3K_UPDATE_NOTICE`) is read at CMake configure time
 from `ui/.env` and `ui/.env.local`, with the configure environment overriding
 both, into the generated `T3kConfig.h` (`NativeUi.cmake`). One file
 configures both UIs.
@@ -69,15 +69,18 @@ plugin/ui/
   core/               no JUCE components: Theme, Fonts, Icons (+ generated
                       LucideIcons.h, CustomIcons, GearGlyphs), Design, Paint,
                       TextFlow / RichText (CSS-style text layout), Tween /
-                      AlphaTween / DelayedCall, AsyncScope, Result, Help
+                      AlphaTween (vblank-driven, via juce_animation),
+                      DelayedCall, AsyncScope, Result, Help
                       (hint strings), Labels, Pitch, EqMath, KnobScale,
                       MeterScale, MidiCatalog, Alerts, Blur, Bitmap (photos
                       resampled once at device density), Wheel
   model/              juce::var → structs: ChainState, Tone, AudioDeviceState,
-                      MidiMapState (VarReader)
+                      MidiMapState (VarReader); ToneQuery (the browser's
+                      filters → the API query string)
   backend/            ui::Backend (the native surface the web bridge exposed)
                       and ProcessorBackend over TONE3000Processor
-  services/           Services (one bundle per editor) and its members:
+  services/           Services (one bundle per editor) and its members
+                      (BrowserState: what the tone browser keeps between visits):
                       ChainStore, MeterStore, PresetStore, AudioDeviceStore,
                       MidiMapStore, UiPrefs, HintBus, Toast, Banners,
                       ParamBinding, AutoMeasure, SpectrumFeed, TunerFeed,
@@ -93,7 +96,9 @@ plugin/ui/
                       PluginHeader, Faceplate, MainScreen, TunerView, …
     gallery/          ChainView, GalleryLane, ToneTile, AddTile, StereoPanRail
     block/            BlockDetail, BlockCard, BlockInfoPanel, BlockEqView
-    browser/          ToneBrowser, ToneCard, StreamTabs, GearFilterRow, Paginator
+    browser/          ToneBrowser (the Select tone screen: search + FilterBar over the
+                      card grid), FilterBar / FilterChip / FilterMenu, ToneCard,
+                      Paginator, BrowserPrompt
     settings/         SettingsScreen, PluginSettingsPage, SystemSettingsPage,
                       MidiMapSection, …
     modals/           ConnectionModal, OAuthOverlay, UpdateNotice
@@ -129,7 +134,10 @@ file it ports and the CSS facts that fixed its numbers.
 - **Pixels.** New or changed visuals get a scenario in the React suite first
   (`ui/local/screenshots/scenarios.mjs`), exported with
   `export-fixtures.mjs`, and a matching drive in `Scenarios.cpp` if it needs
-  one. The capture table is the acceptance test.
+  one. The capture table is the acceptance test. Screens the web build no
+  longer has (the tone browser) are declared `nativeOnly` there: exported
+  for the testbed, skipped by the web capture, so they have no reference
+  PNG and are reviewed by eye against the Figma mockups.
 - **Logic.** Pure logic (parsers, state machines, math) is tested in
   `testbed/SelfTests.cpp`, one `juce::UnitTest` per file it covers.
 - **Icons.** Lucide glyphs come from `script/gen-lucide-icons.mjs` and are
@@ -138,15 +146,53 @@ file it ports and the CSS facts that fixed its numbers.
 - **Style.** Two files per component, CamelCase, `t3k::ui`; `-Wshadow`
   clean; comments explain the *why* and cite the React/CSS they mirror.
 
-## Sign-in and Select
+## Sign-in
 
-OAuth (PKCE) runs in the system browser. `Tone3000Session::leave` starts
+OAuth (PKCE) runs in the system browser. `Tone3000Session::login` starts
 `LoopbackServer` on `127.0.0.1:<ephemeral>`, opens the authorize URL with
 `redirect_uri=http://localhost:<port>/`, and dims the plugin (`OAuthOverlay`
 gains a Cancel button after a few seconds, since the user may never come
 back from the browser). The redirect lands on the loopback, is checked
 against the PKCE `state`, exchanged for tokens (`Tone3000Client`, persisted
 in `UiPrefs`, refreshed transparently with a single in-flight refresh and one
-401 retry), and, for Select, the picked `tone_id` is resolved into the chain
-exactly as the web did. Closing the editor stops the listener; a stale
-callback is ignored.
+401 retry). A login started from the tone browser (`LoginIntent::browse`)
+lands back in it. Closing the editor stops the listener; a stale callback is
+ignored.
+
+## The tone browser (Select tone)
+
+The whole screen needs a session: signed out it shows only the sign-in
+prompt. Signed in, `ToneBrowser` pins a search box and a `FilterBar` above
+the scrolling card grid and asks `ToneSession::searchTones` for one page at a
+time.
+
+- `BrowserState` (`services/`, one per editor) is what the screen keeps
+  between visits: the `ToneQuery`, whether the filter row is unfolded, the
+  page and the page's results. The browser is mounted only while open, so
+  coming back renders the last page at once with no fetch; it refreshes on
+  the next search, filter change or page turn. Closing the editor forgets it.
+- `ToneQuery` (model) is the one place the filters live: text, sort, gear,
+  format, tags / makes / creators, calibrated, verified, profile. It builds
+  the API path itself (`requestPath`): `/tones/search` with the query string,
+  or `/tones/{downloaded,favorited,created}` by gear alone when a profile
+  filter is set. The plugin's NAM architecture always rides along (the API
+  ignores it for IR, and omitting it falls back to a legacy A1-only default).
+  The default sort (best match with text, else trending) is stored as no
+  pick, so Trending never reads as a filter. Unit-tested in `SelfTests.cpp`.
+- `FilterBar` edits the state's query through one horizontally scrolling row
+  of chips (`FilterChip`): the filters button, then (once unfolded, pushing
+  the rest right) Sort, Format, Tags, Makes, Creators, Calibrated, then
+  verified, Profile and the gear chips. A chip holding a value shows it with
+  an × that clears it; the filters button carries a dot while any of the
+  unfolded ones are set. A profile filter parks the search box and the
+  catalog-only controls (dimmed, hint says why) without losing their values.
+- `FilterMenu` is the dropdown (`Popover`): every row has a check column and
+  the current value(s) tick; creator rows lead with the avatar. Taxonomy
+  menus add a search field and look their rows up from
+  `ToneSession::listTaxonomy` (debounced, a newer lookup cancels the one in
+  flight). Any pick closes the menu.
+- The search box submits on Enter (or its ×, or Escape, which clear it);
+  every filter change fetches page 1 at once. An older page arriving after
+  a newer one is dropped.
+- The web-facing bits stay in the web UI: nothing here is shared with `ui/`
+  except the fixtures the testbed renders.

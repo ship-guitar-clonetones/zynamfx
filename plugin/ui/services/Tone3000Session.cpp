@@ -16,17 +16,12 @@ constexpr const char* kLoopbackFailed = "Could not start the local sign-in liste
 constexpr int kFirstModelOnly = 1;
 // Tones max out at 300 models, so one page covers the picker.
 constexpr int kAllModels = 300;
-
-std::vector<Tone> parseTones(const juce::var& rows) {
-  std::vector<Tone> tones;
-  if (const auto* arr = rows.getArray())
-    for (const auto& t : *arr) tones.push_back(Tone::parse(t));
-  return tones;
-}
+// The taxonomy endpoints' page cap: one page fills a filter menu.
+constexpr int kTaxonomyPageSize = 25;
 }  // namespace
 
 Tone3000Session::Config Tone3000Session::Config::fromBuild() {
-  return {config::kApiOrigin, config::kPublishableKey, config::kArchitecture, config::kPreviewPlayersEnabled};
+  return {config::kApiOrigin, config::kPublishableKey, config::kArchitecture};
 }
 
 Tone3000Session::Tone3000Session(Backend& backend, UiPrefs& prefs, HttpTransport& http, Config config)
@@ -88,7 +83,7 @@ void Tone3000Session::logout() {
   cancelFlow();
   client_.clearTokens();
   pkce_.reset();
-  lastFlow_.reset();
+  lastIntent_ = LoginIntent::plain;
   prefs_.remove(UiPrefs::kCachedUser);
   pushToken({});
   notifySessionChanged();
@@ -119,22 +114,26 @@ void Tone3000Session::setToneFavorite(int toneId, bool favorite, Done done) {
   });
 }
 
-void Tone3000Session::listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) {
-  client_.listTrending(gear, [cb = std::move(reply)](Result<juce::var> r) {
-    if (!r) return cb(Result<std::vector<Tone>>::fail(r.error));
-    cb(Result<std::vector<Tone>>::ok(parseTones((*r)["data"])));
+void Tone3000Session::searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) {
+  client_.listTones(query.requestPath(page, pageSize, config_.architecture), [cb = std::move(reply)](Result<juce::var> r) {
+    if (!r) return cb(Result<TonePage>::fail(r.error));
+    cb(Result<TonePage>::ok(TonePage::parse(*r)));
   });
 }
 
-void Tone3000Session::listStream(Stream stream, int page, int pageSize, const juce::String& gear,
-                                 Reply<TonePage> reply) {
-  client_.listTones(streamId(stream), page, pageSize, gear, [cb = std::move(reply)](Result<juce::var> r) {
-    if (!r) return cb(Result<TonePage>::fail(r.error));
-    TonePage out;
-    out.data = parseTones((*r)["data"]);
-    out.page = static_cast<int>((*r).getProperty("page", 1));
-    out.totalPages = static_cast<int>((*r).getProperty("total_pages", 1));
-    cb(Result<TonePage>::ok(std::move(out)));
+void Tone3000Session::listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) {
+  // Tags and makes filter by name; creators by username (what the API
+  // matches `creators` against), so that is the name offered.
+  const bool creators = kind == Taxonomy::creators;
+  client_.listTaxonomy(kind, text, kTaxonomyPageSize, [creators, cb = std::move(reply)](Result<juce::var> r) {
+    if (!r) return cb(Result<std::vector<TaxonomyEntry>>::fail(r.error));
+    std::vector<TaxonomyEntry> entries;
+    if (const auto* rows = (*r)["data"].getArray())
+      for (const auto& row : *rows) {
+        const auto name = row[creators ? "username" : "name"].toString().trim();
+        if (name.isNotEmpty()) entries.push_back({name, creators ? row["avatar_url"].toString() : juce::String()});
+      }
+    cb(Result<std::vector<TaxonomyEntry>>::ok(std::move(entries)));
   });
 }
 
@@ -154,10 +153,6 @@ void Tone3000Session::fetchToneAndModels(int toneId, Reply<Tone> reply) {
   });
 }
 
-void Tone3000Session::finishSelection(const Tone& tone) {
-  if (onToneSelected) onToneSelected(tone);
-}
-
 void Tone3000Session::selectTone(int toneId, Done done) {
   // Both in flight together, like the web's Promise.all: the tone with its
   // first model, and a fresh token pushed to native before the load starts.
@@ -175,7 +170,7 @@ void Tone3000Session::selectTone(int toneId, Done done) {
       return;
     }
     if (!pending->tone || !pending->tokenReady) return;
-    finishSelection(*pending->tone);
+    if (onToneSelected) onToneSelected(*pending->tone);
     if (done) done({});
   });
   fetchToneAndModels(toneId, [pending, settle](Result<Tone> tone) {
@@ -198,13 +193,12 @@ void Tone3000Session::setFlow(AuthFlow::Phase phase, juce::String error) {
 
 void Tone3000Session::clearAuthError() { setFlow(AuthFlow::Phase::idle); }
 
-void Tone3000Session::leave(Flow flow, juce::StringPairArray extra) {
+void Tone3000Session::login(LoginIntent intent) {
   if (config_.publishableKey.isEmpty()) {
     setFlow(AuthFlow::Phase::error, kNoKeyMessage);
     return;
   }
-  lastFlow_ = flow;
-  browseIntent_ = flow != Flow::login;
+  lastIntent_ = intent;
   // Dim the plugin at once; the browser takes a beat to come up.
   setFlow(AuthFlow::Phase::leaving);
   if (!loopback_.start()) {
@@ -213,6 +207,7 @@ void Tone3000Session::leave(Flow flow, juce::StringPairArray extra) {
   }
   pkce_ = oauth::Pkce::generate();
   redirectUri_ = loopback_.redirectUri();
+  juce::StringPairArray extra;
   extra.set("menubar", "true");
   const auto url = oauth::authorizeUrl(config_.apiOrigin, config_.publishableKey, redirectUri_, *pkce_, extra);
   if (!juce::URL(url).launchInDefaultBrowser()) {
@@ -221,26 +216,7 @@ void Tone3000Session::leave(Flow flow, juce::StringPairArray extra) {
   }
 }
 
-void Tone3000Session::startSelectFlow() {
-  juce::StringPairArray extra;
-  extra.set("prompt", "select_tone");
-  if (config_.architecture >= 0) extra.set("architecture", juce::String(config_.architecture));
-  if (config_.preview) extra.set("preview", "true");
-  leave(Flow::select, std::move(extra));
-}
-
-void Tone3000Session::login(LoginIntent intent) {
-  leave(intent == LoginIntent::browse ? Flow::loginBrowse : Flow::login, {});
-}
-
-void Tone3000Session::retryFlow() {
-  // Defaults to Select when nothing is recorded, as the web did.
-  switch (lastFlow_.value_or(Flow::select)) {
-    case Flow::login: return login(LoginIntent::plain);
-    case Flow::loginBrowse: return login(LoginIntent::browse);
-    case Flow::select: return startSelectFlow();
-  }
-}
+void Tone3000Session::retryFlow() { login(lastIntent_); }
 
 void Tone3000Session::cancelFlow() {
   loopback_.stop();
@@ -255,8 +231,7 @@ void Tone3000Session::handleCallback(const juce::String& query) {
   const auto pkce = *pkce_;
   pkce_.reset();  // single use
   loopback_.stop();
-  const bool wantsBrowser = browseIntent_;
-  browseIntent_ = false;
+  const bool wantsBrowser = lastIntent_ == LoginIntent::browse;
 
   const auto cb = oauth::Callback::parse(query, pkce.state);
   switch (cb.kind) {
@@ -270,7 +245,7 @@ void Tone3000Session::handleCallback(const juce::String& query) {
       break;
   }
   setFlow(AuthFlow::Phase::returning);
-  client_.exchangeCode(cb.code, pkce.verifier, redirectUri_, scope_.wrap([this, cb, wantsBrowser](Result<Tokens> tokens) {
+  client_.exchangeCode(cb.code, pkce.verifier, redirectUri_, scope_.wrap([this, wantsBrowser](Result<Tokens> tokens) {
     if (flow_.phase != AuthFlow::Phase::returning) return;  // cancelled meanwhile
     if (!tokens) {
       setFlow(AuthFlow::Phase::error, tokens.error);
@@ -279,18 +254,6 @@ void Tone3000Session::handleCallback(const juce::String& query) {
     client_.setTokens(*tokens);
     notifySessionChanged();
     refreshUser();
-    if (cb.toneId.isNotEmpty()) {
-      fetchToneAndModels(cb.toneId.getIntValue(), scope_.wrap([this](Result<Tone> tone) {
-        if (flow_.phase != AuthFlow::Phase::returning) return;
-        if (!tone) {
-          setFlow(AuthFlow::Phase::error, tone.error);
-          return;
-        }
-        finishSelection(*tone);
-        setFlow(AuthFlow::Phase::idle);
-      }));
-      return;
-    }
     if (wantsBrowser && onAuthenticated) onAuthenticated();
     setFlow(AuthFlow::Phase::idle);
   }));

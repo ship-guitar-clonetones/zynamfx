@@ -17,8 +17,7 @@ PluginRoot::PluginRoot(Services& services)
       main_(services),
       faceplate_(services),
       toast_(services.toast),
-      hintTracker_(services.hints, *this),
-      bannerSlot_([this](float) { resized(); }) {
+      hintTracker_(services.hints, *this) {
   setOpaque(true);
 
   header_.onToggleTuner = [this](bool show) { setTunerShown(show); };
@@ -55,12 +54,8 @@ PluginRoot::PluginRoot(Services& services)
       services_.loadFlow.clearPendingTargets();
       setBrowserShown(false);
     };
-    // Browse leaves for the Select OAuth catalog: the same gate as login.
-    browser.onBrowseTone3000 = [this] {
-      services_.connection.requireConnection([this] { services_.session.startSelectFlow(); });
-    };
-    // Sign-in CTAs inside the browser run the no-prompt login flow and
-    // return to this same browser, never the full Select catalog.
+    // The browser's sign-in gate runs the login flow and returns to this
+    // same browser.
     browser.onSignIn = [this] {
       services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::browse); });
     };
@@ -198,8 +193,6 @@ void PluginRoot::hintChanged() {
 
 void PluginRoot::updateChromeHeight() {
   const int hintExtra = hintsVisible_ ? design::kHintHeight : 0;
-  // The window keeps the banner's space through the whole exit slide; it
-  // only shrinks back once the strip is gone.
   const int bannerExtra = bannerPhase_ != BannerPhase::hidden ? AppBanner::kHeight : 0;
   hintBar_.setVisible(hintsVisible_);
   setSize(design::kWidth, design::kHeight + bannerExtra + hintExtra);
@@ -212,23 +205,17 @@ void PluginRoot::bannerChanged() {
   if (active) {
     switch (bannerPhase_) {
       case BannerPhase::hidden:
-        // From cold the window has to grow first; slide once it has.
+        // From cold the window has to grow first; show once it has.
         bannerPhase_ = BannerPhase::waiting;
         banner_.setSpec(*active);
         updateChromeHeight();
         if (viewportFits()) {
-          bannerEnter();
+          bannerShow();
         } else {
-          bannerWait_.start(kBannerWaitMs, [this] { bannerEnter(); });
+          bannerWait_.start(kBannerWaitMs, [this] { bannerShow(); });
         }
         break;
-      case BannerPhase::leaving:
-        // The window still has the banner's space: re-enter directly.
-        banner_.setSpec(*active);
-        bannerEnter();
-        break;
       case BannerPhase::waiting:
-      case BannerPhase::entering:
       case BannerPhase::shown:
         // Rule swaps render directly.
         banner_.setSpec(*active);
@@ -236,20 +223,11 @@ void PluginRoot::bannerChanged() {
     }
     return;
   }
-  switch (bannerPhase_) {
-    case BannerPhase::waiting:
-      bannerWait_.cancel();
-      bannerPhase_ = BannerPhase::hidden;
-      updateChromeHeight();
-      break;
-    case BannerPhase::entering:
-    case BannerPhase::shown:
-      bannerLeave();  // the last spec stays rendered under the reverse slide
-      break;
-    case BannerPhase::hidden:
-    case BannerPhase::leaving:
-      break;
-  }
+  if (bannerPhase_ == BannerPhase::hidden) return;
+  bannerWait_.cancel();
+  bannerPhase_ = BannerPhase::hidden;
+  banner_.setVisible(false);
+  updateChromeHeight();
 }
 
 bool PluginRoot::viewportFits() const {
@@ -263,7 +241,7 @@ bool PluginRoot::viewportFits() const {
 }
 
 void PluginRoot::componentMovedOrResized(juce::Component&, bool, bool) {
-  if (bannerPhase_ == BannerPhase::waiting && viewportFits()) bannerEnter();
+  if (bannerPhase_ == BannerPhase::waiting && viewportFits()) bannerShow();
 }
 
 void PluginRoot::parentHierarchyChanged() {
@@ -275,20 +253,11 @@ void PluginRoot::parentHierarchyChanged() {
   componentMovedOrResized(*this, false, true);
 }
 
-void PluginRoot::bannerEnter() {
+void PluginRoot::bannerShow() {
   bannerWait_.cancel();
-  bannerPhase_ = BannerPhase::entering;
+  bannerPhase_ = BannerPhase::shown;
   banner_.setVisible(true);
-  bannerSlot_.animateTo(AppBanner::kHeight, kBannerAnimMs, [this] { bannerPhase_ = BannerPhase::shown; });
-}
-
-void PluginRoot::bannerLeave() {
-  bannerPhase_ = BannerPhase::leaving;
-  bannerSlot_.animateTo(0, kBannerAnimMs, [this] {
-    bannerPhase_ = BannerPhase::hidden;
-    banner_.setVisible(false);
-    updateChromeHeight();
-  });
+  resized();
 }
 
 void PluginRoot::handleBannerAction(BannerAction action) {
@@ -377,11 +346,11 @@ void PluginRoot::resized() {
                       static_cast<ModalLayer*>(connectionModal_.get())})
     if (modal != nullptr) modal->setBounds(getLocalBounds());
 
-  // The slide slot: the banner hangs from its bottom edge. Below it the
-  // content column keeps its full height; while the slot is short of the
-  // window's banner space the gap at the bottom is black on black.
-  const int slotH = juce::roundToInt(bannerSlot_.value());
-  banner_.setBounds(0, slotH - AppBanner::kHeight, design::kWidth, AppBanner::kHeight);
+  // The banner strip, then the content column at its full height; while
+  // the window has the strip's space but the banner isn't shown yet, the
+  // gap at the bottom is black on black.
+  const int slotH = bannerPhase_ == BannerPhase::shown ? AppBanner::kHeight : 0;
+  banner_.setBounds(0, 0, design::kWidth, AppBanner::kHeight);
   const int hintH = hintsVisible_ ? design::kHintHeight : 0;
   auto column = juce::Rectangle<int>(0, slotH, design::kWidth, design::kHeight + hintH);
   if (hintsVisible_) hintBar_.setBounds(column.removeFromBottom(hintH));

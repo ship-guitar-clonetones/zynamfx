@@ -117,6 +117,23 @@ std::map<Key, String> buildTable() {
       U("MIDI PC: show each preset’s program change number. Prev/Next and PC follow the list order.");
   t[Key::presetPc] = U("PC: the MIDI program change number that loads this preset.");
 
+  // Tone browser
+  t[Key::browserSearch] = U("Search: find tones on TONE3000 by title, gear, tags or creator.");
+  t[Key::browserMoreFilters] = U("Filters: sort, and narrow by format, tags, makes, creators or calibration.");
+  t[Key::browserFewerFilters] = U("Fewer filters: fold these away. They stay applied.");
+  t[Key::browserVerified] = U("Verified: only tones from verified creators.");
+  t[Key::browserProfile] = U("Profile: your recently used, favorited or created tones.");
+  t[Key::browserGear] = U("Gear: only tones of this type. Click again: all types.");
+  t[Key::browserSort] = U("Sort: order the results.");
+  t[Key::browserFormat] = U("Format: only NAM captures or impulse responses.");
+  t[Key::browserTags] = U("Tags: only tones carrying any of the chosen tags.");
+  t[Key::browserMakes] = U("Makes: only tones of the chosen makes and models.");
+  t[Key::browserCreators] = U("Creators: only tones by the chosen creators.");
+  t[Key::browserCalibrated] = U("Calibrated: only tones with a calibrated model.");
+  t[Key::browserClearFilter] = U("Click the name: change this filter · ×: clear it.");
+  t[Key::browserProfileLocked] =
+      U("Unavailable while a profile filter is set: your own tones list by gear only. Clear the profile to search.");
+
   // Chain gallery
   t[Key::addTile] =
       U("Add Tone: browse TONE3000 for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.");

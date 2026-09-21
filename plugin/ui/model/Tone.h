@@ -17,7 +17,12 @@ namespace t3k::ui {
 struct User {
   juce::String id;
   juce::String username;
+  // Only ever set for a verified creator; name() falls back to the username.
+  juce::String displayName;
+  bool isVerified = false;
   juce::String avatarUrl;
+
+  const juce::String& name() const { return displayName.isNotEmpty() ? displayName : username; }
 
   static User parse(const juce::var& v);
 };

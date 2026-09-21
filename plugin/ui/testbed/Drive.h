@@ -42,6 +42,8 @@ void click(PluginRoot& root, juce::Component& target, bool right = false);
 void clickByHelp(PluginRoot& root, const juce::String& helpPrefix, bool right = false);
 // Type into a field (replaces its contents, fires change callbacks).
 void fill(PluginRoot& root, const juce::String& placeholder, const juce::String& text);
+// fill() then Return.
+void submit(PluginRoot& root, const juce::String& placeholder, const juce::String& text);
 
 // Pump the message loop.
 void wait(int ms);

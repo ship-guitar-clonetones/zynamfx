@@ -45,7 +45,6 @@ public:
   static constexpr const char* kShowPresetPcNumbers = "t3k.showPresetPcNumbers";
   static constexpr const char* kTokens = "t3k_tokens";
   static constexpr const char* kCachedUser = "t3k.cachedUser";
-  static constexpr const char* kBrowserStream = "t3k_browser_stream";
   static constexpr const char* kUpdateNotice = "t3k.updateNotice";
   static constexpr const char* kDismissedBanners = "t3k.dismissedBanners";
   // Session keys.

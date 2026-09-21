@@ -85,7 +85,6 @@ private:
     void paint(juce::Graphics& g) override;
   };
   Strip chrome_;
-  AlphaTween chromeFade_{chrome_};
   ChromeIconButton power_, swap_, remove_;
   EnergyGlow glow_;
   // The LED shows itself while the clip is latched; the slot hides while

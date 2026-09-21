@@ -10,27 +10,26 @@
 namespace t3k::ui {
 
 namespace {
-constexpr const char* kSignInHeading = "Sign in to see your tones and discover zillions more.";
-constexpr const char* kDiscoverMoreHeading = "Discover zillions more tones.";
+constexpr const char* kSignInHeading = "Sign in to search zillions of tones on TONE3000.";
 constexpr const char* kSignInLabel = "Sign in or create free account";
-constexpr const char* kStreamError = "Failed to load tones from TONE3000.";
+constexpr const char* kFetchError = "Failed to load tones from TONE3000.";
 constexpr const char* kPickError = "Failed to load that tone. Please try again.";
 constexpr float kPickErrorPx = 12;
 constexpr float kEmptyPx = 13;
+constexpr float kSearchPx = 14;
+constexpr int kSearchIcon = 18;
+constexpr int kSearchPadX = 16;
+constexpr int kSearchIconGap = 10;
+// Cards slide under the filter row through this much black.
+constexpr int kTopFade = 24;
 
-const char* emptyCopy(Stream stream) {
-  switch (stream) {
-    case Stream::trending: return "No trending tones right now. Check back soon.";
-    case Stream::downloaded: return "Tones you download on TONE3000 will show up here.";
-    case Stream::favorited: return "Tones you favorite on TONE3000 will show up here.";
-    case Stream::created: return "Tones you upload to TONE3000 will show up here.";
-  }
-  return "";
+std::unique_ptr<PillButton> makeFilledButton(const juce::String& label) {
+  return std::make_unique<PillButton>(label, PillButton::Style::filled);
 }
 }  // namespace
 
-// The scrolled column: hosts the pills, cards, prompts and paginator, and
-// paints the two bare text rows (pick error, empty copy) itself.
+// The scrolled column: hosts the cards, prompts and paginator, and paints
+// the two bare text rows (pick error, empty copy) itself.
 class ToneBrowser::Content : public juce::Component {
 public:
   juce::String pickError, emptyCopy;
@@ -52,104 +51,92 @@ public:
   }
 };
 
-std::unique_ptr<PillButton> ToneBrowser::makeBrowseButton() {
-  // Taller than the default outline pill: Browse is the persistent path to
-  // the full catalog, so the icon and mark scale up with the 40px height.
-  auto button = std::make_unique<PillButton>("Browse", PillButton::Style::outline);
-  button->setMetrics({22, 0, 15, 10});
-  button->setLeadingIcon(Icon::Search, 16);
-  button->setTrailingMark(14);
-  button->setSize(button->getWidth(), kBrowseHeight);
-  return button;
-}
-
-std::unique_ptr<PillButton> ToneBrowser::makeFilledButton(const juce::String& label) {
-  return std::make_unique<PillButton>(label, PillButton::Style::filled);
-}
-
 ToneBrowser::ToneBrowser(Services& services)
     : services_(services),
+      state_(services.browser),
       back_("Select Tone", help::Key::closeToneBrowser),
-      browse_(makeBrowseButton()),
+      filters_(services, services.browser),
       scroller_(std::make_unique<Scroller>()),
       content_(std::make_unique<Content>()) {
-  // Land on the stream the user was on last time; default to the public
-  // Trending feed rather than a gated stream that might now be unreachable.
-  stream_ = streamFromId(services_.prefs.get(UiPrefs::kBrowserStream)).value_or(Stream::trending);
-
   back_.onClick = [this] {
     if (onClose) onClose();
   };
-  browse_->onClick = [this] {
-    if (onBrowseTone3000) onBrowseTone3000();
-  };
-  tabs_.setActive(stream_);
-  tabs_.onChange = [this](Stream next) { switchStream(next); };
   addAndMakeVisible(back_);
-  addAndMakeVisible(*browse_);
-  addAndMakeVisible(tabs_);
+
+  search_.setPlaceholder(juce::String::fromUTF8("Search\xe2\x80\xa6"));
+  search_.setFontSize(kSearchPx);
+  search_.setCornerRadius(kSearchHeight / 2.0f);
+  search_.setPadding(0, kSearchPadX + kSearchIcon + kSearchIconGap, kSearchPadX + kSearchIcon + kSearchIconGap);
+  search_.setLeadingIcon(Icon::Search, kSearchIcon, kSearchPadX, theme::kGray);
+  search_.setClearButton(kSearchIcon, kSearchPadX);
+  search_.setHelpText(help::text(help::Key::browserSearch));
+  search_.setText(state_.query.text);
+  search_.onEnter = [this] { submit(); };
+  search_.onClear = [this] { submit(); };
+  search_.onEscape = [this] {
+    search_.setText({});
+    submit();
+  };
+  addChildComponent(search_);
+
+  filters_.onChange = [this] { queryChanged(); };
+  addChildComponent(filters_);
 
   scroller_->setViewedComponent(content_.get(), false);
   addAndMakeVisible(*scroller_);
-  gearRow_.onChange = [this](const juce::String& gear) { setGearFilter(gear); };
-  content_->addChildComponent(gearRow_);
   content_->addChildComponent(dots_);
   paginator_.onPageChange = [this](int page) { setPage(page); };
   content_->addChildComponent(paginator_);
 
   services_.session.addListener(this);
-  fetch();
+  // Back to the page this screen was left on; a fresh visit fetches.
+  if (state_.result && !signedOut()) {
+    loading_ = false;
+    rebuildCards();
+    rebuildBody();
+  } else {
+    fetch();
+  }
 }
 
 ToneBrowser::~ToneBrowser() { services_.session.removeListener(this); }
 
 // State
-bool ToneBrowser::showSignInPrompt() const { return streamIsGated(stream_) && !services_.session.authenticated(); }
-
-bool ToneBrowser::authPending() const {
-  return services_.session.authFlow().phase == ToneSession::AuthFlow::Phase::returning;
-}
-
 void ToneBrowser::sessionChanged() { fetch(); }
 
 void ToneBrowser::authFlowChanged() {
-  // The effect re-ran when authPending cleared; a stream fetch held back
-  // during the return goes out now.
-  if (!authPending() && loading_ && !result_) fetch();
+  // Held back during an OAuth return; the fetch goes out once it clears.
+  if (!authPending() && loading_ && !state_.result) fetch();
 }
 
-void ToneBrowser::switchStream(Stream next) {
-  if (next == stream_) return;
-  stream_ = next;
-  services_.prefs.set(UiPrefs::kBrowserStream, streamId(next));
-  tabs_.setActive(next);
-  page_ = 1;
-  fetch();
+void ToneBrowser::submit() {
+  state_.query.text = search_.text();
+  filters_.refresh();  // the default sort follows the text
+  queryChanged();
 }
 
-void ToneBrowser::setGearFilter(const juce::String& gear) {
-  gear_ = gear;
-  page_ = 1;
+void ToneBrowser::queryChanged() {
+  state_.page = 1;
   fetch();
 }
 
 void ToneBrowser::setPage(int page) {
-  if (page == page_) return;
-  page_ = page;
+  if (page == state_.page) return;
+  state_.page = page;
   fetch();
 }
 
 void ToneBrowser::fetch() {
   // Pre-mounted during an OAuth return: the token exchange hasn't finished,
-  // so we don't yet know whether to render the gated prompt or fetch. Keep
-  // the loading state; authFlowChanged reruns this once it clears.
+  // so we don't yet know whether to render the gate or fetch. Keep the
+  // loading state; authFlowChanged reruns this once it clears.
   if (authPending()) return;
 
-  // Gated stream, signed out: skip the fetch entirely (it would only fail
-  // with not_authenticated and trip the client's re-auth callback).
-  if (showSignInPrompt()) {
+  // Signed out: the gate alone (a fetch would only fail with
+  // not_authenticated and trip the client's re-auth callback).
+  if (signedOut()) {
     fetchScope_.reset();
-    result_.reset();
+    state_.result.reset();
     loading_ = false;
     error_ = false;
     rebuildCards();
@@ -161,41 +148,28 @@ void ToneBrowser::fetch() {
   loading_ = true;
   error_ = false;
   rebuildBody();
-  if (stream_ == Stream::trending) {
-    services_.session.listTrending(gear_, fetchScope_.wrap([this](ui::Result<std::vector<Tone>> r) {
-      if (r) streamLoaded(std::move(*r.value), std::nullopt, std::nullopt);
-      else streamFailed();
-    }));
-  } else {
-    services_.session.listStream(stream_, page_, kPageSize, gear_, fetchScope_.wrap([this](ui::Result<TonePage> r) {
-      if (r) streamLoaded(std::move(r.value->data), r.value->page, r.value->totalPages);
-      else streamFailed();
-    }));
-  }
+  services_.session.searchTones(state_.query, state_.page, kPageSize, fetchScope_.wrap([this](ui::Result<TonePage> r) {
+    if (r) pageLoaded(std::move(*r.value));
+    else pageFailed();
+  }));
 }
 
-void ToneBrowser::streamLoaded(std::vector<Tone> tones, std::optional<int> page, std::optional<int> totalPages) {
-  result_ = StreamResult{std::move(tones), page, totalPages};
+void ToneBrowser::pageLoaded(TonePage page) {
+  state_.result = std::move(page);
   loading_ = false;
   rebuildCards();
   rebuildBody();
-  // Jump to the top whenever fresh results land (page turn / pill).
+  // Jump to the top whenever fresh results land (page turn / filter).
   scroller_->setViewPosition(0, 0);
 }
 
-void ToneBrowser::streamFailed() {
+void ToneBrowser::pageFailed() {
   error_ = true;
   loading_ = false;
   rebuildBody();
 }
 
 void ToneBrowser::pick(const Tone& tone) {
-  // Trending is viewable signed out, but resolving a tone (its models + a
-  // download token) needs a session: route the click through sign-in.
-  if (stream_ == Stream::trending && !services_.session.authenticated()) {
-    if (onSignIn) onSignIn();
-    return;
-  }
   if (pickingId_) return;
   pickError_.clear();
   pickingId_ = tone.id;
@@ -209,11 +183,21 @@ void ToneBrowser::pick(const Tone& tone) {
   }));
 }
 
+const char* ToneBrowser::emptyCopy() const {
+  switch (state_.query.profile) {
+    case Profile::none: return "No tones match. Try a different search or fewer filters.";
+    case Profile::downloaded: return "Tones you download on TONE3000 will show up here.";
+    case Profile::favorited: return "Tones you favorite on TONE3000 will show up here.";
+    case Profile::created: return "Tones you upload to TONE3000 will show up here.";
+  }
+  return "";
+}
+
 // Children
 void ToneBrowser::rebuildCards() {
   cards_.clear();
-  if (!result_) return;
-  for (const auto& tone : result_->data) {
+  if (!state_.result) return;
+  for (const auto& tone : state_.result->data) {
     auto card = std::make_unique<ToneCard>(services_.images, tone);
     card->onClick = [this, id = tone.id] {
       const auto it = std::find_if(cards_.begin(), cards_.end(), [id](const auto& c) { return c->tone().id == id; });
@@ -225,30 +209,39 @@ void ToneBrowser::rebuildCards() {
 }
 
 void ToneBrowser::rebuildBody() {
-  const bool signIn = showSignInPrompt();
+  const bool gate = signedOut() && !authPending();
   const bool showError = error_ && !loading_;
-  const bool hasCards = result_ && !result_->data.empty();
+  const bool hasCards = state_.result && !state_.result->data.empty();
 
-  // Body prompt: the gated sign-in, or the stream error with Try again.
+  // The search controls exist only for a session; while a profile filter
+  // is set the search box parks (its stream lists by gear alone).
+  search_.setVisible(!gate);
+  filters_.setVisible(!gate);
+  const bool locked = filters_.profileLocked();
+  search_.setAlpha(locked ? theme::kDisabledOpacity : 1.0f);
+  search_.setInterceptsMouseClicks(!locked, !locked);
+  search_.setHelpText(help::text(locked ? help::Key::browserProfileLocked : help::Key::browserSearch));
+
+  // Body prompt: the sign-in gate, or the fetch error with Try again.
   bodyPrompt_.reset();
-  if (signIn) {
+  if (gate) {
     bodyPrompt_ = std::make_unique<BrowserPrompt>(true, kSignInHeading, kCopyMaxWidth, makeFilledButton(kSignInLabel));
     bodyPrompt_->button().onClick = [this] {
       if (onSignIn) onSignIn();
     };
   } else if (showError) {
-    bodyPrompt_ = std::make_unique<BrowserPrompt>(false, kStreamError, kErrorMaxWidth, makeFilledButton("Try again"));
+    bodyPrompt_ = std::make_unique<BrowserPrompt>(false, kFetchError, kErrorMaxWidth, makeFilledButton("Try again"));
     bodyPrompt_->button().onClick = [this] { fetch(); };
   }
   if (bodyPrompt_) content_->addAndMakeVisible(*bodyPrompt_);
 
-  // First load (nothing to dim yet): dots alone. Empty stream: its copy.
-  dots_.setVisible(!signIn && !showError && !hasCards && loading_);
-  content_->emptyCopy = !signIn && !showError && !hasCards && !loading_ ? emptyCopy(stream_) : juce::String();
+  // First load (nothing to dim yet): dots alone. Nothing found: the copy.
+  dots_.setVisible(!gate && !showError && !hasCards && loading_);
+  content_->emptyCopy = !gate && !showError && !hasCards && !loading_ ? emptyCopy() : juce::String();
 
-  // Cards stay mounted while a new stream / page loads, dimmed and inert
-  // under the busy overlay. Other cards dim while one pick resolves.
-  const bool cardsVisible = !signIn && !showError && hasCards;
+  // Cards stay mounted while a new page loads, dimmed and inert under the
+  // busy overlay. Other cards dim while one pick resolves.
+  const bool cardsVisible = !gate && !showError && hasCards;
   for (auto& card : cards_) {
     card->setVisible(cardsVisible);
     const bool picking = pickingId_ && *pickingId_ == card->tone().id;
@@ -264,40 +257,16 @@ void ToneBrowser::rebuildBody() {
     gridBusy_.reset();
   }
 
-  // Paginated streams keep the paginator at the end of the page; Trending
-  // is a fixed top-10 feed and never paginates.
-  const bool paginate = !signIn && !error_ && result_ && result_->totalPages.value_or(1) > 1;
+  const bool paginate = !gate && !error_ && state_.result && state_.result->totalPages > 1;
   paginator_.setVisible(paginate);
   if (paginate) {
-    paginator_.set(page_, *result_->totalPages);
+    paginator_.set(state_.page, state_.result->totalPages);
     paginator_.setAlpha(loading_ ? theme::kDisabledOpacity : 1.0f);
     paginator_.setInterceptsMouseClicks(!loading_, false);
   }
 
-  // Trending always closes with a path to the rest of the catalog: a
-  // sign-in nudge while signed out, the Browse CTA again when signed in.
-  // Held back until results land so it never floats under the dots.
-  footerBrowse_.reset();
-  footerPrompt_.reset();
-  if (stream_ == Stream::trending && !error_ && !loading_) {
-    if (services_.session.authenticated()) {
-      footerBrowse_ = makeBrowseButton();
-      footerBrowse_->onClick = [this] {
-        if (onBrowseTone3000) onBrowseTone3000();
-      };
-      content_->addAndMakeVisible(*footerBrowse_);
-    } else {
-      footerPrompt_ = std::make_unique<BrowserPrompt>(true, kDiscoverMoreHeading, kCopyMaxWidth, makeFilledButton(kSignInLabel));
-      footerPrompt_->button().onClick = [this] {
-        if (onSignIn) onSignIn();
-      };
-      content_->addAndMakeVisible(*footerPrompt_);
-    }
-  }
-
   content_->pickError = pickError_;
-  gearRow_.setVisible(!signIn);
-  layoutContent();
+  resized();
 }
 
 // Layout
@@ -306,17 +275,28 @@ void ToneBrowser::resized() {
   const int colW = std::min(kColumnWidth, w);
   const int colX = (w - colW) / 2;
 
-  // Header row: top-aligned (Browse is taller), no side inset, flush with
-  // the column like ← BLOCK.
   int y = kPadTop;
   back_.setTopLeftPosition(colX, y);
-  browse_->setTopLeftPosition(colX + colW - browse_->getWidth(), y);
-  y += kBrowseHeight + kHeaderGap;
-  tabs_.setBounds(colX, y, colW, StreamTabs::kHeight);
-  y += StreamTabs::kHeight;
+  y += BackLink::kHeight;
+  if (search_.isVisible()) {
+    y += kHeaderGap;
+    search_.setBounds(colX, y, colW, kSearchHeight);
+    y += kSearchHeight + kHeaderGap;
+    filters_.setColumn({colX, y, colW, FilterBar::kHeight});
+    y += FilterBar::kHeight;
+  }
 
   scroller_->setBounds(0, y, w, std::max(0, getHeight() - y));
   layoutContent();
+}
+
+// Scrolled cards fade out under the header instead of clipping at it.
+void ToneBrowser::paintOverChildren(juce::Graphics& g) {
+  if (!search_.isVisible() || scroller_->getViewPositionY() == 0) return;
+  const auto top = scroller_->getBounds().toFloat().withHeight(kTopFade);
+  g.setGradientFill(juce::ColourGradient::vertical(juce::Colours::black, top.getY(),
+                                                   juce::Colours::transparentBlack, top.getBottom()));
+  g.fillRect(top);
 }
 
 void ToneBrowser::layoutContent() {
@@ -324,12 +304,8 @@ void ToneBrowser::layoutContent() {
   if (w <= 0) return;
   const int colW = std::min(kColumnWidth, w);
   const int colX = (w - colW) / 2;
-  int y = kContentPadTop;
+  int y = 0;
 
-  if (gearRow_.isVisible()) {
-    gearRow_.setColumn({colX, y, colW, GearFilterRow::kHeight});
-    y += GearFilterRow::kHeight;
-  }
   if (pickError_.isNotEmpty()) {
     y += kPickErrorGap;
     const int line = Fonts::normalLineHeight(kPickErrorPx);
@@ -337,8 +313,8 @@ void ToneBrowser::layoutContent() {
     y += line;
   }
 
-  // Tone grid / empty state / sign-in prompt.
-  y += kBodyGap;
+  // Tone grid / empty state / prompt.
+  y += kContentPadTop;
   if (bodyPrompt_) {
     bodyPrompt_->setBounds(colX, y, colW, bodyPrompt_->heightFor(colW));
     y += bodyPrompt_->getHeight();
@@ -374,15 +350,6 @@ void ToneBrowser::layoutContent() {
     y += kPaginatorGap;
     paginator_.setTopLeftPosition(colX + colW - paginator_.getWidth(), y);
     y += Paginator::kHeight;
-  }
-
-  if (footerBrowse_) {
-    y += BrowserPrompt::kPadY;
-    footerBrowse_->setTopLeftPosition(colX + (colW - footerBrowse_->getWidth()) / 2, y);
-    y += footerBrowse_->getHeight() + BrowserPrompt::kPadY;
-  } else if (footerPrompt_) {
-    footerPrompt_->setBounds(colX, y, colW, footerPrompt_->heightFor(colW));
-    y += footerPrompt_->getHeight();
   }
 
   y += kContentPadBottom;

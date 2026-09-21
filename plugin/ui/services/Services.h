@@ -7,6 +7,7 @@
 #include "AudioDeviceStore.h"
 #include "AutoMeasure.h"
 #include "Banners.h"
+#include "BrowserState.h"
 #include "ChainStore.h"
 #include "ConnectionGate.h"
 #include "HintBus.h"
@@ -76,6 +77,7 @@ public:
   AutoMeasure autoBalance;
   AutoMeasure autoAlign;
   ImageLoader images;
+  BrowserState browser;
   LocalFiles localFiles;
   ModelLoads modelLoads;
   ConnectionGate connection;

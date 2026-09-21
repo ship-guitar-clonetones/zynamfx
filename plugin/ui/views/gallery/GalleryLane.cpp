@@ -1,7 +1,6 @@
 #include "GalleryLane.h"
 
 #include "GalleryGeometry.h"
-#include "core/AlphaTween.h"
 #include "core/Design.h"
 #include "core/Help.h"
 #include "core/Icons.h"
@@ -12,7 +11,6 @@ namespace t3k::ui {
 namespace {
 // Diameter of the branch dots: half the power-button chrome footprint.
 constexpr int kBranchDot = theme::kIconBoxSize / 2;
-constexpr int kBranchFadeMs = 150;
 }  // namespace
 
 // Full-gap hover zone wrapping a branch dot: the whole 24px connector run is
@@ -25,21 +23,18 @@ public:
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
     setWantsKeyboardFocus(false);
     onClick = std::move(action);
-    fade_.snap(design::kCoarsePointer ? 1.0f : 0.0f);
+    setAlpha(design::kCoarsePointer ? 1.0f : 0.0f);
   }
 
-  void mouseEnter(const juce::MouseEvent&) override { fade_.animateTo(1.0f, kBranchFadeMs); }
+  void mouseEnter(const juce::MouseEvent&) override { setAlpha(1.0f); }
   void mouseExit(const juce::MouseEvent&) override {
-    if (!design::kCoarsePointer) fade_.animateTo(0.0f, kBranchFadeMs);
+    if (!design::kCoarsePointer) setAlpha(0.0f);
   }
 
   void paintButton(juce::Graphics& g, bool, bool) override {
     g.setColour(theme::kWhite);
     g.fillEllipse(getLocalBounds().toFloat().withSizeKeepingCentre(kBranchDot, kBranchDot));
   }
-
-private:
-  AlphaTween fade_{*this};
 };
 
 GalleryLane::GalleryLane(Services& services, ChainSide side) : services_(services), side_(side) {

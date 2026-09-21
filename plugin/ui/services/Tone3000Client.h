@@ -15,6 +15,7 @@
 #include "HttpClient.h"
 #include "UiPrefs.h"
 #include "core/Result.h"
+#include "model/ToneQuery.h"
 
 namespace t3k::ui {
 
@@ -67,17 +68,19 @@ public:
   void fetch(const juce::String& path, const juce::String& method, const juce::String& jsonBody,
              Reply<HttpResponse> reply);
   // Bearer when a session exists, anonymous otherwise (and anonymous again
-  // when the session cannot be refreshed): Trending, the version check.
+  // when the session cannot be refreshed): the version check.
   void fetchOptionalAuth(const juce::String& path, juce::StringPairArray headers, Reply<HttpResponse> reply);
 
   // Typed endpoints
   void getUser(Reply<juce::var> reply);
   void getTone(int toneId, Reply<juce::var> reply);
   void setFavorite(int toneId, bool favorite, Reply<bool> reply);
-  // /tones/{endpoint}?page&page_size[&gear]
-  void listTones(const juce::String& endpoint, int page, int pageSize, const juce::String& gear,
-                 Reply<juce::var> reply);
-  void listTrending(const juce::String& gear, Reply<juce::var> reply);
+  // A tone listing by its ready-made path (ToneQuery::requestPath): the
+  // PaginatedResponse payload.
+  void listTones(const juce::String& path, Reply<juce::var> reply);
+  // /tags, /makes or /users (creators), most-used first, one page of
+  // `pageSize`, narrowed by `query` when non-empty.
+  void listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply);
   // /models?tone_id&page_size[&architecture]; architecture < 0 omits it.
   void listModels(int toneId, int pageSize, int architecture, Reply<juce::var> reply);
   void fetchPluginVersion(const juce::String& deviceId, Reply<juce::var> reply);
@@ -90,7 +93,7 @@ private:
   void anonymousRequest(const juce::String& path, const juce::StringPairArray& headers,
                         std::function<void(HttpResponse)> onDone);
   // GET expecting a JSON body; non-2xx → "<label> failed: <status>".
-  void getJson(const juce::String& path, const char* label, Reply<juce::var> reply);
+  void getJson(const juce::String& path, juce::String label, Reply<juce::var> reply);
 
   HttpTransport& http_;
   UiPrefs& prefs_;

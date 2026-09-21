@@ -133,6 +133,11 @@ void fill(PluginRoot& root, const juce::String& placeholder, const juce::String&
   }
 }
 
+void submit(PluginRoot& root, const juce::String& placeholder, const juce::String& text) {
+  fill(root, placeholder, text);
+  if (auto* e = inputWithPlaceholder(root, placeholder)) e->keyPressed(juce::KeyPress(juce::KeyPress::returnKey));
+}
+
 void wait(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
 
 void openSettings(PluginRoot& root) {
