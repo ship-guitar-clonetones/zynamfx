@@ -80,6 +80,11 @@ juce::String count(double value) {
   return text + units[unit];
 }
 
+juce::String toFixed(double value, int decimals) {
+  if (decimals > 0) return juce::String(value, decimals);
+  return juce::String(static_cast<juce::int64>(std::llround(value)));
+}
+
 juce::String timeAgoShort(const juce::String& iso8601, juce::Time now) {
   if (iso8601.length() < 4) return {};  // fromISO8601 asserts on an empty string
   const auto then = juce::Time::fromISO8601(iso8601);

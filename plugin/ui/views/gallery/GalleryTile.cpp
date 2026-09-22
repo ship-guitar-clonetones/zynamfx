@@ -9,6 +9,9 @@ GalleryTile::GalleryTile(Services& services, std::string blockId, int size)
     : services_(services), blockId_(std::move(blockId)), size_(size) {
   setSize(size, size);
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
+  // A touch drag on a tile sorts it; only the gaps around the tiles pan the
+  // chain view.
+  setViewportIgnoreDragFlag(true);
   // Sortable tiles are focusable (keyboard sorting) but draw no focus ring,
   // as the web didn't.
   setWantsKeyboardFocus(true);

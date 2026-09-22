@@ -77,26 +77,10 @@ private:
   float lanesTop_ = 0;
 };
 
-// Horizontal-only scroll area with hidden scrollbars. JUCE remaps a plain
-// vertical wheel onto a sideways-only viewport (the web needed a hook for
-// that) and hands the event on to ancestors at either end, like native
-// scroll chaining; touch drags pan it from the gaps around the tiles.
-class ChainView::Scroller : public juce::Viewport {
-public:
-  Scroller() {
-    setScrollBarsShown(false, false, false, true);
-    setScrollOnDragMode(ScrollOnDragMode::nonHover);
-  }
-  std::function<void()> onScroll;
-  void visibleAreaChanged(const juce::Rectangle<int>&) override {
-    if (onScroll) onScroll();
-  }
-};
-
 ChainView::ChainView(Services& services)
     : services_(services),
       rail_(services),
-      scroller_(std::make_unique<Scroller>()),
+      scroller_(std::make_unique<DragScroller>(DragScroller::Axis::horizontal)),
       column_(std::make_unique<Column>()),
       left_(services, ChainSide::left),
       right_(services, ChainSide::right) {

@@ -4,8 +4,8 @@
 // Two shapes of request hide behind one query. The catalog search
 // (GET /tones/search) takes all of it. A profile filter (Recently used,
 // Favorites, Created) instead pages one of the signed-in user's own streams
-// (GET /tones/{downloaded|favorited|created}), which only filter by gear:
-// the browser dims the search box and the other filters while one is set.
+// (GET /tones/{downloaded|favorited|created}), which filter by gear and a
+// title search only: the browser parks the other filters while one is set.
 #pragma once
 
 #include <juce_core/juce_core.h>
@@ -54,9 +54,15 @@ struct ToneQuery {
   juce::String gear;             // "" = any (single, like the chip row)
   juce::String format;           // "" = any
   std::vector<juce::String> tags, makes, creators;
-  bool calibrated = false;
+  bool calibrated = false;  // see calibratedInForce()
   bool verified = false;
   Profile profile = Profile::none;
+
+  // Calibration is a property of amp and pedal captures. Cabinets and
+  // spaces are impulse responses, as is the IR format, so under those the
+  // Calibrated filter is parked: kept, but neither shown as set nor sent.
+  bool calibratedApplies() const { return gear != "cab" && gear != "space" && format != "ir"; }
+  bool calibratedInForce() const { return calibrated && calibratedApplies(); }
 
   // The API's default sort for this text, and the sort in force.
   ToneSort defaultSort() const { return text.isNotEmpty() ? ToneSort::bestMatch : ToneSort::trending; }
@@ -69,7 +75,7 @@ struct ToneQuery {
   // Anything set behind the filter button (the dot on it).
   bool hasAdvancedFilters() const {
     return sortIsExplicit() || format.isNotEmpty() || !tags.empty() || !makes.empty() || !creators.empty() ||
-           calibrated;
+           calibratedInForce();
   }
   const std::vector<juce::String>& picked(Taxonomy kind) const;
   std::vector<juce::String>& picked(Taxonomy kind);

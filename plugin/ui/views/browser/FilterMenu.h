@@ -1,6 +1,7 @@
 // The dropdown under a filter chip (the Select tone mockups' menus): a
-// panel of 14px rows, each with a check column so the current value(s)
-// tick and every label lines up; creator rows lead with the avatar. A
+// panel of 14px rows. A single-pick menu shows the current value in white;
+// a multi-pick menu adds a check column so the picked names tick and every
+// label lines up. Rows may lead with an icon or a creator avatar. A
 // searchable menu (the taxonomy filters) adds a search field on top and
 // tells its owner what was typed. The panel fits its widest row and grows
 // with its rows up to a cap, then scrolls. Any pick reports and closes.
@@ -13,7 +14,9 @@
 #include <optional>
 #include <vector>
 
+#include "core/Icons.h"
 #include "services/ImageLoader.h"
+#include "widgets/DragScroller.h"
 #include "widgets/Popover.h"
 #include "widgets/TextField.h"
 
@@ -26,14 +29,17 @@ public:
     juce::String label;
     // Set: the row leads with this avatar ("" = the fallback glyph).
     std::optional<juce::String> avatarUrl;
+    // Set: the row leads with this icon (the Favorites bookmark).
+    std::optional<Icon> icon;
   };
+  enum class Picks { single, multi };
   static constexpr int kGap = 8;  // anchor → panel
 
   // `searchPlaceholder` set = a search field over the rows.
-  FilterMenu(ImageLoader& images, juce::String searchPlaceholder = {});
+  FilterMenu(ImageLoader& images, Picks picks, juce::String searchPlaceholder = {});
   ~FilterMenu() override;
 
-  // Replace the rows; `picked` ids show ticked.
+  // Replace the rows; `picked` ids read as current.
   void setOptions(std::vector<Option> options, const std::vector<juce::String>& picked);
   // A muted line instead of rows.
   void setStatus(juce::String status);
@@ -60,9 +66,10 @@ private:
   void layoutRows();
 
   ImageLoader& images_;
+  const Picks picks_;
   const bool searchable_;
   TextField search_;
-  juce::Viewport viewport_;
+  DragScroller viewport_{DragScroller::Axis::vertical};
   juce::Component list_;
   std::vector<std::unique_ptr<Row>> rows_;
   juce::String status_;

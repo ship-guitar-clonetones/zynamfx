@@ -184,6 +184,16 @@ const std::map<juce::String, Drive>& drives() {
          wait(400);
          unhover(root);
        }},
+      {"browser-profile-search",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Profile:");
+         wait(200);
+         if (auto* row = buttonNamed(root, "Recently used")) click(root, *row);
+         wait(300);
+         submit(root, juce::String::fromUTF8("Search\xe2\x80\xa6"), "vox");
+         wait(400);
+         unhover(root);
+       }},
       {"browser-profile-empty",
        [](PluginRoot& root, MockBackend&) {
          clickByHelp(root, "Profile:");
@@ -204,6 +214,24 @@ const std::map<juce::String, Drive>& drives() {
          wait(200);
          clickByHelp(root, "Sort:");
          wait(300);
+       }},
+      {"browser-sort-newest",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Sort:");
+         wait(200);
+         if (auto* row = buttonNamed(root, "Newest")) click(root, *row);
+         wait(400);
+         unhover(root);
+       }},
+      {"browser-calibrated-ir",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* chip = buttonNamed(root, "Cabinet")) click(root, *chip);
+         wait(300);
+         clickByHelp(root, "Filters:");
+         wait(400);
+         unhover(root);
        }},
       {"browser-format-ir",
        [](PluginRoot& root, MockBackend&) {

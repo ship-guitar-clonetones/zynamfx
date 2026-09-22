@@ -9,6 +9,10 @@
 
 namespace t3k::ui::labels {
 
+// JavaScript's Number.toFixed: `decimals` places, trailing zeros kept, and
+// none at 0 ("38", where juce::String(38.4, 0) would print "38.4").
+juce::String toFixed(double value, int decimals);
+
 // The browser's gear filter chips (labels.ts GEAR_FILTERS), in order.
 struct GearFilter {
   const char* id;

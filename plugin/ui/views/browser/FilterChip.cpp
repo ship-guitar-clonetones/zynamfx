@@ -77,15 +77,20 @@ void FilterChip::setLocked(bool locked) {
   setMouseCursor(locked_ ? juce::MouseCursor::NormalCursor : juce::MouseCursor::PointingHandCursor);
 }
 
-// Content runs glyph → label → trailing → dot with fixed gaps; a chip with
-// no label pads only enough to be a circle around its glyph.
+// A lone glyph pads only enough to be a circle; anything more takes the
+// text pads.
+int FilterChip::sidePad() const {
+  return label_.isEmpty() && trailing_ == Trailing::none ? (kHeight - kGlyph) / 2 : 1 + kPadX;
+}
+
+// Content runs glyph → label → trailing → dot with fixed gaps; without a
+// label the trailing glyph sits a glyph gap from the leading one.
 int FilterChip::naturalWidth() const {
-  const bool hasLabel = label_.isNotEmpty();
-  const int sidePad = hasLabel ? 1 + kPadX : (kHeight - kGlyph) / 2;
-  int w = 2 * sidePad;
-  if (glyph_ != Glyph::none) w += kGlyph;
-  if (hasLabel) w += (glyph_ != Glyph::none ? kGlyphGap : 0) + juce::roundToInt(Fonts::width(Fonts::sans(kPx), label_));
-  if (trailing_ != Trailing::none) w += kTrailingGap + kTrailing;
+  const bool hasLabel = label_.isNotEmpty(), hasGlyph = glyph_ != Glyph::none;
+  int w = 2 * sidePad();
+  if (hasGlyph) w += kGlyph;
+  if (hasLabel) w += (hasGlyph ? kGlyphGap : 0) + juce::roundToInt(Fonts::width(Fonts::sans(kPx), label_));
+  if (trailing_ != Trailing::none) w += (hasLabel ? kTrailingGap : hasGlyph ? kGlyphGap : 0) + kTrailing;
   if (dot_) w += kTrailingGap + kDot;
   return w;
 }
@@ -96,13 +101,11 @@ void FilterChip::fitToContent() {
 }
 
 juce::Rectangle<float> FilterChip::glyphBox() const {
-  const int sidePad = label_.isNotEmpty() ? 1 + kPadX : (kHeight - kGlyph) / 2;
-  return juce::Rectangle<float>(static_cast<float>(sidePad), (getHeight() - kGlyph) / 2.0f, kGlyph, kGlyph);
+  return juce::Rectangle<float>(static_cast<float>(sidePad()), (getHeight() - kGlyph) / 2.0f, kGlyph, kGlyph);
 }
 
 juce::Rectangle<float> FilterChip::trailingBox() const {
-  const float right = static_cast<float>(getWidth() - (label_.isNotEmpty() ? 1 + kPadX : (kHeight - kGlyph) / 2)) -
-                      (dot_ ? kTrailingGap + kDot : 0);
+  const float right = static_cast<float>(getWidth() - sidePad()) - (dot_ ? kTrailingGap + kDot : 0);
   return juce::Rectangle<float>(right - kTrailing, (getHeight() - kTrailing) / 2.0f, kTrailing, kTrailing);
 }
 

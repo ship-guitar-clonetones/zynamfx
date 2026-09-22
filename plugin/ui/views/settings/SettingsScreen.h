@@ -14,6 +14,7 @@
 #include "PluginSettingsPage.h"
 #include "SystemSettingsPage.h"
 #include "services/Services.h"
+#include "widgets/DragScroller.h"
 #include "widgets/form/FormItem.h"
 
 namespace t3k::ui {
@@ -54,7 +55,7 @@ private:
 
   bool standalone_;
   Tab tab_;
-  juce::Viewport viewport_;
+  DragScroller viewport_{DragScroller::Axis::vertical};
   juce::Component content_;
   FormStack stack_;
   std::unique_ptr<Header> header_;

@@ -50,9 +50,17 @@ private:
   // The per-machine preferences file. Every plugin instance in the process
   // reads and writes the same file, and PropertiesFile saves its whole
   // in-memory copy, so two instances each holding their own would clobber
-  // each other's writes: one shared instance per process.
+  // each other's writes: one shared instance per process. Across processes
+  // (each DAW, the standalone) UiPrefs merges under the lock and saves each
+  // write itself, so the file never autosaves.
   struct PrefsFile {
-    juce::PropertiesFile file{TONE3000Processor::uiPreferencesOptions()};
+    juce::InterProcessLock lock{"TONE3000.ui-preferences"};
+    juce::PropertiesFile file{[this] {
+      auto options = TONE3000Processor::uiPreferencesOptions();
+      options.processLock = &lock;
+      options.millisecondsBeforeSaving = -1;
+      return options;
+    }()};
   };
 
   TONE3000Processor& processor_;

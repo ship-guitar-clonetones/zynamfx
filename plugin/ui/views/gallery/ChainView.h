@@ -20,6 +20,7 @@
 #include "StereoPanRail.h"
 #include "services/ChainStore.h"
 #include "services/Services.h"
+#include "widgets/DragScroller.h"
 
 namespace t3k::ui {
 
@@ -54,7 +55,6 @@ public:
 private:
   class Ghost;
   class Column;
-  class Scroller;
   struct Lanes {
     std::vector<ChainItem> left, right;
     std::vector<ChainItem>& of(ChainSide side) { return side == ChainSide::left ? left : right; }
@@ -97,7 +97,7 @@ private:
   bool keyboardSort_ = false;
 
   StereoPanRail rail_;
-  std::unique_ptr<Scroller> scroller_;
+  std::unique_ptr<DragScroller> scroller_;
   std::unique_ptr<Column> column_;
   bool restorePending_ = true;
   GalleryLane left_, right_;

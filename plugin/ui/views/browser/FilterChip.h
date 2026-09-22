@@ -2,8 +2,8 @@
 // leading glyph (a Lucide icon, a gear glyph, the creator avatar or the
 // verified badge), a 14px label, and an optional trailing chevron (the chip
 // opens a menu) or × (the chip clears its value). Chips read gray until
-// active, then white; a chip with no label is a circle. Sizes itself from
-// its content.
+// active, then white; a chip that is only a glyph is a circle. Sizes itself
+// from its content.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -60,6 +60,7 @@ private:
   void clicked() override;
   void fitToContent();
   bool inClearZone(juce::Point<int> p) const;
+  int sidePad() const;
   juce::Rectangle<float> glyphBox() const;
   juce::Rectangle<float> trailingBox() const;
 

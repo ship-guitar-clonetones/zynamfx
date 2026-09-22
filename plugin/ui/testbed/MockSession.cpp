@@ -132,10 +132,21 @@ std::vector<Tone> MockSession::matching(const ToneQuery& q) const {
 
 void MockSession::searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) {
   if (query.profile != Profile::none) {
-    // The suite's fixed gated page, whatever the page asked for.
-    answer<TonePage>("gated", std::move(reply), [this] {
+    // The suite's fixed gated page, whatever the page asked for, narrowed
+    // by the title search and gear the stream endpoints take.
+    answer<TonePage>("gated", std::move(reply), [this, query] {
       const auto spec = override("gated");
-      return Result<TonePage>::ok(TonePage::parse(spec.isObject() ? spec : gatedPage_));
+      auto gated = TonePage::parse(spec.isObject() ? spec : gatedPage_);
+      const auto text = query.text.trim();
+      if (text.isNotEmpty() || query.gear.isNotEmpty()) {
+        std::erase_if(gated.data, [&](const Tone& tone) {
+          return (text.isNotEmpty() && !tone.title.containsIgnoreCase(text)) ||
+                 (query.gear.isNotEmpty() && !tone.gear.equalsIgnoreCase(query.gear));
+        });
+        gated.page = 1;
+        gated.totalPages = 1;
+      }
+      return Result<TonePage>::ok(std::move(gated));
     });
     return;
   }

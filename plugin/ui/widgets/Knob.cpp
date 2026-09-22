@@ -53,6 +53,7 @@ Knob::Knob(Options options) : options_(std::move(options)) {
   // column, as the web's `overflow: visible` slot did.
   setPaintingIsUnclipped(true);
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
+  setViewportIgnoreDragFlag(true);  // a touch drag turns the knob, not the page
   if (options_.help) setHelpText(help::text(*options_.help));
   live_ = emitted_ = value_ = juce::jlimit(options_.min, options_.max, options_.min);
 }

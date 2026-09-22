@@ -202,6 +202,7 @@ public:
 
   void mouseDown(const juce::MouseEvent& e) override {
     const auto hit = dotAt(graphPoint(e));
+    setViewportIgnoreDragFlag(hit.has_value());  // a dot drag edits; the graph around it pans
     if (!hit) return;
     select(*hit);
     // Touch: the second tap of a double tap resets and ends the gesture.
@@ -498,7 +499,9 @@ public:
 
   void mouseDown(const juce::MouseEvent& e) override {
     const int col = columnAt(e.position);
-    if (col < 0 || !eq::hasGain(owner_.bands()[static_cast<size_t>(col)].type)) return;
+    const bool onFader = col >= 0 && eq::hasGain(owner_.bands()[static_cast<size_t>(col)].type);
+    setViewportIgnoreDragFlag(onFader);  // a fader drag edits; the gaps pan
+    if (!onFader) return;
     // Touch double tap / Alt-click: reset, and end the gesture there so the
     // grab-jump of a fresh drag doesn't move it straight back off 0.
     if ((e.source.isTouch() && e.getNumberOfClicks() == 2) || e.mods.isAltDown()) {

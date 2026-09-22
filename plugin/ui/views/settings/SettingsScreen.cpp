@@ -134,8 +134,6 @@ SettingsScreen::SettingsScreen(Services& services, Tab initialTab)
   content_.addAndMakeVisible(stack_);
 
   viewport_.setViewedComponent(&content_, false);
-  viewport_.setScrollBarsShown(false, false, true, false);
-  viewport_.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::nonHover);
   addAndMakeVisible(viewport_);
 
   setTab(tab_);

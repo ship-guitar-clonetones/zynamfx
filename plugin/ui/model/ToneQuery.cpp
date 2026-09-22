@@ -95,16 +95,16 @@ juce::String ToneQuery::requestPath(int page, int pageSize, int architecture) co
   QueryString qs;
   qs.add("page", juce::String(page)).add("page_size", juce::String(pageSize));
   const juce::String base = "/api/v1/tones/" + juce::String(profileEndpoint(profile));
+  qs.addEscaped("query", text.trim());
   if (profile != Profile::none) return base + qs.addEscaped("gear", gear).str();
 
-  qs.addEscaped("query", text.trim());
   if (sort) qs.add("sort", sortId(*sort));
   qs.addEscaped("gears", gear);
   qs.add("format", format);
   qs.add("tags", joined(tags, "_"));
   qs.add("makes", joined(makes, "_"));
   qs.add("creators", joined(creators, ","));
-  qs.addFlag("calibrated", calibrated).addFlag("verified", verified);
+  qs.addFlag("calibrated", calibratedInForce()).addFlag("verified", verified);
   if (architecture >= 0) qs.add("architecture", juce::String(architecture));
   return base + qs.str();
 }

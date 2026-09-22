@@ -42,22 +42,11 @@ void lockFor(FilterChip& chip, bool locked, help::Key hint) {
 }
 }  // namespace
 
-// Horizontal-only scroll area with hidden scrollbars; JUCE remaps a plain
-// vertical wheel onto it (the web's useHorizontalWheelScroll).
-class FilterBar::Scroller : public juce::Viewport {
-public:
-  Scroller() {
-    setScrollBarsShown(false, false, false, true);
-    setScrollOnDragMode(ScrollOnDragMode::nonHover);
-  }
-  std::function<void()> onScroll;
-  void visibleAreaChanged(const juce::Rectangle<int>&) override {
-    if (onScroll) onScroll();
-  }
-};
-
 FilterBar::FilterBar(Services& services, BrowserState& state)
-    : services_(services), state_(state), query_(state.query), scroller_(std::make_unique<Scroller>()) {
+    : services_(services),
+      state_(state),
+      query_(state.query),
+      scroller_(std::make_unique<DragScroller>(DragScroller::Axis::horizontal)) {
   scroller_->setViewedComponent(&row_, false);
   scroller_->onScroll = [this] { repaint(); };
   addAndMakeVisible(*scroller_);
@@ -99,6 +88,10 @@ void FilterBar::buildChips() {
   row_.addChildComponent(*toggle_);
 
   sort_ = makeMenuChip(help::Key::browserSort, [this](FilterChip& chip) { openSortMenu(chip); });
+  sort_->onClear = [this] {
+    query_.sort.reset();
+    changed();
+  };
   format_ = makeMenuChip(help::Key::browserFormat, [this](FilterChip& chip) { openFormatMenu(chip); });
   format_->onClear = [this] {
     query_.format.clear();
@@ -170,8 +163,10 @@ void FilterBar::refreshChips() {
   // Parked filters can still be folded away, just not opened or changed.
   lockFor(*toggle_, locked && !expanded, expanded ? help::Key::browserFewerFilters : help::Key::browserMoreFilters);
 
-  sort_->setLabel(sortLabel(query_.effectiveSort()));
-  sort_->setActive(query_.sortIsExplicit());
+  // The sort chip always names the order in force; only a non-default one
+  // is a filter, with an × back to the default.
+  const auto* sortName = sortLabel(query_.effectiveSort());
+  showValue(*sort_, query_.sortIsExplicit() ? sortName : "", sortName, help::Key::browserSort);
   juce::String formatChip;
   for (const auto& option : kFormatOptions)
     if (query_.format == option.id) formatChip = option.chip;
@@ -179,16 +174,23 @@ void FilterBar::refreshChips() {
   showValue(*tags_, joined(query_.tags), "Tags", help::Key::browserTags);
   showValue(*makes_, joined(query_.makes), "Makes", help::Key::browserMakes);
   showValue(*creators_, joined(query_.creators), "Creators", help::Key::browserCreators);
-  calibrated_->setActive(query_.calibrated);
+  calibrated_->setActive(query_.calibratedInForce());
   for (auto* chip : {sort_.get(), format_.get(), tags_.get(), makes_.get(), creators_.get(), calibrated_.get()}) {
     chip->setVisible(expanded);
     chip->setLocked(locked);
     if (locked) chip->setHelpText(help::text(help::Key::browserProfileLocked));
   }
+  // Impulse responses carry no calibration data: the chip parks under IR gear.
+  if (!locked) {
+    const bool ir = !query_.calibratedApplies();
+    calibrated_->setLocked(ir);
+    calibrated_->setHelpText(help::text(ir ? help::Key::browserCalibratedIr : help::Key::browserCalibrated));
+  }
 
   verified_->setActive(query_.verified);
   lockFor(*verified_, locked, help::Key::browserVerified);
-  showValue(*profile_, profileChipLabel(query_.profile), "Profile", help::Key::browserProfile);
+  // The avatar is the chip's name: no label until a profile is picked.
+  showValue(*profile_, profileChipLabel(query_.profile), "", help::Key::browserProfile);
   const auto& gearFilters = labels::gearFilters();
   for (size_t i = 0; i < gear_.size(); ++i) gear_[i]->setActive(query_.gear == gearFilters[i].id);
 
@@ -204,13 +206,15 @@ void FilterBar::layoutChips() {
   order.insert(order.end(), {verified_.get(), profile_.get()});
   for (auto& chip : gear_) order.push_back(chip.get());
 
+  // The divider parts the extra filters (or, folded, the button holding
+  // them) from the ones always on show.
+  auto* lastExtra = state_.filtersExpanded ? calibrated_.get() : toggle_.get();
   int x = kBleed;
   for (auto* chip : order) {
     chip->setVisible(true);
     chip->setTopLeftPosition(x, 0);
     x += chip->getWidth() + kGap;
-    // The filters button stands apart from the filters it doesn't cover.
-    if (chip == toggle_.get()) {
+    if (chip == lastExtra) {
       divider_ = {x, (kHeight - kDividerHeight) / 2, 1, kDividerHeight};
       x += 1 + kGap;
     }
@@ -233,10 +237,10 @@ void FilterBar::paintOverChildren(juce::Graphics& g) {
 }
 
 // Menus
-void FilterBar::openMenu(FilterChip& chip, std::vector<FilterMenu::Option> options,
+void FilterBar::openMenu(FilterChip& chip, FilterMenu::Picks picks, std::vector<FilterMenu::Option> options,
                          const std::vector<juce::String>& picked, std::function<void(const juce::String& id)> pick,
                          const char* searchPlaceholder) {
-  menu_ = std::make_unique<FilterMenu>(services_.images, searchPlaceholder ? searchPlaceholder : "");
+  menu_ = std::make_unique<FilterMenu>(services_.images, picks, searchPlaceholder ? searchPlaceholder : "");
   menu_->setOptions(std::move(options), picked);
   menu_->onPick = [this, apply = std::move(pick)](const juce::String& id) {
     apply(id);
@@ -254,26 +258,34 @@ void FilterBar::openMenu(FilterChip& chip, std::vector<FilterMenu::Option> optio
 void FilterBar::openSortMenu(FilterChip& chip) {
   std::vector<FilterMenu::Option> options;
   for (const auto sort : kToneSorts)
-    if (sort != ToneSort::bestMatch || query_.text.isNotEmpty()) options.push_back({sortId(sort), sortLabel(sort), {}});
-  openMenu(chip, std::move(options), {sortId(query_.effectiveSort())}, [this](const juce::String& id) {
-    for (const auto sort : kToneSorts)
-      if (id == sortId(sort)) query_.setSort(sort);
-  });
+    if (sort != ToneSort::bestMatch || query_.text.isNotEmpty())
+      options.push_back({sortId(sort), sortLabel(sort), {}, {}});
+  openMenu(chip, FilterMenu::Picks::single, std::move(options), {sortId(query_.effectiveSort())},
+           [this](const juce::String& id) {
+             for (const auto sort : kToneSorts)
+               if (id == sortId(sort)) query_.setSort(sort);
+           });
 }
 
 void FilterBar::openFormatMenu(FilterChip& chip) {
   std::vector<FilterMenu::Option> options;
-  for (const auto& option : kFormatOptions) options.push_back({option.id, option.label, {}});
-  openMenu(chip, std::move(options), {query_.format}, [this](const juce::String& id) { query_.format = id; });
+  for (const auto& option : kFormatOptions) options.push_back({option.id, option.label, {}, {}});
+  openMenu(chip, FilterMenu::Picks::single, std::move(options), {query_.format},
+           [this](const juce::String& id) { query_.format = id; });
 }
 
 void FilterBar::openProfileMenu(FilterChip& chip) {
   std::vector<FilterMenu::Option> options;
-  for (const auto profile : kProfiles) options.push_back({profileEndpoint(profile), profileLabel(profile), {}});
-  openMenu(chip, std::move(options), {profileEndpoint(query_.profile)}, [this](const juce::String& id) {
-    for (const auto profile : kProfiles)
-      if (id == profileEndpoint(profile)) query_.profile = profile;
-  });
+  for (const auto profile : kProfiles) {
+    // Favorites carries the bookmark it is kept with (the old tabs' icon).
+    const auto icon = profile == Profile::favorited ? std::optional(Icon::Bookmark) : std::nullopt;
+    options.push_back({profileEndpoint(profile), profileLabel(profile), {}, icon});
+  }
+  openMenu(chip, FilterMenu::Picks::single, std::move(options), {profileEndpoint(query_.profile)},
+           [this](const juce::String& id) {
+             for (const auto profile : kProfiles)
+               if (id == profileEndpoint(profile)) query_.profile = profile;
+           });
 }
 
 // Opens on a lookup of the most-used names; typing narrows it. A pick
@@ -284,7 +296,7 @@ void FilterBar::openTaxonomyMenu(FilterChip& chip, Taxonomy kind) {
                                                       : "Search creators";
   menuKind_ = kind;
   openMenu(
-      chip, {}, {},
+      chip, FilterMenu::Picks::multi, {}, {},
       [this, kind](const juce::String& name) {
         auto& picked = query_.picked(kind);
         const auto it = std::find(picked.begin(), picked.end(), name);
@@ -312,7 +324,7 @@ void FilterBar::lookupTaxonomy(Taxonomy kind, const juce::String& text) {
     const auto& picked = query_.picked(kind);
     std::vector<FilterMenu::Option> options;
     auto add = [&](const juce::String& name, const juce::String& avatarUrl) {
-      options.push_back({name, name, creators ? std::optional(avatarUrl) : std::nullopt});
+      options.push_back({name, name, creators ? std::optional(avatarUrl) : std::nullopt, {}});
     };
     for (const auto& name : picked) {
       const auto found = std::find_if(r->begin(), r->end(), [&](const auto& e) { return e.name == name; });

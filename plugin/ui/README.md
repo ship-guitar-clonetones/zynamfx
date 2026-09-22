@@ -90,7 +90,8 @@ plugin/ui/
                       Tone3000Client, ToneSession / Tone3000Session
   widgets/            reusable controls that know nothing about services
                       (Knob, PillButton, Popover, ContextMenu, ModalLayer,
-                      DbMeter, DotMeter, TextField, …); widgets/form/ is the
+                      DbMeter, DotMeter, TextField, DragScroller, …);
+                      widgets/form/ is the
                       settings form kit (FormItem layout, rows, controls)
   views/              screens, wiring widgets to services: PluginRoot,
                       PluginHeader, Faceplate, MainScreen, TunerView, …
@@ -174,21 +175,27 @@ time.
 - `ToneQuery` (model) is the one place the filters live: text, sort, gear,
   format, tags / makes / creators, calibrated, verified, profile. It builds
   the API path itself (`requestPath`): `/tones/search` with the query string,
-  or `/tones/{downloaded,favorited,created}` by gear alone when a profile
-  filter is set. The plugin's NAM architecture always rides along (the API
+  or `/tones/{downloaded,favorited,created}` with the title search and gear
+  alone when a profile filter is set. The plugin's NAM architecture always rides along (the API
   ignores it for IR, and omitting it falls back to a legacy A1-only default).
   The default sort (best match with text, else trending) is stored as no
   pick, so Trending never reads as a filter. Unit-tested in `SelfTests.cpp`.
 - `FilterBar` edits the state's query through one horizontally scrolling row
   of chips (`FilterChip`): the filters button, then (once unfolded, pushing
-  the rest right) Sort, Format, Tags, Makes, Creators, Calibrated, then
-  verified, Profile and the gear chips. A chip holding a value shows it with
-  an × that clears it; the filters button carries a dot while any of the
-  unfolded ones are set. A profile filter parks the search box and the
-  catalog-only controls (dimmed, hint says why) without losing their values.
-- `FilterMenu` is the dropdown (`Popover`): every row has a check column and
-  the current value(s) tick; creator rows lead with the avatar. Taxonomy
-  menus add a search field and look their rows up from
+  the rest right) Sort, Format, Tags, Makes, Creators, Calibrated, a
+  divider, then verified, the profile chip (the user's avatar alone until a
+  profile is picked) and the gear chips. A chip holding a value shows it
+  with an × that clears it (Sort: back to the default); the filters button
+  carries a dot while any of the unfolded ones are set. A profile filter
+  parks the catalog-only controls (dimmed, hint says why) without losing
+  their values; the search box stays live, matching titles within the
+  stream; IR gear (cabinet, space) or the IR
+  format parks Calibrated the same way, and the flag stays out of the
+  request (`ToneQuery::calibratedInForce`).
+- `FilterMenu` is the dropdown (`Popover`). Single-pick menus (Sort, Format,
+  Profile) show the current value in white; multi-pick ones add a check
+  column. Rows may lead with an icon (Favorites' bookmark) or a creator
+  avatar. Taxonomy menus add a search field and look their rows up from
   `ToneSession::listTaxonomy` (debounced, a newer lookup cancels the one in
   flight). Any pick closes the menu.
 - The search box submits on Enter (or its ×, or Escape, which clear it);

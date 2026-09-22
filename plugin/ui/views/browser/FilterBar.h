@@ -26,6 +26,7 @@
 #include "core/DelayedCall.h"
 #include "core/Help.h"
 #include "services/Services.h"
+#include "widgets/DragScroller.h"
 #include "views/gallery/GalleryGeometry.h"
 
 namespace t3k::ui {
@@ -55,7 +56,6 @@ public:
   void paintOverChildren(juce::Graphics& g) override;
 
 private:
-  class Scroller;
 
   void buildChips();
   void layoutChips();
@@ -66,10 +66,11 @@ private:
   // Chip factories (each wires its own handlers).
   std::unique_ptr<FilterChip> makeMenuChip(help::Key hint, std::function<void(FilterChip&)> open);
   std::unique_ptr<FilterChip> makeTaxonomyChip(help::Key hint, Taxonomy kind);
-  // One menu at a time: `options` ticked by `picked`, `pick` applied to the
-  // query and the row refetched.
-  void openMenu(FilterChip& chip, std::vector<FilterMenu::Option> options, const std::vector<juce::String>& picked,
-                std::function<void(const juce::String& id)> pick, const char* searchPlaceholder = nullptr);
+  // One menu at a time: `options` with `picked` current, `pick` applied to
+  // the query and the row refetched.
+  void openMenu(FilterChip& chip, FilterMenu::Picks picks, std::vector<FilterMenu::Option> options,
+                const std::vector<juce::String>& picked, std::function<void(const juce::String& id)> pick,
+                const char* searchPlaceholder = nullptr);
   void openSortMenu(FilterChip& chip);
   void openFormatMenu(FilterChip& chip);
   void openProfileMenu(FilterChip& chip);
@@ -80,7 +81,7 @@ private:
   BrowserState& state_;
   ToneQuery& query_;  // state_.query
 
-  std::unique_ptr<Scroller> scroller_;
+  std::unique_ptr<DragScroller> scroller_;
   juce::Component row_;
   std::unique_ptr<FilterChip> toggle_;  // the filters button; ‹ while expanded
   // Behind the filters button

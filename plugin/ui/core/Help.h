@@ -23,9 +23,9 @@ enum class Key {
   presetPrev, presetNext, presetBrowse, presetSave, presetNew, presetRename, presetDelete,
   presetReorder, presetDrag, presetPcToggle, presetPc,
   // Tone browser
-  browserSearch, browserMoreFilters, browserFewerFilters, browserVerified, browserProfile, browserGear,
+  browserSearch, browserSearchProfile, browserMoreFilters, browserFewerFilters, browserVerified, browserProfile, browserGear,
   browserSort, browserFormat, browserTags, browserMakes, browserCreators, browserCalibrated,
-  browserClearFilter, browserProfileLocked,
+  browserClearFilter, browserProfileLocked, browserCalibratedIr,
   // Chain gallery
   addTile, closeToneBrowser, copyBlock, pasteBlock, loadFileTile, loadFolderTile, blockPower,
   retryLoad, swapTone, removeBlock, panLeft, panRight, panLink, monoSum, panMonoSum, soloLeft,

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/Design.h"
+#include "core/Labels.h"
 
 namespace t3k::ui {
 
@@ -31,7 +32,7 @@ juce::String bufferMs(const AudioDeviceState& s) {
 // 48 → "48", 44100 → "44.1".
 juce::String kHz(double rate) {
   const bool whole = std::fmod(rate, 1000.0) == 0;
-  return juce::String(rate / 1000.0, whole ? 0 : 1);
+  return labels::toFixed(rate / 1000.0, whole ? 0 : 1);
 }
 
 std::vector<BannerRule> makeRules() {

@@ -11,18 +11,20 @@
 
 namespace t3k::ui {
 
-// One option: check column, optional avatar, label; a rounded hover fill.
-// Picked rows read white, the rest muted.
+// One option: a check column (multi-pick menus), an optional icon or
+// avatar, the label; a rounded hover fill. Picked rows read white, the
+// rest muted.
 class FilterMenu::Row : public juce::Button {
 public:
   static constexpr int kPadX = 12;
   static constexpr int kCheck = 16;
+  static constexpr int kIcon = 16;
   static constexpr int kAvatar = 22;  // the cards' creator avatar size
   static constexpr int kColumnGap = 8;
   static constexpr float kPx = 14;
 
-  Row(const Option& option, bool picked, ImageLoader& images)
-      : juce::Button(option.label), label_(option.label), picked_(picked) {
+  Row(const Option& option, bool picked, bool checks, ImageLoader& images)
+      : juce::Button(option.label), label_(option.label), icon_(option.icon), picked_(picked), checks_(checks) {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
     setWantsKeyboardFocus(false);
     if (option.avatarUrl) {
@@ -34,33 +36,46 @@ public:
   }
 
   // Everything but the label, so the menu can fit its widest row.
-  int chromeWidth() const { return 2 * kPadX + kCheck + kColumnGap + (avatar_ ? kAvatar + kColumnGap : 0); }
+  int chromeWidth() const {
+    return 2 * kPadX + (checks_ ? kCheck + kColumnGap : 0) + (icon_ ? kIcon + kColumnGap : 0) +
+           (avatar_ ? kAvatar + kColumnGap : 0);
+  }
   const juce::String& label() const { return label_; }
 
   void resized() override {
-    if (avatar_) avatar_->setBounds(kPadX + kCheck + kColumnGap, (getHeight() - kAvatar) / 2, kAvatar, kAvatar);
+    if (avatar_)
+      avatar_->setBounds(kPadX + (checks_ ? kCheck + kColumnGap : 0), (getHeight() - kAvatar) / 2, kAvatar, kAvatar);
   }
 
   void paintButton(juce::Graphics& g, bool highlighted, bool) override {
     auto box = getLocalBounds();
     if (highlighted) paint::fill(g, box.toFloat(), 8.0f, juce::Colours::white.withAlpha(0.08f));
+    const auto fg = picked_ ? theme::kWhite : theme::kMuted;
     auto content = box.reduced(kPadX, 0);
-    const auto check = content.removeFromLeft(kCheck).withSizeKeepingCentre(kCheck, kCheck);
-    if (picked_) Icons::draw(g, Icon::Check, check.toFloat(), theme::kWhite);
-    content.removeFromLeft(kColumnGap);
+    if (checks_) {
+      const auto check = content.removeFromLeft(kCheck).withSizeKeepingCentre(kCheck, kCheck);
+      if (picked_) Icons::draw(g, Icon::Check, check.toFloat(), theme::kWhite);
+      content.removeFromLeft(kColumnGap);
+    }
     if (avatar_) content.removeFromLeft(kAvatar + kColumnGap);
-    paint::text(g, label_, content, Fonts::sans(kPx), picked_ ? theme::kWhite : theme::kMuted);
+    if (icon_) {
+      Icons::draw(g, *icon_, content.removeFromLeft(kIcon).withSizeKeepingCentre(kIcon, kIcon).toFloat(), fg);
+      content.removeFromLeft(kColumnGap);
+    }
+    paint::text(g, label_, content, Fonts::sans(kPx), fg);
   }
 
 private:
   juce::String label_;
+  std::optional<Icon> icon_;
   bool picked_;
+  bool checks_;
   std::unique_ptr<Avatar> avatar_;
   ImageLoader::Request avatarRequest_;
 };
 
-FilterMenu::FilterMenu(ImageLoader& images, juce::String searchPlaceholder)
-    : images_(images), searchable_(searchPlaceholder.isNotEmpty()) {
+FilterMenu::FilterMenu(ImageLoader& images, Picks picks, juce::String searchPlaceholder)
+    : images_(images), picks_(picks), searchable_(searchPlaceholder.isNotEmpty()) {
   if (searchable_) {
     search_.setPlaceholder(searchPlaceholder);
     search_.setCornerRadius(8);
@@ -74,7 +89,6 @@ FilterMenu::FilterMenu(ImageLoader& images, juce::String searchPlaceholder)
     addAndMakeVisible(search_);
   }
   viewport_.setViewedComponent(&list_, false);
-  viewport_.setScrollBarsShown(false, false, true, false);
   addAndMakeVisible(viewport_);
   layoutRows();
 }
@@ -85,7 +99,7 @@ void FilterMenu::setOptions(std::vector<Option> options, const std::vector<juce:
   rows_.clear();
   for (auto& option : options) {
     const bool isPicked = std::find(picked.begin(), picked.end(), option.id) != picked.end();
-    auto row = std::make_unique<Row>(option, isPicked, images_);
+    auto row = std::make_unique<Row>(option, isPicked, picks_ == Picks::multi, images_);
     row->onClick = [this, id = option.id] {
       close();
       if (onPick) onPick(id);

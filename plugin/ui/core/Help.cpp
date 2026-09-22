@@ -119,6 +119,7 @@ std::map<Key, String> buildTable() {
 
   // Tone browser
   t[Key::browserSearch] = U("Search: find tones on TONE3000 by title, gear, tags or creator.");
+  t[Key::browserSearchProfile] = U("Search: find tones in this list by title.");
   t[Key::browserMoreFilters] = U("Filters: sort, and narrow by format, tags, makes, creators or calibration.");
   t[Key::browserFewerFilters] = U("Fewer filters: fold these away. They stay applied.");
   t[Key::browserVerified] = U("Verified: only tones from verified creators.");
@@ -132,7 +133,8 @@ std::map<Key, String> buildTable() {
   t[Key::browserCalibrated] = U("Calibrated: only tones with a calibrated model.");
   t[Key::browserClearFilter] = U("Click the name: change this filter · ×: clear it.");
   t[Key::browserProfileLocked] =
-      U("Unavailable while a profile filter is set: your own tones list by gear only. Clear the profile to search.");
+      U("Unavailable while a profile filter is set: your own tones list by title and gear only. Clear the profile to use it.");
+  t[Key::browserCalibratedIr] = U("Not for impulse responses: cabinets and spaces carry no calibration data.");
 
   // Chain gallery
   t[Key::addTile] =

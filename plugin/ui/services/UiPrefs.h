@@ -3,6 +3,12 @@
 // useToneSession.ts): `persistent` is a PropertiesFile in the plugin's
 // app-data folder, `session` is plain memory that lives as long as the
 // editor. Keys keep their web names so a reader of either UI finds them.
+//
+// The file is one per machine user and every host process (each DAW, the
+// standalone) holds its own copy of it, so a write is a merge: under the
+// process lock, pull in what the others wrote, apply the one key, save at
+// once. Nothing of another process's ever gets overwritten with a stale
+// copy, which is what keeps one sign-in valid everywhere.
 #pragma once
 
 #include <juce_data_structures/juce_data_structures.h>
@@ -20,9 +26,16 @@ public:
   };
 
   // Persistent values live in `file`, which the caller owns and may share
-  // between editors (nullptr = memory only, as the testbed uses).
-  explicit UiPrefs(juce::PropertiesFile* file = nullptr);
+  // between editors (nullptr = memory only, as the testbed uses). `lock` is
+  // the file's Options::processLock, held across each read-modify-write.
+  explicit UiPrefs(juce::PropertiesFile* file = nullptr, juce::InterProcessLock* lock = nullptr);
   ~UiPrefs();
+
+  // Pull in what other processes wrote since the last read or write;
+  // listeners hear every key that changed. Writes do this on their own;
+  // call it before acting on a value another host may have moved on
+  // (the tokens).
+  void sync();
 
   juce::String get(const juce::String& key, const juce::String& fallback = {}) const;
   bool getBool(const juce::String& key, bool fallback) const;
@@ -52,7 +65,17 @@ public:
   static constexpr const char* kChainScroll = "t3k.chainScroll";
 
 private:
+  static constexpr int kLockTimeoutMs = 500;
+
+  class Guard;
+  // Reload the file, dropping our copy first (reload() merges, so a key
+  // another process removed would otherwise linger); returns the keys whose
+  // values changed. Caller holds the lock.
+  juce::StringArray pullLocked();
+  void notify(const juce::StringArray& keys);
+
   juce::PropertiesFile* file_;
+  juce::InterProcessLock* lock_;
   std::map<juce::String, juce::String> memory_;
   juce::ListenerList<Listener> listeners;
 };

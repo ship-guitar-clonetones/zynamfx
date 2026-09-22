@@ -33,16 +33,11 @@ Found find(const ChainState& state, const std::string& blockId) {
 }
 }  // namespace
 
-class BlockDetail::Scroller : public juce::Viewport {
-public:
-  Scroller() {
-    setScrollBarsShown(false, false, true, false);
-    setScrollOnDragMode(ScrollOnDragMode::nonHover);
-  }
-};
-
 BlockDetail::BlockDetail(Services& services, const std::string& blockId)
-    : services_(services), blockId_(blockId), scroller_(std::make_unique<Scroller>()), back_(std::make_unique<BackLink>("BLOCK", help::Key::backToChain)) {
+    : services_(services),
+      blockId_(blockId),
+      scroller_(std::make_unique<DragScroller>(DragScroller::Axis::vertical)),
+      back_(std::make_unique<BackLink>("BLOCK", help::Key::backToChain)) {
   back_->onClick = [this] {
     if (onBack) onBack();
   };

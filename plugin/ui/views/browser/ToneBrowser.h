@@ -27,6 +27,7 @@
 #include "services/Services.h"
 #include "widgets/BackLink.h"
 #include "widgets/BusyOverlay.h"
+#include "widgets/DragScroller.h"
 #include "widgets/LoadingDots.h"
 #include "widgets/PillButton.h"
 #include "widgets/TextField.h"
@@ -55,7 +56,6 @@ public:
 
 private:
   class Content;
-  class Scroller;
   static constexpr int kHeaderGap = 16;  // header row → search → filters
   static constexpr int kContentPadTop = 24, kContentPadBottom = 24;
   static constexpr int kPaginatorGap = 16;  // grid → paginator
@@ -101,7 +101,7 @@ private:
   FilterBar filters_;
 
   // Scrolling content
-  std::unique_ptr<Scroller> scroller_;
+  std::unique_ptr<DragScroller> scroller_;
   std::unique_ptr<Content> content_;
   std::vector<std::unique_ptr<ToneCard>> cards_;
   std::unique_ptr<BusyOverlay> gridBusy_;

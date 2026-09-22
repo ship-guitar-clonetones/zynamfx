@@ -46,13 +46,18 @@ void Tone3000Client::setTokens(const Tokens& tokens) {
 void Tone3000Client::clearTokens() { prefs_.remove(UiPrefs::kTokens); }
 
 void Tone3000Client::getAccessToken(Reply<juce::String> reply) {
-  const auto stored = tokens();
+  auto stored = tokens();
+  // Near expiry: another host may already have refreshed; take its pair.
+  if (stored && !fresh(*stored)) {
+    prefs_.sync();
+    stored = tokens();
+  }
   if (!stored) {
     if (onAuthRequired) onAuthRequired();
     reply(Result<juce::String>::fail("not_authenticated"));
     return;
   }
-  if (now() <= stored->expiresAtMs - kRefreshLeadMs) {
+  if (fresh(*stored)) {
     reply(Result<juce::String>::ok(stored->access));
     return;
   }
@@ -66,18 +71,30 @@ void Tone3000Client::refresh(const juce::String& refreshToken) {
   form.set("grant_type", "refresh_token");
   form.set("refresh_token", refreshToken);
   form.set("client_id", key_);
-  postTokenForm(form, [this](Result<Tokens> result) {
-    auto waiters = std::move(refreshWaiters_);
-    refreshWaiters_.clear();
+  postTokenForm(form, [this, refreshToken](Result<Tokens> result) {
     if (result) {
       setTokens(*result);
-      for (auto& w : waiters) w(Result<juce::String>::ok(result->access));
+      settleRefresh(Result<juce::String>::ok(result->access));
+      return;
+    }
+    // Rejected. If another host rotated the pair meanwhile, ours was simply
+    // stale: theirs is the live one. Otherwise the session is gone.
+    prefs_.sync();
+    if (const auto theirs = tokens(); theirs && theirs->refresh != refreshToken) {
+      if (fresh(*theirs)) settleRefresh(Result<juce::String>::ok(theirs->access));
+      else refresh(theirs->refresh);  // the waiters stay queued
       return;
     }
     clearTokens();
     if (onAuthRequired) onAuthRequired();
-    for (auto& w : waiters) w(Result<juce::String>::fail("token_refresh_failed"));
+    settleRefresh(Result<juce::String>::fail("token_refresh_failed"));
   });
+}
+
+void Tone3000Client::settleRefresh(Result<juce::String> result) {
+  auto waiters = std::move(refreshWaiters_);
+  refreshWaiters_.clear();
+  for (auto& w : waiters) w(result);
 }
 
 void Tone3000Client::exchangeCode(const juce::String& code, const juce::String& codeVerifier,

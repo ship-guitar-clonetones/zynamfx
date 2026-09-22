@@ -42,21 +42,12 @@ public:
   }
 };
 
-// Vertical scroll with hidden scrollbars (the web's hide-scrollbar column).
-class ToneBrowser::Scroller : public juce::Viewport {
-public:
-  Scroller() {
-    setScrollBarsShown(false, false, true, false);
-    setScrollOnDragMode(ScrollOnDragMode::nonHover);
-  }
-};
-
 ToneBrowser::ToneBrowser(Services& services)
     : services_(services),
       state_(services.browser),
       back_("Select Tone", help::Key::closeToneBrowser),
       filters_(services, services.browser),
-      scroller_(std::make_unique<Scroller>()),
+      scroller_(std::make_unique<DragScroller>(DragScroller::Axis::vertical)),
       content_(std::make_unique<Content>()) {
   back_.onClick = [this] {
     if (onClose) onClose();
@@ -69,7 +60,6 @@ ToneBrowser::ToneBrowser(Services& services)
   search_.setPadding(0, kSearchPadX + kSearchIcon + kSearchIconGap, kSearchPadX + kSearchIcon + kSearchIconGap);
   search_.setLeadingIcon(Icon::Search, kSearchIcon, kSearchPadX, theme::kGray);
   search_.setClearButton(kSearchIcon, kSearchPadX);
-  search_.setHelpText(help::text(help::Key::browserSearch));
   search_.setText(state_.query.text);
   search_.onEnter = [this] { submit(); };
   search_.onClear = [this] { submit(); };
@@ -184,8 +174,9 @@ void ToneBrowser::pick(const Tone& tone) {
 }
 
 const char* ToneBrowser::emptyCopy() const {
+  if (state_.query.text.isNotEmpty()) return "No tones match. Try a different search or fewer filters.";
   switch (state_.query.profile) {
-    case Profile::none: return "No tones match. Try a different search or fewer filters.";
+    case Profile::none: return "No tones match. Try fewer filters.";
     case Profile::downloaded: return "Tones you download on TONE3000 will show up here.";
     case Profile::favorited: return "Tones you favorite on TONE3000 will show up here.";
     case Profile::created: return "Tones you upload to TONE3000 will show up here.";
@@ -213,14 +204,11 @@ void ToneBrowser::rebuildBody() {
   const bool showError = error_ && !loading_;
   const bool hasCards = state_.result && !state_.result->data.empty();
 
-  // The search controls exist only for a session; while a profile filter
-  // is set the search box parks (its stream lists by gear alone).
+  // The search controls exist only for a session. A profile filter's
+  // stream searches titles alone.
   search_.setVisible(!gate);
   filters_.setVisible(!gate);
-  const bool locked = filters_.profileLocked();
-  search_.setAlpha(locked ? theme::kDisabledOpacity : 1.0f);
-  search_.setInterceptsMouseClicks(!locked, !locked);
-  search_.setHelpText(help::text(locked ? help::Key::browserProfileLocked : help::Key::browserSearch));
+  search_.setHelpText(help::text(filters_.profileLocked() ? help::Key::browserSearchProfile : help::Key::browserSearch));
 
   // Body prompt: the sign-in gate, or the fetch error with Try again.
   bodyPrompt_.reset();

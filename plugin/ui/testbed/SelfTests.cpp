@@ -10,6 +10,8 @@
 #include <iostream>
 #include <thread>
 
+#include "core/KnobScale.h"
+#include "core/Labels.h"
 #include "core/Pitch.h"
 #include "core/RichText.h"
 #include "model/Tone.h"
@@ -327,6 +329,67 @@ HttpResponse jsonResponse(int status, const juce::String& body) {
   return r;
 }
 
+// Two PropertiesFile objects on one file stand in for two host processes.
+struct UiPrefsTests : juce::UnitTest {
+  UiPrefsTests() : juce::UnitTest("UiPrefs", "ui") {}
+
+  struct Host : UiPrefs::Listener {
+    Host(const juce::File& file, juce::InterProcessLock& lock)
+        : props(file,
+                [&] {
+                  juce::PropertiesFile::Options o;
+                  o.millisecondsBeforeSaving = -1;
+                  o.processLock = &lock;
+                  return o;
+                }()),
+          prefs(&props, &lock) {
+      prefs.addListener(this);
+    }
+    ~Host() override { prefs.removeListener(this); }
+    void prefChanged(const juce::String& key) override { heard.add(key); }
+    juce::PropertiesFile props;
+    UiPrefs prefs;
+    juce::StringArray heard;
+  };
+
+  void runTest() override {
+    const auto file = juce::File::createTempFile("t3k-prefs.xml");
+    juce::InterProcessLock lock("TONE3000.ui-preferences.test");
+    Host a(file, lock), b(file, lock);
+
+    beginTest("a write merges in the other host's writes instead of overwriting them");
+    a.prefs.set(UiPrefs::kTokens, "A");
+    b.prefs.setBool(UiPrefs::kShowHints, false);  // b's copy never saw kTokens
+    expectEquals(b.prefs.get(UiPrefs::kTokens), juce::String("A"));
+    expect(b.heard.contains(UiPrefs::kTokens) && b.heard.contains(UiPrefs::kShowHints));
+    Host c(file, lock);  // what is on disk
+    expectEquals(c.prefs.get(UiPrefs::kTokens), juce::String("A"));
+    expect(!c.prefs.getBool(UiPrefs::kShowHints, true));
+
+    beginTest("sync pulls in changes and removals, telling listeners of each");
+    a.heard.clear();
+    a.prefs.sync();  // b's hints toggle
+    expect(!a.prefs.getBool(UiPrefs::kShowHints, true) && a.heard.contains(UiPrefs::kShowHints));
+    a.heard.clear();
+    b.prefs.set(UiPrefs::kTokens, "B");
+    b.prefs.remove(UiPrefs::kShowHints);
+    expectEquals(a.prefs.get(UiPrefs::kTokens), juce::String("A"));
+    a.prefs.sync();
+    expectEquals(a.prefs.get(UiPrefs::kTokens), juce::String("B"));
+    expect(a.prefs.getBool(UiPrefs::kShowHints, true));
+    expect(a.heard.contains(UiPrefs::kTokens) && a.heard.contains(UiPrefs::kShowHints));
+    a.heard.clear();
+    a.prefs.sync();
+    expect(a.heard.isEmpty());
+
+    beginTest("a write of the value already held is no write");
+    a.prefs.set(UiPrefs::kTokens, "B");
+    expect(a.heard.isEmpty());
+
+    file.deleteFile();
+  }
+};
+
 struct Tone3000ClientTests : juce::UnitTest {
   Tone3000ClientTests() : juce::UnitTest("Tone3000Client", "ui") {}
   void runTest() override {
@@ -399,7 +462,19 @@ struct Tone3000ClientTests : juce::UnitTest {
     expectEquals(error, juce::String("token_refresh_failed"));
     expect(!Tokens::fromVar(prefs.getJson(UiPrefs::kTokens)).has_value());
 
+    beginTest("a rejected refresh adopts the pair another host rotated meanwhile");
+    authRequired = false;
+    client.setTokens({"A4", "R4", 0});
+    http.answer = [&](const HttpRequest&) {
+      prefs.setJson(UiPrefs::kTokens, Tokens{"A5", "R5", 1'000'000 + 3'600'000}.toVar());  // the other host
+      return jsonResponse(400, R"({"error":"invalid_grant"})");
+    };
+    client.getAccessToken([&](Result<juce::String> r) { token = r ? *r : juce::String(); });
+    expectEquals(token, juce::String("A5"));
+    expect(!authRequired && client.authenticated());
+
     beginTest("optional-auth calls fall back to anonymous when the session is gone");
+    client.clearTokens();
     http.sent.clear();
     http.answer = [](const HttpRequest&) { return jsonResponse(200, "[]"); };
     HttpResponse anon;
@@ -434,6 +509,32 @@ struct ToneModelTests : juce::UnitTest {
     const auto plain = User::parse(juce::JSON::parse(R"({"id":8,"username":"staas","display_name":null})"));
     expect(!plain.isVerified);
     expectEquals(plain.name(), juce::String("staas"));
+  }
+};
+
+struct ReadoutTests : juce::UnitTest {
+  ReadoutTests() : juce::UnitTest("Readouts", "ui") {}
+  void runTest() override {
+    beginTest("toFixed is JavaScript's: fixed places, none at 0");
+    expectEquals(labels::toFixed(38.4, 0), juce::String("38"));
+    expectEquals(labels::toFixed(38.5, 0), juce::String("39"));
+    expectEquals(labels::toFixed(-3.26, 1), juce::String("-3.3"));
+    expectEquals(labels::toFixed(5.0, 1), juce::String("5.0"));
+    expectEquals(labels::toFixed(48.0, 0), juce::String("48"));
+
+    beginTest("knob readouts match the web's scales");
+    expectEquals(scales::percent().format(0.384), juce::String("38 %"));
+    expectEquals(scales::percent().editText(0.384), juce::String("38"));
+    expectEquals(scales::gainDb().format(0.5), juce::String("0.0 dB"));
+    expectEquals(scales::gainDb().format(0.0), juce::String("-24.0 dB"));
+    expectEquals(scales::gateDb().format(0.333), juce::String("-67 dB"));
+    expectEquals(scales::tone().format(0.5), juce::String("5.0"));
+    expectEquals(scales::offsetMs().format(0.5), juce::String("0 ms"));
+    expectEquals(scales::offsetMs().format(0.25), juce::String("12.0 ms L"));
+    expectEquals(scales::crossoverHz().format(0.5), juce::String("130 Hz"));
+    expectEquals(scales::pan(true).format(0.5), juce::String("C"));
+    expectEquals(scales::pan(true).format(0.0), juce::String("100L"));
+    expectEquals(scales::pan(false).format(0.75), juce::String("50R"));
   }
 };
 
@@ -483,6 +584,20 @@ struct ToneQueryTests : juce::UnitTest {
     expect(path.contains("&creators=tone3000,amalgam_audio&"));
     expect(path.contains("&calibrated=true&verified=true&architecture=2"));
 
+    beginTest("calibrated is parked, not sent, under IR gear or the IR format; it comes back with amps");
+    q = {};
+    q.calibrated = true;
+    expect(q.calibratedInForce() && q.hasAdvancedFilters());
+    for (const char* ir : {"cab", "space"}) {
+      q.gear = ir;
+      expect(!q.calibratedApplies() && !q.calibratedInForce() && !q.hasAdvancedFilters());
+      expect(!q.requestPath(1, 12, 2).contains("calibrated"));
+    }
+    q.gear = "amp";
+    expect(q.calibratedInForce() && q.requestPath(1, 12, 2).contains("&calibrated=true"));
+    q.format = "ir";
+    expect(!q.calibratedApplies() && !q.requestPath(1, 12, 2).contains("calibrated"));
+
     beginTest("the architecture rides along with every format (the API ignores it for IR); < 0 omits it");
     q = {};
     q.format = "ir";
@@ -491,14 +606,17 @@ struct ToneQueryTests : juce::UnitTest {
     expect(q.requestPath(1, 12, 2).endsWith("&format=nam&architecture=2"));
     expect(q.requestPath(1, 12, -1).endsWith("&format=nam"));
 
-    beginTest("a profile filter pages the user's own stream, by gear alone");
+    beginTest("a profile filter pages the user's own stream, by title search and gear alone");
     q = {};
-    q.text = "ignored";
+    q.text = " plexi ";
     q.tags = {"metal"};
+    q.verified = true;
     q.gear = "pedal";
     q.profile = Profile::favorited;
-    expectEquals(q.requestPath(3, 12, 2), juce::String("/api/v1/tones/favorited?page=3&page_size=12&gear=pedal"));
+    expectEquals(q.requestPath(3, 12, 2),
+                 juce::String("/api/v1/tones/favorited?page=3&page_size=12&query=plexi&gear=pedal"));
     q.profile = Profile::downloaded;
+    q.text.clear();
     q.gear.clear();
     expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/downloaded?page=1&page_size=12"));
 
@@ -519,9 +637,11 @@ PitchTests pitchTests;
 OAuthTests oauthTests;
 LoopbackServerTests loopbackServerTests;
 PaginatorTests paginatorTests;
+UiPrefsTests uiPrefsTests;
 Tone3000ClientTests tone3000ClientTests;
 ToneModelTests toneModelTests;
 ToneQueryTests toneQueryTests;
+ReadoutTests readoutTests;
 
 }  // namespace
 

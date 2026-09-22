@@ -14,6 +14,7 @@
 
 #include "BlockCard.h"
 #include "widgets/BackLink.h"
+#include "widgets/DragScroller.h"
 #include "services/ChainStore.h"
 #include "services/Services.h"
 
@@ -36,7 +37,6 @@ public:
   void resized() override;
 
 private:
-  class Scroller;
 
   void chainChanged(const ChainState& state) override;
   // The card grows on its own (info fetch, MORE); the column follows.
@@ -46,7 +46,7 @@ private:
 
   Services& services_;
   std::string blockId_;
-  std::unique_ptr<Scroller> scroller_;
+  std::unique_ptr<DragScroller> scroller_;
   juce::Component column_;
   std::unique_ptr<BackLink> back_;
   std::unique_ptr<BlockCard> card_;

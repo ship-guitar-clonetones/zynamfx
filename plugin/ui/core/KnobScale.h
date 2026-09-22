@@ -9,6 +9,8 @@
 #include <cmath>
 #include <functional>
 
+#include "Labels.h"
+
 namespace t3k::ui {
 
 struct KnobScale {
@@ -24,17 +26,15 @@ struct KnobScale {
 
 namespace scales {
 
-inline juce::String fixed(double v, int decimals) { return juce::String(v, decimals); }
-
 inline KnobScale make(std::function<double(double)> toDisplay,
                       std::function<double(double)> fromDisplay, juce::String unit, int decimals) {
   KnobScale s;
   s.toDisplay = toDisplay;
   s.fromDisplay = std::move(fromDisplay);
   s.format = [toDisplay, unit, decimals](double n) {
-    return fixed(toDisplay(n), decimals) + (unit.isNotEmpty() ? " " + unit : juce::String());
+    return labels::toFixed(toDisplay(n), decimals) + (unit.isNotEmpty() ? " " + unit : juce::String());
   };
-  s.editText = [toDisplay, decimals](double n) { return fixed(toDisplay(n), decimals); };
+  s.editText = [toDisplay, decimals](double n) { return labels::toFixed(toDisplay(n), decimals); };
   return s;
 }
 
@@ -85,9 +85,9 @@ inline KnobScale sidedMs(double maxMs) {
   s.format = [span](double n) {
     const double ms = (n - 0.5) * span;
     if (std::abs(ms) < 0.05) return juce::String("0 ms");
-    return fixed(std::abs(ms), 1) + " ms " + (ms < 0 ? "L" : "R");
+    return labels::toFixed(std::abs(ms), 1) + " ms " + (ms < 0 ? "L" : "R");
   };
-  s.editText = [span](double n) { return fixed((n - 0.5) * span, 1); };
+  s.editText = [span](double n) { return labels::toFixed((n - 0.5) * span, 1); };
   return s;
 }
 

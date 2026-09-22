@@ -6,7 +6,7 @@ NativeEditor::NativeEditor(TONE3000Processor& owner)
     : AudioProcessorEditor(&owner),
       processor_(owner),
       backend_(owner, *this),
-      prefs_(&prefsFile_->file),
+      prefs_(&prefsFile_->file, &prefsFile_->lock),
       session_(backend_, prefs_, http_, Tone3000Session::Config::fromBuild()),
       services_(backend_, session_, *this, prefs_),
       root_(services_) {

@@ -3,7 +3,11 @@
 // the same key the webview used in localStorage, so a signed-in user stays
 // signed in across editor sessions; the access token refreshes
 // transparently (proactively within 60 s of expiry, and once more after a
-// stray 401). Every reply lands on the message thread.
+// stray 401). The prefs file is shared with every other host running the
+// plugin, and a refresh rotates the pair, so before refreshing (and before
+// giving up on a rejected refresh) the store is re-read: a pair another
+// host rotated meanwhile is adopted rather than fought. Every reply lands
+// on the message thread.
 #pragma once
 
 #include <juce_core/juce_core.h>
@@ -86,7 +90,9 @@ public:
   void fetchPluginVersion(const juce::String& deviceId, Reply<juce::var> reply);
 
 private:
+  bool fresh(const Tokens& t) const { return now() <= t.expiresAtMs - kRefreshLeadMs; }
   void refresh(const juce::String& refreshToken);
+  void settleRefresh(Result<juce::String> result);
   void postTokenForm(const juce::StringPairArray& form, Reply<Tokens> reply);
   void bearerRequest(const juce::String& path, const juce::String& method, const juce::String& jsonBody,
                      const juce::String& token, std::function<void(HttpResponse)> onDone);
