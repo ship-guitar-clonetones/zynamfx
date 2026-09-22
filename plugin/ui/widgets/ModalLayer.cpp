@@ -10,6 +10,10 @@ ModalLayer::ModalLayer(Backdrop backdrop) : backdrop_(std::move(backdrop)) {
   setWantsKeyboardFocus(true);
 }
 
+std::unique_ptr<juce::AccessibilityHandler> ModalLayer::createAccessibilityHandler() {
+  return std::make_unique<juce::AccessibilityHandler>(*this, juce::AccessibilityRole::dialogWindow);
+}
+
 ModalLayer::~ModalLayer() { stopTimer(); }
 
 void ModalLayer::setContent(juce::Component& content) {

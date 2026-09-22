@@ -6,6 +6,7 @@
 #include "core/Fonts.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 #include "widgets/form/FormControls.h"
 
 namespace t3k::ui {
@@ -66,12 +67,12 @@ RichText boldThen(const juce::String& strong, const juce::String& rest) {
 // Fixed width + constant label so the active state never shifts layout; the
 // icon turns green (and pulses) while the tone plays. Playing is busy, not
 // blocked; only a missing output device reads as not-allowed.
-class SystemSettingsPage::TestButton : public juce::Button, private juce::Timer {
+class SystemSettingsPage::TestButton : public Clickable, private juce::Timer {
 public:
   static constexpr int kWidth = 104, kIcon = 15, kGap = 7;
   static constexpr float kPulseMs = 900, kPulseMinAlpha = 0.35f;
 
-  TestButton() : juce::Button("Test") { setWantsKeyboardFocus(false); }
+  TestButton() : Clickable("Test") {}
 
   void setDisabled(bool disabled) {
     disabled_ = disabled;

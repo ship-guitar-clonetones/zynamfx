@@ -13,10 +13,9 @@ IconButton::IconButton(const char* svg, int boxSize, int glyphSize)
     : IconButton(std::nullopt, svg, boxSize, glyphSize) {}
 
 IconButton::IconButton(std::optional<Icon> icon, const char* svg, int boxSize, int glyphSize)
-    : juce::Button({}), icon_(icon), svg_(svg), glyphSize_(glyphSize) {
+    : Clickable({}), icon_(icon), svg_(svg), glyphSize_(glyphSize) {
   setSize(boxSize, boxSize);
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
 }
 
 void IconButton::setIcon(Icon icon) {

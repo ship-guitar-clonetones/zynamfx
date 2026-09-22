@@ -38,10 +38,9 @@ void AccountMenu::Menu::resized() {
 }
 
 // Pill
-AccountMenu::AccountMenu() : juce::Button({}) {
+AccountMenu::AccountMenu() : Clickable({}) {
   setHelpText(help::text(help::Key::account));
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
   addAndMakeVisible(avatar_);
   setSize(kWidth, kHeight);
 

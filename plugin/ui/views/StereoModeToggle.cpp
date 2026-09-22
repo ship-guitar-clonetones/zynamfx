@@ -5,6 +5,7 @@
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -17,13 +18,12 @@ constexpr int kHighlightHeight = 28;
 constexpr int kGlyph = 12;
 }  // namespace
 
-class StereoModeToggle::Segment : public juce::Button {
+class StereoModeToggle::Segment : public Clickable {
 public:
   Segment(const char* svg, float glyphWidth, help::Key helpKey)
-      : juce::Button({}), svg_(svg), glyphWidth_(glyphWidth) {
+      : Clickable({}), svg_(svg), glyphWidth_(glyphWidth) {
     setHelpText(help::text(helpKey));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
   }
 
   void setSelected(bool selected) {

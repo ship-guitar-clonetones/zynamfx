@@ -2,6 +2,13 @@
 // tile menus…). Lives in the root's overlay layer so it paints above
 // everything, is positioned relative to an anchor component, and dismisses
 // on a press outside itself/its anchor or on Escape (useDismissable.ts).
+// The panel takes its anchor's scale: one opened from a counter-scaled
+// subtree (the tone browser's body, at 1x under the window zoom) is 1x too.
+// Keyboard: the panel takes focus when it opens and is its own focus
+// container, so Tab / Shift+Tab and the arrows walk its rows (buttons)
+// without leaving it; Enter presses a row. A panel the keyboard opened (or
+// walked) hands focus back to its anchor when it closes; one the mouse
+// opened leaves nothing focused, so the host's keys work again.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -49,6 +56,8 @@ public:
   bool dismissOnAnchorPress = false;
 
   bool keyPressed(const juce::KeyPress& key) override;
+  std::unique_ptr<juce::ComponentTraverser> createKeyboardFocusTraverser() override;
+  std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
   // Every panel draws a 1px border; CSS padding starts inside it.
   static constexpr int kBorder = 1;
@@ -59,6 +68,9 @@ protected:
   void reposition();
 
 private:
+  // Adopt `source`'s scale relative to the overlay; returns it.
+  float adoptScaleOf(const juce::Component& source);
+
   // Global mouse listener: a press anywhere outside the panel and its
   // anchor dismisses. Separate object because Component is itself a
   // MouseListener for its own events.
@@ -72,8 +84,11 @@ private:
   };
 
   void outsidePress(const juce::MouseEvent& e);
+  // Focus the next (or previous) row after the focused one, wrapping.
+  void focusRow(bool next);
 
   OutsidePressWatcher watcher_{*this};
+  bool keyboardOpened_ = false;  // the anchor had focus at open(): focus returns to it
   juce::Component::SafePointer<juce::Component> anchor_;
   Align align_ = Align::left;
   Placement placement_ = Placement::below;

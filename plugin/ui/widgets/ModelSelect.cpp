@@ -6,6 +6,7 @@
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -29,9 +30,9 @@ const juce::Colour kCountColour = juce::Colours::white.withAlpha(0.60f);
 }  // namespace
 
 // ‹ / › stepper: a 20px chevron, DISABLED_OPACITY + not-allowed at the ends.
-class ModelSelect::StepButton : public juce::Button {
+class ModelSelect::StepButton : public Clickable {
 public:
-  explicit StepButton(Icon icon) : juce::Button({}), icon_(icon) { setWantsKeyboardFocus(false); }
+  StepButton(Icon icon, const juce::String& name) : Clickable(name), icon_(icon) {}
 
   void setEnabledLook(bool enabled) {
     setEnabled(enabled);
@@ -54,6 +55,7 @@ public:
   explicit Dropdown(ModelSelect& owner) : owner_(owner) {
     viewport_.setViewedComponent(&content_, false);
     viewport_.setScrollBarsShown(false, false, true, false);
+    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
     dots_.setVisible(false);
     content_.addChildComponent(dots_);
@@ -93,12 +95,11 @@ public:
   void resized() override { viewport_.setBounds(getLocalBounds()); }
 
 private:
-  class Row : public juce::Button {
+  class Row : public Clickable {
   public:
     Row(const Option& option, bool active, bool divider)
-        : juce::Button(option.name), name_(option.name), active_(active), divider_(divider) {
+        : Clickable(option.name), name_(option.name), active_(active), divider_(divider) {
       setMouseCursor(juce::MouseCursor::PointingHandCursor);
-      setWantsKeyboardFocus(false);
     }
     bool active() const { return active_; }
 
@@ -170,8 +171,8 @@ public:
 }  // namespace
 
 ModelSelect::ModelSelect()
-    : prev_(std::make_unique<StepButton>(Icon::ChevronLeft)),
-      next_(std::make_unique<StepButton>(Icon::ChevronRight)),
+    : prev_(std::make_unique<StepButton>(Icon::ChevronLeft, "Previous model")),
+      next_(std::make_unique<StepButton>(Icon::ChevronRight, "Next model")),
       list_(std::make_unique<Dropdown>(*this)) {
   prev_->onClick = [this] { step(-1); };
   next_->onClick = [this] { step(+1); };

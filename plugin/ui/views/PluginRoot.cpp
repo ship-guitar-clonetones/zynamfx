@@ -1,6 +1,8 @@
 #include "PluginRoot.h"
 
 #include "core/Design.h"
+#include "core/Help.h"
+#include "core/NoDefaultFocus.h"
 #include "core/Theme.h"
 
 namespace t3k::ui {
@@ -19,6 +21,7 @@ PluginRoot::PluginRoot(Services& services)
       toast_(services.toast),
       hintTracker_(services.hints, *this) {
   setOpaque(true);
+  setFocusContainerType(FocusContainerType::keyboardFocusContainer);
 
   header_.onToggleTuner = [this](bool show) { setTunerShown(show); };
   header_.onStereoToggle = [this](bool stereo) {
@@ -75,6 +78,7 @@ PluginRoot::PluginRoot(Services& services)
   addAndMakeVisible(overlay_);
   overlay_.addChildComponent(toast_);
 
+  addMouseListener(&focusPolicy_, true);
   services_.hints.addListener(this);
   services_.banners.addListener(this);
   services_.connection.addListener(this);
@@ -89,6 +93,8 @@ PluginRoot::PluginRoot(Services& services)
 }
 
 PluginRoot::~PluginRoot() {
+  removeMouseListener(&focusPolicy_);
+  if (keyWindow_ != nullptr) keyWindow_->removeKeyListener(&focusPolicy_);
   services_.session.onAuthenticated = nullptr;
   services_.loadFlow.onShowBrowser = nullptr;
   if (watchedParent_ != nullptr) watchedParent_->removeComponentListener(this);
@@ -245,6 +251,11 @@ void PluginRoot::componentMovedOrResized(juce::Component&, bool, bool) {
 }
 
 void PluginRoot::parentHierarchyChanged() {
+  if (auto* top = getTopLevelComponent(); top != this && top != keyWindow_.getComponent()) {
+    if (keyWindow_ != nullptr) keyWindow_->removeKeyListener(&focusPolicy_);
+    keyWindow_ = top;
+    top->addKeyListener(&focusPolicy_);
+  }
   auto* parent = getParentComponent();
   if (parent == watchedParent_) return;
   if (watchedParent_ != nullptr) watchedParent_->removeComponentListener(this);
@@ -253,11 +264,53 @@ void PluginRoot::parentHierarchyChanged() {
   componentMovedOrResized(*this, false, true);
 }
 
+// Keyboard focus (see the header): JUCE's tab order, with no default.
+std::unique_ptr<juce::ComponentTraverser> PluginRoot::createKeyboardFocusTraverser() {
+  return std::make_unique<NoDefaultFocus>();
+}
+
+bool PluginRoot::FocusPolicy::keyPressed(const juce::KeyPress& key, juce::Component*) {
+  if (!key.isKeyCode(juce::KeyPress::tabKey)) return false;
+  // Focus resting on the window itself (a standalone DocumentWindow takes
+  // it when the OS activates it) is nothing focused as far as the UI goes.
+  auto* focused = juce::Component::getCurrentlyFocusedComponent();
+  if (focused != nullptr && root_.isParentOf(focused)) return false;
+  const auto order = juce::KeyboardFocusTraverser().getAllComponents(&root_);
+  if (order.empty()) return false;
+  (key.getModifiers().isShiftDown() ? order.back() : order.front())->grabKeyboardFocus();
+  return true;
+}
+
+void PluginRoot::FocusPolicy::mouseDown(const juce::MouseEvent& e) {
+  // Runs after the pressed component's own mouseDown, so a click that gave
+  // focus (a text field) has already done so: keep focus when it sits on the
+  // pressed component's line of ancestry either way (an editor inside its
+  // field, a row inside its popover).
+  auto* focused = juce::Component::getCurrentlyFocusedComponent();
+  auto* pressed = e.eventComponent;
+  if (focused == nullptr || pressed == nullptr || !root_.isParentOf(focused)) return;
+  if (focused == pressed || focused->isParentOf(pressed) || pressed->isParentOf(focused)) return;
+  focused->giveAwayKeyboardFocus();
+}
+
+bool PluginRoot::keyPressed(const juce::KeyPress& key) {
+  if (key != juce::KeyPress::escapeKey) return false;
+  auto* focused = getCurrentlyFocusedComponent();
+  if (focused == nullptr || !isParentOf(focused)) return false;
+  focused->giveAwayKeyboardFocus();
+  return true;
+}
+
 void PluginRoot::bannerShow() {
   bannerWait_.cancel();
   bannerPhase_ = BannerPhase::shown;
   banner_.setVisible(true);
   resized();
+  if (const auto& spec = services_.banners.active()) {
+    juce::String text;
+    for (const auto& run : spec->content) text << run.text;
+    help::announce(text);
+  }
 }
 
 void PluginRoot::handleBannerAction(BannerAction action) {

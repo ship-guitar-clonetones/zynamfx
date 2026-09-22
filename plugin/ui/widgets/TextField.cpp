@@ -33,6 +33,7 @@ TextField::~TextField() { juce::Desktop::getInstance().removeFocusChangeListener
 
 void TextField::setPlaceholder(const juce::String& text) {
   editor_.setTextToShowWhenEmpty(text, theme::kGray);
+  editor_.setTitle(text);  // the field's name to a screen reader
 }
 
 void TextField::setText(const juce::String& text, bool notify) {
@@ -65,6 +66,7 @@ void TextField::setClearButton(int size, int right) {
   clear_->setHelpText("Clear");
   clear_->onClick = [this] {
     editor_.setText({}, /*sendChangeMessage=*/true);
+    focus();  // the press dropped the field's focus; clearing is a prelude to retyping
     if (onClear) onClear();
   };
   clearRight_ = right;

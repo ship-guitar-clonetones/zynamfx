@@ -9,6 +9,7 @@
 #include "core/Labels.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -32,11 +33,10 @@ void paintStat(juce::Graphics& g, juce::Rectangle<int> row, int x, Icon icon, co
 
 // Bookmark tally as a toggle (signed in): outline idle, white fill when
 // favorited; the whole icon + count is the button.
-class ToneMeta::BookmarkButton : public juce::Button {
+class ToneMeta::BookmarkButton : public Clickable {
 public:
-  BookmarkButton() : juce::Button("Bookmark") {
+  BookmarkButton() : Clickable("Bookmark") {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
   }
   void set(int count, bool favorited) {
     count_ = labels::count(count);

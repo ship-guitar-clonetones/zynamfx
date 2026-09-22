@@ -64,7 +64,7 @@ std::unique_ptr<FilterChip> FilterBar::makeMenuChip(help::Key hint, std::functio
   auto* raw = chip.get();
   chip->onPress = [this, raw, openMenu = std::move(open)] {
     if (menu_) {
-      menu_.reset();  // pressing the chip of the open menu closes it
+      closeMenu();  // pressing the chip of the open menu closes it
       return;
     }
     openMenu(*raw);
@@ -141,13 +141,20 @@ void FilterBar::buildChips() {
 
 // State
 void FilterBar::changed() {
+  closeMenu();
   refreshChips();
   if (onChange) onChange();
 }
 
+void FilterBar::closeMenu() {
+  lookupDebounce_.cancel();
+  lookupScope_.reset();
+  menu_.reset();
+}
+
 void FilterBar::setExpanded(bool expanded) {
   state_.filtersExpanded = expanded;
-  menu_.reset();
+  closeMenu();
   refreshChips();
   scroller_->setViewPosition(0, 0);
 }
@@ -244,14 +251,9 @@ void FilterBar::openMenu(FilterChip& chip, FilterMenu::Picks picks, std::vector<
   menu_->setOptions(std::move(options), picked);
   menu_->onPick = [this, apply = std::move(pick)](const juce::String& id) {
     apply(id);
-    menu_.reset();
     changed();
   };
-  menu_->onDismiss = [this] {
-    lookupDebounce_.cancel();
-    lookupScope_.reset();
-    menu_.reset();
-  };
+  menu_->onDismiss = [this] { closeMenu(); };
   menu_->openBelow(chip);
 }
 

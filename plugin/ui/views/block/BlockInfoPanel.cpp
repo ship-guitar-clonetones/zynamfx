@@ -7,6 +7,7 @@
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -25,11 +26,10 @@ int ceilInt(float v) { return static_cast<int>(std::ceil(v)); }
 }  // namespace
 
 // MORE / LESS: mono 14px uppercase + a 16px chevron, gap 8.
-class BlockInfoPanel::MoreButton : public juce::Button {
+class BlockInfoPanel::MoreButton : public Clickable {
 public:
-  MoreButton() : juce::Button("More") {
+  MoreButton() : Clickable("More") {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
     setExpanded(false);
   }
   void setExpanded(bool expanded) {

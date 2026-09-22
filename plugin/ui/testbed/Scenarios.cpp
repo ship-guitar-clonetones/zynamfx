@@ -5,7 +5,9 @@
 
 #include "Drive.h"
 #include "views/PluginRoot.h"
+#include "views/browser/FilterChip.h"
 #include "widgets/DbMeter.h"
+#include "widgets/DragScroller.h"
 
 namespace t3k::ui::testbed {
 
@@ -155,6 +157,17 @@ const std::map<juce::String, Drive>& drives() {
          wait(600);
          unhover(root);
        }},
+      {"browser-scrolled",
+       [](PluginRoot& root, MockBackend&) {
+         // The browser's vertical DragScroller: the one whose content is taller than it.
+         auto* scroller = find(root, [](juce::Component& c) {
+           auto* v = dynamic_cast<DragScroller*>(&c);
+           return v != nullptr && v->getViewedComponent() != nullptr &&
+                  v->getViewedComponent()->getHeight() > v->getHeight();
+         });
+         if (auto* v = dynamic_cast<DragScroller*>(scroller)) v->setViewPosition(0, 100);
+         wait(100);
+       }},
       {"browser-search-typed",
        [](PluginRoot& root, MockBackend&) {
          submit(root, juce::String::fromUTF8("Search\xe2\x80\xa6"), "vox");
@@ -209,6 +222,29 @@ const std::map<juce::String, Drive>& drives() {
          unhover(root);
        }},
       {"browser-sort-menu",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Sort:");
+         wait(300);
+       }},
+      {"browser-sort-cleared",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Filters:");
+         wait(200);
+         clickByHelp(root, "Sort:");
+         wait(200);
+         if (auto* newest = buttonNamed(root, "Newest")) click(root, *newest);
+         wait(300);
+         // The chip now reads Newest ×, with the clear-filter hint. Its menu
+         // again, then a press on its ×.
+         auto* chip = dynamic_cast<FilterChip*>(buttonNamed(root, "Newest"));
+         if (chip) click(root, *chip);
+         wait(200);
+         if (chip && chip->onClear) chip->onClear();
+         wait(300);
+       }},
+      {"browser-zoom-menu",
        [](PluginRoot& root, MockBackend&) {
          clickByHelp(root, "Filters:");
          wait(200);

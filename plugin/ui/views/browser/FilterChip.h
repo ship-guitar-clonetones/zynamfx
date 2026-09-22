@@ -13,10 +13,11 @@
 
 #include "core/Icons.h"
 #include "widgets/Avatar.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
-class FilterChip : public juce::Button {
+class FilterChip : public Clickable {
 public:
   static constexpr int kHeight = 38;  // 20px glyph + 8px pads + 1px borders
   enum class Trailing { none, chevron, clear };
@@ -46,6 +47,7 @@ public:
   void paintButton(juce::Graphics& g, bool highlighted, bool down) override;
   void resized() override;
   void mouseDown(const juce::MouseEvent& e) override;
+  bool keyPressed(const juce::KeyPress& key) override;
 
 private:
   enum class Glyph { none, icon, svg, badge, avatar };

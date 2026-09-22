@@ -1,13 +1,14 @@
 #include "FormControls.h"
 
 #include "core/Paint.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
 // PillToggle
-PillToggle::PillToggle() : juce::Button({}), progress_(*this, [this](float) { repaint(); }) {
+PillToggle::PillToggle() : Clickable({}), progress_(*this, [this](float) { repaint(); }) {
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
+  setToggleable(true);  // a screen reader hears on / off
   setSize(kWidth, kHeight);
   onClick = [this] {
     setValue(!on_);
@@ -18,6 +19,7 @@ PillToggle::PillToggle() : juce::Button({}), progress_(*this, [this](float) { re
 void PillToggle::setValue(bool on, bool animate) {
   if (on == on_ && !progress_.running()) return;
   on_ = on;
+  setToggleState(on, juce::dontSendNotification);
   if (animate)
     progress_.animateTo(on ? 1.0f : 0.0f, kAnimMs);
   else
@@ -77,12 +79,11 @@ void ChoiceIndicator::paint(juce::Graphics& g, juce::Rectangle<float> box, bool 
 }
 
 // SegmentedControl
-class SegmentedControl::Cell : public juce::Button {
+class SegmentedControl::Cell : public Clickable {
 public:
   Cell(SegmentedControl& owner, juce::String label, int index)
-      : juce::Button(label), owner_(owner), label_(std::move(label)), index_(index) {
+      : Clickable(label), owner_(owner), label_(std::move(label)), index_(index) {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
     onClick = [this] {
       if (owner_.selected_ == index_) return;
       owner_.setSelected(index_);
@@ -162,9 +163,8 @@ FormButton::Look FormButton::text(float px, bool bold, juce::Colour colour, int 
   return {std::nullopt, 0, padX, padY, px, bold, colour, align};
 }
 
-FormButton::FormButton(juce::String label, Look look) : juce::Button(label), label_(std::move(label)), look_(look) {
+FormButton::FormButton(juce::String label, Look look) : Clickable(label), label_(std::move(label)), look_(look) {
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
 }
 
 void FormButton::setLabel(const juce::String& label) {

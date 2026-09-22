@@ -8,13 +8,14 @@
 #include "core/Paint.h"
 #include "core/Theme.h"
 #include "widgets/Avatar.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
 // One option: a check column (multi-pick menus), an optional icon or
 // avatar, the label; a rounded hover fill. Picked rows read white, the
 // rest muted.
-class FilterMenu::Row : public juce::Button {
+class FilterMenu::Row : public Clickable {
 public:
   static constexpr int kPadX = 12;
   static constexpr int kCheck = 16;
@@ -24,9 +25,8 @@ public:
   static constexpr float kPx = 14;
 
   Row(const Option& option, bool picked, bool checks, ImageLoader& images)
-      : juce::Button(option.label), label_(option.label), icon_(option.icon), picked_(picked), checks_(checks) {
+      : Clickable(option.label), label_(option.label), icon_(option.icon), picked_(picked), checks_(checks) {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
     if (option.avatarUrl) {
       avatar_ = std::make_unique<Avatar>();
       addAndMakeVisible(*avatar_);

@@ -11,10 +11,11 @@
 
 #include "core/Icons.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
-class IconButton : public juce::Button {
+class IconButton : public Clickable {
 public:
   // Glyph size follows the box: ICON_SIZE at ICON_BOX_SIZE, 18 in a 28 box.
   static int glyphSizeFor(int box) {

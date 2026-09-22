@@ -5,11 +5,15 @@
 
 #include <juce_core/juce_core.h>
 #include <juce_events/juce_events.h>
+#include <juce_gui_basics/juce_gui_basics.h>
 
 #include <atomic>
 #include <iostream>
 #include <thread>
 
+#include "Drive.h"
+#include "Host.h"
+#include "core/Help.h"
 #include "core/KnobScale.h"
 #include "core/Labels.h"
 #include "core/Pitch.h"
@@ -22,7 +26,16 @@
 #include "services/Tone3000Client.h"
 #include "services/UiPrefs.h"
 #include "services/UpdateCheck.h"
+#include "views/browser/FilterChip.h"
 #include "views/browser/Paginator.h"
+#include "widgets/Avatar.h"
+#include "widgets/ChromeTextButton.h"
+#include "widgets/DragScroller.h"
+#include "widgets/FormatBadge.h"
+#include "widgets/IconButton.h"
+#include "widgets/Knob.h"
+#include "widgets/form/FormControls.h"
+#include "widgets/Popover.h"
 
 namespace t3k::ui::testbed {
 
@@ -485,6 +498,58 @@ struct Tone3000ClientTests : juce::UnitTest {
   }
 };
 
+struct DragScrollerTests : juce::UnitTest {
+  DragScrollerTests() : juce::UnitTest("DragScroller", "ui") {}
+
+  // A wheel event as JUCE delivers it to the viewport itself (bubbled up
+  // from the child it landed on).
+  static void wheel(DragScroller& s, float deltaX, float deltaY) {
+    const auto now = juce::Time::getCurrentTime();
+    const juce::MouseEvent e(juce::Desktop::getInstance().getMainMouseSource(), {10.0f, 10.0f}, {}, 0, 0, 0, 0, 0, &s,
+                             &s, now, {10.0f, 10.0f}, now, 0, false);
+    juce::MouseWheelDetails w;
+    w.deltaX = deltaX;
+    w.deltaY = deltaY;
+    s.mouseWheelMove(e, w);
+  }
+
+  struct Rig {
+    DragScroller s{DragScroller::Axis::horizontal};
+    juce::Component content;
+    Rig() {
+      content.setSize(4000, 100);
+      s.setSize(400, 100);
+      s.setViewedComponent(&content, false);
+      s.setViewPosition(1000, 0);
+    }
+  };
+
+  void runTest() override {
+    beginTest("a mostly vertical gesture pans by its vertical delta, sideways jitter ignored");
+    {
+      Rig r;
+      wheel(r.s, 0.001f, -0.05f);  // 11.2px (JUCE: up is negative; the view moves the other way)
+      expectEquals(r.s.getViewPositionX(), 1011);
+      wheel(r.s, -0.002f, -0.05f);  // jitter flips sign: same direction, and the .2 carried
+      expectEquals(r.s.getViewPositionX(), 1022);
+    }
+
+    beginTest("a native sideways gesture pans by its own delta");
+    {
+      Rig r;
+      wheel(r.s, 0.05f, 0.001f);
+      expectEquals(r.s.getViewPositionX(), 989);
+    }
+
+    beginTest("slow gestures accumulate sub-pixel motion instead of rounding up per event");
+    {
+      Rig r;
+      for (int i = 0; i < 10; ++i) wheel(r.s, 0.0f, -0.001f);  // 0.224px each: 2.24px in all
+      expectEquals(r.s.getViewPositionX(), 1002);
+    }
+  }
+};
+
 struct ToneModelTests : juce::UnitTest {
   ToneModelTests() : juce::UnitTest("Tone", "ui") {}
   void runTest() override {
@@ -629,14 +694,230 @@ struct ToneQueryTests : juce::UnitTest {
   }
 };
 
+// The keyboard / screen-reader contract every control signs up to.
+struct AccessibilityTests : juce::UnitTest {
+  AccessibilityTests() : juce::UnitTest("Accessibility", "ui") {}
+  void runTest() override {
+    beginTest("help::lead names a control from its hint");
+    expectEquals(help::lead("Undo: step back through chain edits."), juce::String("Undo"));
+    expectEquals(help::lead("Clear"), juce::String("Clear"));
+    expectEquals(help::lead(juce::String()), juce::String());
+    expectEquals(help::lead(": odd"), juce::String(": odd"));
+
+    beginTest("buttons take focus from Tab, never from a click");
+    IconButton icon(Icon::X);
+    expect(icon.getWantsKeyboardFocus());
+    expect(!icon.getMouseClickGrabsKeyboardFocus());
+
+    beginTest("a button's name: title, else text, else the hint lead");
+    icon.setHelpText(help::text(help::Key::undo));
+    expectEquals(icon.accessibleName(), help::lead(help::text(help::Key::undo)));
+    expectEquals(icon.createAccessibilityHandler()->getTitle(), icon.accessibleName());
+    expectEquals(icon.createAccessibilityHandler()->getHelp(), help::text(help::Key::undo));
+    ChromeTextButton save("Save", help::Key::presetSave);
+    expectEquals(save.accessibleName(), juce::String("Save"));
+    save.setTitle("Save preset");
+    expectEquals(save.accessibleName(), juce::String("Save preset"));
+
+    beginTest("a chip's name follows its label; Backspace is its x");
+    FilterChip chip("Sort");
+    chip.setLabel("Newest");
+    expectEquals(chip.accessibleName(), juce::String("Newest"));
+    int cleared = 0;
+    chip.onClear = [&] { ++cleared; };
+    chip.setTrailing(FilterChip::Trailing::clear);
+    expect(chip.keyPressed(juce::KeyPress(juce::KeyPress::backspaceKey)));
+    expectEquals(cleared, 1);
+    chip.setTrailing(FilterChip::Trailing::chevron);
+    expect(!chip.keyPressed(juce::KeyPress(juce::KeyPress::backspaceKey)));
+    expectEquals(cleared, 1);
+
+    beginTest("a knob is a Tab stop and a slider; arrows step it, Space falls through");
+    Knob::Options options;
+    options.label = "Input";
+    options.scale = &scales::gainDb();
+    options.help = help::Key::inputLevel;
+    Knob knob(options);
+    expect(knob.getWantsKeyboardFocus());
+    expect(!knob.getMouseClickGrabsKeyboardFocus());
+    expectEquals(knob.getTitle(), juce::String("Input"));
+    knob.setValue(0.5f);
+    std::vector<float> emitted;
+    int gestures = 0;
+    knob.onChange = [&](float v) { emitted.push_back(v); };
+    knob.onDragStateChange = [&](bool down) { gestures += down ? 1 : -1; };
+    expect(knob.keyPressed(juce::KeyPress(juce::KeyPress::rightKey)));
+    expectEquals(static_cast<int>(emitted.size()), 1);
+    expectWithinAbsoluteError(emitted.back(), 0.51f, 1e-5f);
+    expectEquals(gestures, 0);  // begin and end bracketed the step
+    expect(knob.keyPressed(juce::KeyPress(juce::KeyPress::downKey, juce::ModifierKeys::shiftModifier, 0)));
+    expectWithinAbsoluteError(emitted.back(), 0.51f - 0.01f / 8, 1e-5f);
+    expect(knob.keyPressed(juce::KeyPress(juce::KeyPress::endKey)));
+    expectWithinAbsoluteError(emitted.back(), 1.0f, 1e-6f);
+    expect(!knob.keyPressed(juce::KeyPress(juce::KeyPress::spaceKey)));
+    auto handler = knob.createAccessibilityHandler();
+    expect(handler->getRole() == juce::AccessibilityRole::slider);
+    expectEquals(handler->getValueInterface()->getCurrentValueAsString(), juce::String("24.0 dB"));
+    handler->getValueInterface()->setValue(0.0);
+    expectWithinAbsoluteError(knob.value(), 0.5f, 1e-6f);
+
+    beginTest("the paginator turns pages with the arrows");
+    Paginator pages;
+    pages.set(2, 5);
+    int turnedTo = 0;
+    pages.onPageChange = [&](int p) { turnedTo = p; };
+    expect(pages.keyPressed(juce::KeyPress(juce::KeyPress::rightKey)));
+    expectEquals(turnedTo, 3);
+    expect(pages.keyPressed(juce::KeyPress(juce::KeyPress::leftKey)));
+    expectEquals(turnedTo, 1);
+    expectEquals(pages.createAccessibilityHandler()->getValueInterface()->getCurrentValueAsString(),
+                 juce::String("Page 2 of 5"));
+
+    beginTest("a pill toggle reads as checked when on");
+    PillToggle toggle;
+    expect(!toggle.createAccessibilityHandler()->getCurrentState().isChecked());
+    toggle.setValue(true, /*animate=*/false);
+    expect(toggle.createAccessibilityHandler()->getCurrentState().isChecked());
+
+    beginTest("decoration stays out of the accessibility tree");
+    expect(!Avatar().isAccessible());
+    expect(!FormatBadge().isAccessible());
+  }
+};
+
+// The focus policy end to end, in a real window: keys and presses enter
+// through the peer, as the OS delivers them, so JUCE's own focus plumbing
+// (click-to-focus, the tab walk, listeners) is what is under test.
+struct FocusPolicyTests : juce::UnitTest {
+  FocusPolicyTests() : juce::UnitTest("Focus policy", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+  // The focused component when it is inside the UI; the window itself
+  // holding focus (a DocumentWindow does once the OS activates it) is
+  // nothing focused as far as the UI is concerned.
+  static juce::Component* focused() {
+    auto* f = juce::Component::getCurrentlyFocusedComponent();
+    return f != nullptr && dynamic_cast<juce::TopLevelWindow*>(f) == nullptr ? f : nullptr;
+  }
+  static bool key(juce::ComponentPeer& peer, int code, juce::ModifierKeys mods = {}) {
+    return peer.handleKeyPress(juce::KeyPress(code, mods, 0));
+  }
+  // A primary click at the component's centre, through the peer.
+  static void click(juce::ComponentPeer& peer, juce::Component& target) {
+    const auto pos = peer.getComponent().getLocalPoint(&target, target.getLocalBounds().getCentre().toFloat());
+    const auto now = juce::Time::currentTimeMillis();
+    using Type = juce::MouseInputSource::InputSourceType;
+    peer.handleMouseEvent(Type::mouse, pos, juce::ModifierKeys::leftButtonModifier, 0.0f, 0.0f, now);
+    peer.handleMouseEvent(Type::mouse, pos, juce::ModifierKeys(), 0.0f, 0.0f, now + 1);
+    pump(30);
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("main-stereo");  // stereo input: the Input Mode menu button shows
+    if (scenario == nullptr) {
+      expect(false, "main-stereo scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("focus policy", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto* peer = host.getPeer();
+    if (peer == nullptr) {
+      expect(false, "no window peer");
+      return;
+    }
+    // JUCE grants keyboard focus only once the OS has focused the window;
+    // a run from a terminal or CI may not be allowed to take it.
+    juce::Process::makeForegroundProcess();
+    window.toFront(true);
+    peer->grabFocus();
+    for (int i = 0; i < 20 && !peer->isFocused(); ++i) pump(50);
+    if (!peer->isFocused()) {
+      logMessage("the window could not take OS focus here; focus policy not exercised");
+      return;
+    }
+    auto& root = host.pluginRoot();
+
+    beginTest("nothing is focused until the keyboard asks");
+    expect(focused() == nullptr);
+
+    beginTest("Tab from nothing enters the order; Escape leaves it");
+    expect(key(*peer, juce::KeyPress::tabKey));
+    expect(focused() != nullptr && root.isParentOf(focused()));
+    auto* first = focused();
+    expect(key(*peer, juce::KeyPress::tabKey));
+    expect(focused() != nullptr && focused() != first);
+    expect(key(*peer, juce::KeyPress::tabKey, juce::ModifierKeys::shiftModifier));
+    expect(focused() == first);
+    expect(key(*peer, juce::KeyPress::escapeKey));
+    expect(focused() == nullptr);
+
+    beginTest("Space with a Tab-focused button is left for the host");
+    expect(key(*peer, juce::KeyPress::tabKey));
+    expect(dynamic_cast<Clickable*>(focused()) != nullptr);
+    expect(!key(*peer, juce::KeyPress::spaceKey));
+    expect(!key(*peer, juce::KeyPress::spaceKey));  // and with nothing focused
+    key(*peer, juce::KeyPress::escapeKey);
+
+    beginTest("a click never focuses a button or a knob, and drops any focus held");
+    auto* knob = dynamic_cast<Knob*>(drive::find(root, [](juce::Component& c) {
+      return dynamic_cast<Knob*>(&c) != nullptr && c.isShowing() && c.isEnabled();
+    }));
+    auto* inputMode = drive::byHelpPrefix(root, "Input Mode:");
+    expect(knob != nullptr && inputMode != nullptr);
+    if (knob == nullptr || inputMode == nullptr) return;
+    expect(key(*peer, juce::KeyPress::tabKey));
+    expect(focused() != nullptr);
+    click(*peer, *knob);
+    expect(focused() == nullptr);
+    expect(!key(*peer, juce::KeyPress::returnKey));  // Enter goes to the host after mouse work
+    click(*peer, *inputMode);  // opens its menu: the panel takes focus, the button never does
+    expect(focused() != inputMode);
+    key(*peer, juce::KeyPress::escapeKey);
+    pump(30);
+    expect(focused() == nullptr);
+
+    beginTest("a keyboard-opened menu: arrows walk the rows, Escape returns to the anchor");
+    inputMode->grabKeyboardFocus();
+    expect(focused() == inputMode);
+    expect(key(*peer, juce::KeyPress::returnKey));  // Enter presses the button
+    pump(30);
+    auto* menu = dynamic_cast<Popover*>(focused());
+    expect(menu != nullptr);
+    if (menu != nullptr) {
+      expect(key(*peer, juce::KeyPress::downKey));
+      expect(focused() != menu && menu->isParentOf(focused()));
+      auto* row = focused();
+      expect(key(*peer, juce::KeyPress::downKey));
+      expect(focused() != row && menu->isParentOf(focused()));
+      expect(key(*peer, juce::KeyPress::tabKey, juce::ModifierKeys::shiftModifier));
+      expect(focused() == row);
+      expect(key(*peer, juce::KeyPress::escapeKey));
+      pump(30);
+      expect(!menu->isOpen());
+      expect(focused() == inputMode);
+    }
+    key(*peer, juce::KeyPress::escapeKey);
+    expect(focused() == nullptr);
+    window.setVisible(false);
+  }
+};
+
 HtmlTests htmlTests;
 RichFlowTests richFlowTests;
+AccessibilityTests accessibilityTests;
+FocusPolicyTests focusPolicyTests;
 UpdateCheckTests updateCheckTests;
 ConnectionGateTests connectionGateTests;
 PitchTests pitchTests;
 OAuthTests oauthTests;
 LoopbackServerTests loopbackServerTests;
 PaginatorTests paginatorTests;
+DragScrollerTests dragScrollerTests;
 UiPrefsTests uiPrefsTests;
 Tone3000ClientTests tone3000ClientTests;
 ToneModelTests toneModelTests;

@@ -60,6 +60,7 @@ void ToneTile::setBlock(const ChainItem& block) {
   block_ = block;
   enabled_ = block.params.enabled;
   setHelpText(help::toneTile(block.tone.title));
+  setTitle(block.tone.title);
   image_.setTone(block.tone.image, block.tone.gear, block.tone.local, kGlyphSize);
   syncState();
 }

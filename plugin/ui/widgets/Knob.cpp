@@ -28,6 +28,9 @@ constexpr int kHoldMs = 500;
 constexpr float kHoldSlop = 8.0f;
 // Bipolar centre detent window (coarse drag only).
 constexpr float kDetent = 0.02f;
+// Arrow key step (of the normalised range); Shift divides by kFineFactor.
+constexpr float kKeyStep = 0.01f;
+constexpr int kKeyReadoutMs = 600;
 
 const juce::Colour kEditorBorder = juce::Colour(235, 235, 245).withAlpha(0.3f);
 
@@ -54,6 +57,9 @@ Knob::Knob(Options options) : options_(std::move(options)) {
   setPaintingIsUnclipped(true);
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
   setViewportIgnoreDragFlag(true);  // a touch drag turns the knob, not the page
+  setWantsKeyboardFocus(true);
+  setMouseClickGrabsKeyboardFocus(false);  // Tab reaches a knob; a click leaves the host's keys alone
+  setTitle(options_.label);
   if (options_.help) setHelpText(help::text(*options_.help));
   live_ = emitted_ = value_ = juce::jlimit(options_.min, options_.max, options_.min);
 }
@@ -191,6 +197,69 @@ void Knob::mouseDoubleClick(const juce::MouseEvent& e) {
   if (e.source.isTouch() || !faceBounds().contains(e.getPosition())) return;
   endDrag();
   openEditor();
+}
+
+// Keyboard / screen reader
+void Knob::nudgeTo(float normalised) {
+  if (dragging_) return;
+  const float v = juce::jlimit(options_.min, options_.max, normalised);
+  if (onDragStateChange) onDragStateChange(true);
+  live_ = v;
+  if (!juce::exactlyEqual(v, emitted_)) emit(v);
+  if (onDragStateChange) onDragStateChange(false);
+  setReadoutVisible(true);
+  readoutTimer_.start(kKeyReadoutMs, [this] { setReadoutVisible(false); });
+}
+
+bool Knob::keyPressed(const juce::KeyPress& key) {
+  using KP = juce::KeyPress;
+  const float step = key.getModifiers().isShiftDown() ? kKeyStep / kFineFactor : kKeyStep;
+  if (key.isKeyCode(KP::upKey) || key.isKeyCode(KP::rightKey)) {
+    nudgeTo(live_ + step);
+  } else if (key.isKeyCode(KP::downKey) || key.isKeyCode(KP::leftKey)) {
+    nudgeTo(live_ - step);
+  } else if (key.isKeyCode(KP::homeKey)) {
+    nudgeTo(options_.min);
+  } else if (key.isKeyCode(KP::endKey)) {
+    nudgeTo(options_.max);
+  } else if (key == KP::returnKey) {
+    openEditor();
+  } else {
+    return false;  // Space and the rest fall through to the host
+  }
+  return true;
+}
+
+namespace {
+// The knob as a slider: its value in display units over the display range,
+// read out with the unit ("-3.2 dB").
+class KnobValue : public juce::AccessibilityValueInterface {
+public:
+  KnobValue(Knob& knob, const Knob::Options& options, std::function<void(float)> set)
+      : knob_(knob), options_(options), set_(std::move(set)) {}
+
+  bool isReadOnly() const override { return false; }
+  double getCurrentValue() const override { return options_.scale->toDisplay(knob_.value()); }
+  juce::String getCurrentValueAsString() const override { return options_.scale->format(knob_.value()); }
+  void setValue(double display) override { set_(static_cast<float>(options_.scale->fromDisplay(display))); }
+  void setValueAsString(const juce::String& text) override { setValue(text.getDoubleValue()); }
+  AccessibleValueRange getRange() const override {
+    const double lo = options_.scale->toDisplay(options_.min), hi = options_.scale->toDisplay(options_.max);
+    return {{std::min(lo, hi), std::max(lo, hi)}, std::abs(hi - lo) * kKeyStep};
+  }
+
+private:
+  Knob& knob_;
+  const Knob::Options& options_;
+  std::function<void(float)> set_;
+};
+}  // namespace
+
+std::unique_ptr<juce::AccessibilityHandler> Knob::createAccessibilityHandler() {
+  juce::AccessibilityHandler::Interfaces interfaces;
+  interfaces.value = std::make_unique<KnobValue>(*this, options_, [this](float v) { nudgeTo(v); });
+  return std::make_unique<juce::AccessibilityHandler>(*this, juce::AccessibilityRole::slider,
+                                                      juce::AccessibilityActions(), std::move(interfaces));
 }
 
 // Readout / editor

@@ -15,12 +15,13 @@
 #include "services/ImageLoader.h"
 #include "widgets/Avatar.h"
 #include "widgets/BusyOverlay.h"
+#include "widgets/Clickable.h"
 #include "widgets/FormatBadge.h"
 #include "widgets/ToneImage.h"
 
 namespace t3k::ui {
 
-class ToneCard : public juce::Button {
+class ToneCard : public Clickable {
 public:
   static constexpr int kPad = 12;
   static constexpr int kImage = 112;

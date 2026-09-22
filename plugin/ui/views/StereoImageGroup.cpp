@@ -3,6 +3,7 @@
 #include "core/Fonts.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -52,14 +53,13 @@ Knob::Options offsetKnob(const Copy& copy) {
 // What sits in the slot while the feature is off: an outline pill CTA
 // (pillButtonStyle) flanked by elongated hollow triangles, pointing out for
 // Spread (◁ SPREAD ▷) and in for Align (▷ ALIGN ◁).
-class StereoImageGroup::Advert : public juce::Button {
+class StereoImageGroup::Advert : public Clickable {
 public:
   Advert(const char* label, bool arrowsInward, help::Key help)
-      : juce::Button(label), label_(label), inward_(arrowsInward) {
+      : Clickable(label), label_(label), inward_(arrowsInward) {
     setSize(kWidth, kAdvertHeight);
     setHelpText(help::text(help));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
   }
 
   void mouseDown(const juce::MouseEvent& e) override {

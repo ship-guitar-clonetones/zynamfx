@@ -11,6 +11,7 @@ namespace t3k::ui {
 
 ToneImage::ToneImage(ImageLoader& loader) : loader_(loader) {
   setInterceptsMouseClicks(false, false);
+  setAccessible(false);  // artwork; the tile or card carries the name
   setOpaque(true);
 }
 

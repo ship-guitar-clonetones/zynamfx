@@ -12,8 +12,48 @@ const juce::String kEllipsis = juce::String::fromUTF8("\xe2\x80\xa6");
 }
 
 Paginator::Paginator() {
-  setWantsKeyboardFocus(false);
+  // One Tab stop for the whole row (Left / Right turn the page), not one
+  // per number; a click never focuses it.
+  setWantsKeyboardFocus(true);
+  setMouseClickGrabsKeyboardFocus(false);
+  setTitle("Pages");
   rebuild();
+}
+
+void Paginator::turnTo(int page) {
+  if (page >= 1 && page <= totalPages_ && page != page_ && onPageChange) onPageChange(page);
+}
+
+bool Paginator::keyPressed(const juce::KeyPress& key) {
+  const int step = key.isKeyCode(juce::KeyPress::leftKey) ? -1 : key.isKeyCode(juce::KeyPress::rightKey) ? 1 : 0;
+  if (step == 0) return false;
+  turnTo(page_ + step);
+  return true;
+}
+
+namespace {
+class PagesValue : public juce::AccessibilityValueInterface {
+public:
+  explicit PagesValue(Paginator& owner) : owner_(owner) {}
+  bool isReadOnly() const override { return false; }
+  double getCurrentValue() const override { return owner_.page(); }
+  juce::String getCurrentValueAsString() const override {
+    return "Page " + juce::String(owner_.page()) + " of " + juce::String(owner_.totalPages());
+  }
+  void setValue(double page) override { owner_.turnTo(juce::roundToInt(page)); }
+  void setValueAsString(const juce::String& text) override { setValue(text.getIntValue()); }
+  AccessibleValueRange getRange() const override { return {{1.0, static_cast<double>(owner_.totalPages())}, 1.0}; }
+
+private:
+  Paginator& owner_;
+};
+}  // namespace
+
+std::unique_ptr<juce::AccessibilityHandler> Paginator::createAccessibilityHandler() {
+  juce::AccessibilityHandler::Interfaces interfaces;
+  interfaces.value = std::make_unique<PagesValue>(*this);
+  return std::make_unique<juce::AccessibilityHandler>(*this, juce::AccessibilityRole::slider,
+                                                      juce::AccessibilityActions(), std::move(interfaces));
 }
 
 void Paginator::set(int page, int totalPages) {

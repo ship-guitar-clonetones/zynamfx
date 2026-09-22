@@ -24,6 +24,8 @@ struct Scenario {
   bool hints() const { return static_cast<bool>(data.getProperty("hints", true)); }
   bool banner() const { return static_cast<bool>(data.getProperty("banner", false)); }
   int settleMs() const { return static_cast<int>(data.getProperty("settle", 400)); }
+  // Window zoom to lay the root out at (the grid holds 1x under it).
+  double zoom() const { return static_cast<double>(data.getProperty("zoom", 1.0)); }
 };
 
 struct Fixtures {

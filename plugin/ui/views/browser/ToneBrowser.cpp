@@ -1,6 +1,7 @@
 #include "ToneBrowser.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "core/Fonts.h"
 #include "core/Help.h"
@@ -20,13 +21,27 @@ constexpr float kSearchPx = 14;
 constexpr int kSearchIcon = 18;
 constexpr int kSearchPadX = 16;
 constexpr int kSearchIconGap = 10;
-// Cards slide under the filter row through this much black.
-constexpr int kTopFade = 24;
+// Cards slide under the filter row through this much black: a solid band
+// right under the pills, then a fade that starts steep (alpha (1-t)^1.5) so
+// the cards read as gone before they reach it.
+constexpr int kTopFade = 32;
+constexpr float kTopSolid = 0.2f;  // 6px
+constexpr float kTopFadePower = 1.5f;
 
 std::unique_ptr<PillButton> makeFilledButton(const juce::String& label) {
   return std::make_unique<PillButton>(label, PillButton::Style::filled);
 }
 }  // namespace
+
+// Everything under the ← row, at 1x whatever the window zoom.
+class ToneBrowser::Body : public juce::Component {
+public:
+  explicit Body(ToneBrowser& owner) : owner_(owner) {}
+  void paintOverChildren(juce::Graphics& g) override { owner_.paintTopFade(g); }
+
+private:
+  ToneBrowser& owner_;
+};
 
 // The scrolled column: hosts the cards, prompts and paginator, and paints
 // the two bare text rows (pick error, empty copy) itself.
@@ -46,6 +61,7 @@ ToneBrowser::ToneBrowser(Services& services)
     : services_(services),
       state_(services.browser),
       back_("Select Tone", help::Key::closeToneBrowser),
+      body_(std::make_unique<Body>(*this)),
       filters_(services, services.browser),
       scroller_(std::make_unique<DragScroller>(DragScroller::Axis::vertical)),
       content_(std::make_unique<Content>()) {
@@ -53,6 +69,7 @@ ToneBrowser::ToneBrowser(Services& services)
     if (onClose) onClose();
   };
   addAndMakeVisible(back_);
+  addAndMakeVisible(*body_);
 
   search_.setPlaceholder(juce::String::fromUTF8("Search\xe2\x80\xa6"));
   search_.setFontSize(kSearchPx);
@@ -67,18 +84,19 @@ ToneBrowser::ToneBrowser(Services& services)
     search_.setText({});
     submit();
   };
-  addChildComponent(search_);
+  body_->addChildComponent(search_);
 
   filters_.onChange = [this] { queryChanged(); };
-  addChildComponent(filters_);
+  body_->addChildComponent(filters_);
 
   scroller_->setViewedComponent(content_.get(), false);
-  addAndMakeVisible(*scroller_);
+  body_->addAndMakeVisible(*scroller_);
   content_->addChildComponent(dots_);
   paginator_.onPageChange = [this](int page) { setPage(page); };
   content_->addChildComponent(paginator_);
 
   services_.session.addListener(this);
+  services_.zoom.addListener(this);
   // Back to the page this screen was left on; a fresh visit fetches.
   if (state_.result && !signedOut()) {
     loading_ = false;
@@ -89,7 +107,10 @@ ToneBrowser::ToneBrowser(Services& services)
   }
 }
 
-ToneBrowser::~ToneBrowser() { services_.session.removeListener(this); }
+ToneBrowser::~ToneBrowser() {
+  services_.zoom.removeListener(this);
+  services_.session.removeListener(this);
+}
 
 // State
 void ToneBrowser::sessionChanged() { fetch(); }
@@ -151,12 +172,17 @@ void ToneBrowser::pageLoaded(TonePage page) {
   rebuildBody();
   // Jump to the top whenever fresh results land (page turn / filter).
   scroller_->setViewPosition(0, 0);
+  const auto& result = *state_.result;
+  help::announce(result.data.empty() ? juce::String(emptyCopy())
+                                     : juce::String(result.data.size()) + " tones, page " + juce::String(result.page) +
+                                           " of " + juce::String(result.totalPages));
 }
 
 void ToneBrowser::pageFailed() {
   error_ = true;
   loading_ = false;
   rebuildBody();
+  help::announce(kFetchError);
 }
 
 void ToneBrowser::pick(const Tone& tone) {
@@ -200,7 +226,7 @@ void ToneBrowser::rebuildCards() {
 }
 
 void ToneBrowser::rebuildBody() {
-  const bool gate = signedOut() && !authPending();
+  const bool gate = gated();
   const bool showError = error_ && !loading_;
   const bool hasCards = state_.result && !state_.result->data.empty();
 
@@ -259,13 +285,28 @@ void ToneBrowser::rebuildBody() {
 
 // Layout
 void ToneBrowser::resized() {
+  // Design space: the ← row, and the box the body fills under it.
   const int w = getWidth();
   const int colW = std::min(kColumnWidth, w);
-  const int colX = (w - colW) / 2;
+  back_.setTopLeftPosition((w - colW) / 2, kPadTop);
+  const int top = kPadTop + BackLink::kHeight;
+  const int h = std::max(0, getHeight() - top);
 
-  int y = kPadTop;
-  back_.setTopLeftPosition(colX, y);
-  y += BackLink::kHeight;
+  // The body holds 1x on screen: counter-scaled by the zoom and sized in
+  // screen pixels over that box.
+  const float z = zoom();
+  body_->setTransform(juce::AffineTransform::scale(1 / z).translated(0, static_cast<float>(top)));
+  body_->setBounds(0, 0, juce::roundToInt(w * z), juce::roundToInt(h * z));
+  layoutBody();
+}
+
+// Screen pixels from here down. The column under the ← row is kColumnWidth
+// design px wide: that times the zoom.
+void ToneBrowser::layoutBody() {
+  const int w = body_->getWidth();
+  const int colW = std::min(juce::roundToInt(kColumnWidth * zoom()), w);
+  const int colX = (w - colW) / 2;
+  int y = 0;
   if (search_.isVisible()) {
     y += kHeaderGap;
     search_.setBounds(colX, y, colW, kSearchHeight);
@@ -273,24 +314,27 @@ void ToneBrowser::resized() {
     filters_.setColumn({colX, y, colW, FilterBar::kHeight});
     y += FilterBar::kHeight;
   }
-
-  scroller_->setBounds(0, y, w, std::max(0, getHeight() - y));
+  scroller_->setBounds(0, y, w, std::max(0, body_->getHeight() - y));
   layoutContent();
 }
 
-// Scrolled cards fade out under the header instead of clipping at it.
-void ToneBrowser::paintOverChildren(juce::Graphics& g) {
+// Scrolled cards fade out under the filter row instead of clipping at it.
+void ToneBrowser::paintTopFade(juce::Graphics& g) {
   if (!search_.isVisible() || scroller_->getViewPositionY() == 0) return;
   const auto top = scroller_->getBounds().toFloat().withHeight(kTopFade);
-  g.setGradientFill(juce::ColourGradient::vertical(juce::Colours::black, top.getY(),
-                                                   juce::Colours::transparentBlack, top.getBottom()));
+  auto fade = juce::ColourGradient::vertical(juce::Colours::black, top.getY(), juce::Colours::transparentBlack,
+                                             top.getBottom());
+  fade.addColour(kTopSolid, juce::Colours::black);
+  for (const float t : {0.25f, 0.5f, 0.75f})
+    fade.addColour(kTopSolid + t * (1 - kTopSolid), juce::Colours::black.withAlpha(std::pow(1 - t, kTopFadePower)));
+  g.setGradientFill(fade);
   g.fillRect(top);
 }
 
 void ToneBrowser::layoutContent() {
   const int w = scroller_->getWidth();
   if (w <= 0) return;
-  const int colW = std::min(kColumnWidth, w);
+  const int colW = std::min(juce::roundToInt(kColumnWidth * zoom()), w);
   const int colX = (w - colW) / 2;
   int y = 0;
 
@@ -314,17 +358,21 @@ void ToneBrowser::layoutContent() {
     content_->emptyBox = {colX + kEmptyPadX, y + kEmptyPadY, colW - 2 * kEmptyPadX, line};
     y += kEmptyPadY + line + kEmptyPadY;
   } else if (!cards_.empty() && cards_.front()->isVisible()) {
-    // Grid rows are as tall as their taller card, fractionally (a wrapped
-    // 14px title is 36.4px): the rows accumulate at that precision and each
-    // card's edges snap where they land, as the two-column CSS grid does.
+    // Two columns of cards that widen with the window, three once three fit
+    // at the default width. Grid rows are as tall as their tallest card,
+    // fractionally (a wrapped 14px title is 36.4px): the rows accumulate at
+    // that precision and each card's edges snap where they land, as the CSS
+    // grid does.
     const int gridTop = y;
-    const int cardW = (colW - kGridGap) / 2;
+    const size_t cols = colW >= 3 * kCardWidth + 2 * kGridGap ? 3 : 2;
+    const int cardW = (colW - static_cast<int>(cols - 1) * kGridGap) / static_cast<int>(cols);
     float rowY = static_cast<float>(y);
-    for (size_t i = 0; i < cards_.size(); i += 2) {
-      float rowH = cards_[i]->contentHeightFor(cardW);
-      if (i + 1 < cards_.size()) rowH = std::max(rowH, cards_[i + 1]->contentHeightFor(cardW));
+    for (size_t i = 0; i < cards_.size(); i += cols) {
+      const size_t end = std::min(i + cols, cards_.size());
+      float rowH = 0;
+      for (size_t j = i; j < end; ++j) rowH = std::max(rowH, cards_[j]->contentHeightFor(cardW));
       const int top = juce::roundToInt(rowY), bottom = juce::roundToInt(rowY + rowH);
-      for (size_t j = i; j < std::min(i + 2, cards_.size()); ++j) {
+      for (size_t j = i; j < end; ++j) {
         cards_[j]->setContentHeight(rowH);
         cards_[j]->setBounds(colX + static_cast<int>(j - i) * (cardW + kGridGap), top, cardW, bottom - top);
       }

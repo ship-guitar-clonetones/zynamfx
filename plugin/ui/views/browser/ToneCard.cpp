@@ -22,8 +22,7 @@ constexpr float kBadgeGap = 6;
 }  // namespace
 
 ToneCard::ToneCard(ImageLoader& images, const Tone& tone)
-    : juce::Button(tone.title), images_(images), tone_(tone), image_(images) {
-  setWantsKeyboardFocus(false);
+    : Clickable(tone.title), images_(images), tone_(tone), image_(images) {
 
   image_.setCornerRadius(kImageCorner);
   image_.setTone(tone_.images.empty() ? juce::String() : tone_.images.front(), tone_.gear, /*local=*/false);

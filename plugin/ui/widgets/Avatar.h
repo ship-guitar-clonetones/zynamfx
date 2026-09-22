@@ -8,7 +8,10 @@ namespace t3k::ui {
 
 class Avatar : public juce::Component {
 public:
-  Avatar() { setInterceptsMouseClicks(false, false); }
+  Avatar() {
+    setInterceptsMouseClicks(false, false);
+    setAccessible(false);  // decorative: the name beside it is the content
+  }
 
   void setImage(juce::Image image) {
     image_ = std::move(image);

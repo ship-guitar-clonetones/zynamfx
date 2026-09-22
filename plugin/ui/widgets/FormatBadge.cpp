@@ -16,7 +16,10 @@ const juce::Colour kChipBg{0xffa1a1aa};
 constexpr int kChipHeight = 18;
 }  // namespace
 
-FormatBadge::FormatBadge() { setInterceptsMouseClicks(false, false); }
+FormatBadge::FormatBadge() {
+  setInterceptsMouseClicks(false, false);
+  setAccessible(false);  // decorative: the card names its format
+}
 
 void FormatBadge::setFormat(const juce::String& label, bool a2) {
   label_ = label;

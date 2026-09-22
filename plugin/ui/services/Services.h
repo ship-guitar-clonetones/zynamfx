@@ -23,6 +23,7 @@
 #include "ToneSession.h"
 #include "UiPrefs.h"
 #include "UpdateCheck.h"
+#include "Zoom.h"
 #include "backend/Backend.h"
 
 namespace t3k::ui {
@@ -83,6 +84,7 @@ public:
   ConnectionGate connection;
   ToneLoadFlow loadFlow;
   UpdateCheck updates;
+  Zoom zoom;
 };
 
 }  // namespace t3k::ui

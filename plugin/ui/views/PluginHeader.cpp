@@ -6,6 +6,7 @@
 #include "core/Help.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -18,11 +19,11 @@ constexpr int kLogoHeight = 24;  // 160 * 32 / 210, rounded like the browser
 }  // namespace
 
 // The wordmark links to tone3000.com.
-class PluginHeader::LogoLink : public juce::Button {
+class PluginHeader::LogoLink : public Clickable {
 public:
-  LogoLink() : juce::Button({}) {
+  LogoLink() : Clickable({}) {
+    setTitle("TONE3000");  // tone3000.com, to a screen reader
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
     onClick = [] { juce::URL("https://www.tone3000.com").launchInDefaultBrowser(); };
   }
   void paintButton(juce::Graphics& g, bool, bool) override {

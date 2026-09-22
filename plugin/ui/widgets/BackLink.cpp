@@ -9,10 +9,9 @@
 
 namespace t3k::ui {
 
-BackLink::BackLink(const juce::String& label, help::Key help) : juce::Button("Back"), label_(label.toUpperCase()) {
+BackLink::BackLink(const juce::String& label, help::Key help) : Clickable("Back"), label_(label.toUpperCase()) {
   setHelpText(help::text(help));
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
   // drawText ellipsises at the measured width; a hair of slack keeps it whole.
   const int textW = static_cast<int>(std::ceil(Fonts::width(Fonts::mono(kPx), label_))) + 2;
   setSize(kIcon + kGap + textW, kHeight);

@@ -8,6 +8,7 @@ namespace t3k::ui {
 BlockLed::BlockLed(MeterStore& meters, juce::String id, int size)
     : meters_(meters), id_(std::move(id)) {
   setSize(size, size);
+  setAccessible(false);  // a live indicator: noise to a screen reader
   setHelpText(help::text(help::Key::clipDot));
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
   meters_.addListener(this);

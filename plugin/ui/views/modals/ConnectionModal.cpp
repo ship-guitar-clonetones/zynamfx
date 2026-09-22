@@ -13,6 +13,7 @@ ConnectionModal::ConnectionModal(Backdrop backdrop, ConnectionGate::Problem prob
     : ModalLayer(std::move(backdrop)) {
   const bool offline = problem == ConnectionGate::Problem::offline;
   setName(offline ? "No internet connection" : "Secure connection failed");
+  setTitle(getName());
   body_.setIcon(offline ? Icon::WifiOff : Icon::ShieldAlert);
   body_.setCopy(offline ? kOfflineCopy : kInsecureCopy, kBodyMaxW);
   body_.addButton("Try again", PillButton::Style::filled).onClick = [this] {

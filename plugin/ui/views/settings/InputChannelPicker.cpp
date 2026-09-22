@@ -81,6 +81,7 @@ public:
   ChannelList() {
     viewport_.setViewedComponent(&column_, false);
     viewport_.setScrollBarsShown(false, false, true, false);
+    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
   }
 

@@ -8,11 +8,10 @@
 
 namespace t3k::ui {
 
-ChromeIconButton::ChromeIconButton(Tone tone, help::Key help) : juce::Button({}), tone_(tone) {
+ChromeIconButton::ChromeIconButton(Tone tone, help::Key help) : Clickable({}), tone_(tone) {
   setSize(theme::kIconBoxSize, theme::kIconBoxSize);
   setHelpText(help::text(help));
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
 }
 
 ChromeIconButton::ChromeIconButton(Icon icon, Tone tone, help::Key help)

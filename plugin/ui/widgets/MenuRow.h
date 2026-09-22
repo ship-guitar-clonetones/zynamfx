@@ -7,10 +7,11 @@
 #include <optional>
 
 #include "core/Icons.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
-class MenuRow : public juce::Button {
+class MenuRow : public Clickable {
 public:
   struct Metrics {
     int height;

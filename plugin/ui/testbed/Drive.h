@@ -48,6 +48,11 @@ void submit(PluginRoot& root, const juce::String& placeholder, const juce::Strin
 // Pump the message loop.
 void wait(int ms);
 
+// Every shown, enabled control that Tab can reach (popover rows included)
+// must have a screen-reader name; returns a line locating each that has
+// none (class, root position, parent class). Empty = the screen passes.
+juce::StringArray unnamedFocusables(juce::Component& root);
+
 // The Settings takeover via the account menu, and its System tab.
 void openSettings(PluginRoot& root);
 void openSystemSettings(PluginRoot& root);

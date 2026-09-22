@@ -1,5 +1,7 @@
 #include "FilterChip.h"
 
+#include <utility>
+
 #include "core/Brand.h"
 #include "core/Fonts.h"
 #include "core/Paint.h"
@@ -13,9 +15,8 @@ constexpr float kBadgeAspect = 17.5f / 20.0f;
 constexpr float kBadgeHeight = 18;
 }  // namespace
 
-FilterChip::FilterChip(juce::String label) : juce::Button(label), label_(std::move(label)) {
+FilterChip::FilterChip(juce::String label) : Clickable(label), label_(std::move(label)) {
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
   addChildComponent(avatar_);
   fitToContent();
 }
@@ -124,9 +125,18 @@ void FilterChip::mouseDown(const juce::MouseEvent& e) {
 }
 
 void FilterChip::clicked() {
+  const bool clear = std::exchange(clearPressed_, false);  // a key press (Enter) is never on the ×
   if (locked_) return;
-  if (clearPressed_ && onClear) onClear();
-  else if (!clearPressed_ && onPress) onPress();
+  if (clear && onClear) onClear();
+  else if (!clear && onPress) onPress();
+}
+
+// Keyboard: Backspace / Delete on a focused chip is its ×.
+bool FilterChip::keyPressed(const juce::KeyPress& key) {
+  const bool clearKey = key.isKeyCode(juce::KeyPress::backspaceKey) || key.isKeyCode(juce::KeyPress::deleteKey);
+  if (!clearKey || locked_ || trailing_ != Trailing::clear || !onClear) return Clickable::keyPressed(key);
+  onClear();
+  return true;
 }
 
 void FilterChip::paintButton(juce::Graphics& g, bool, bool) {

@@ -139,4 +139,12 @@ bool GalleryTile::keyPressed(const juce::KeyPress& key) {
   return false;
 }
 
+std::unique_ptr<juce::AccessibilityHandler> GalleryTile::createAccessibilityHandler() {
+  return std::make_unique<juce::AccessibilityHandler>(
+      *this, juce::AccessibilityRole::button,
+      juce::AccessibilityActions()
+          .addAction(juce::AccessibilityActionType::press, [this] { open(); })
+          .addAction(juce::AccessibilityActionType::showMenu, [this] { openMenu(getLocalBounds().getCentre()); }));
+}
+
 }  // namespace t3k::ui

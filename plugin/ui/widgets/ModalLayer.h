@@ -36,6 +36,8 @@ public:
   void childBoundsChanged(juce::Component* child) override;
   void visibilityChanged() override;
   void mouseDown(const juce::MouseEvent&) override {}  // swallow
+  // A dialog to screen readers; the subclass names it with setTitle().
+  std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
 private:
   void timerCallback() override { refresh(); }

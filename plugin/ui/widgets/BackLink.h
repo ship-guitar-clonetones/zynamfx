@@ -6,10 +6,11 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "core/Help.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
-class BackLink : public juce::Button {
+class BackLink : public Clickable {
 public:
   static constexpr int kIcon = 16;
   static constexpr int kGap = 16;

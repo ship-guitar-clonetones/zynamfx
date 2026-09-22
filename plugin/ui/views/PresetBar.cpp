@@ -7,6 +7,7 @@
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 #include "widgets/Popover.h"
 #include "widgets/TextField.h"
 
@@ -25,14 +26,13 @@ constexpr int kListPadTop = 10, kListPadBottom = 12;
 
 // Borderless white icon button with `pad` around an `icon`-px glyph
 // (PresetBar.tsx iconButtonStyle: radius 4).
-class GlyphButton : public juce::Button {
+class GlyphButton : public Clickable {
 public:
   GlyphButton(Icon icon, int glyph, int pad, help::Key key)
-      : juce::Button({}), icon_(icon), glyph_(glyph) {
+      : Clickable({}), icon_(icon), glyph_(glyph) {
     setSize(glyph + pad * 2, glyph + pad * 2);
     setHelpText(help::text(key));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
   }
   void setColour(juce::Colour c) { colour_ = c; repaint(); }
   void setFilled(bool filled) { filled_ = filled; repaint(); }
@@ -71,12 +71,11 @@ private:
 }  // namespace
 
 // Pill buttons
-class PresetBar::Chevron : public juce::Button {
+class PresetBar::Chevron : public Clickable {
 public:
-  Chevron(Icon icon, help::Key key) : juce::Button({}), icon_(icon) {
+  Chevron(Icon icon, help::Key key) : Clickable({}), icon_(icon) {
     setHelpText(help::text(key));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
   }
   void setLit(bool lit) { lit_ = lit; repaint(); }
   void paintButton(juce::Graphics& g, bool, bool) override {
@@ -89,12 +88,11 @@ private:
   bool lit_ = true;
 };
 
-class PresetBar::NameButton : public juce::Button {
+class PresetBar::NameButton : public Clickable {
 public:
-  NameButton() : juce::Button({}) {
+  NameButton() : Clickable({}) {
     setHelpText(help::text(help::Key::presetBrowse));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
   }
   void set(const juce::String& text, bool active) {
     text_ = text;
@@ -162,9 +160,9 @@ public:
 private:
   // Invisible hit target; the panel paints the pill so the label colour can
   // follow the field without a second component.
-  class Hit : public juce::Button {
+  class Hit : public Clickable {
   public:
-    Hit() : juce::Button("Save") { setWantsKeyboardFocus(false); }
+    Hit() : Clickable("Save") {}
     void paintButton(juce::Graphics&, bool, bool) override {}
   };
 
@@ -207,6 +205,7 @@ public:
 
     viewport_.setViewedComponent(&content_, false);
     viewport_.setScrollBarsShown(false, false, true, false);
+    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
   }
 
@@ -379,11 +378,9 @@ public:
   }
 
 private:
-  class NameButton : public juce::Button {
+  class NameButton : public Clickable {
   public:
-    NameButton(const juce::String& text, bool active) : juce::Button({}), text_(text), active_(active) {
-      setWantsKeyboardFocus(false);
-    }
+    NameButton(const juce::String& text, bool active) : Clickable(text), text_(text), active_(active) {}
     void paintButton(juce::Graphics& g, bool, bool) override {
       paint::text(g, text_, getLocalBounds(), Fonts::sans(14), active_ ? theme::kWhite : kMutedText);
     }

@@ -6,6 +6,7 @@ namespace t3k::ui {
 
 AlertIcon::AlertIcon(AlertVariant variant) : variant_(variant) {
   setInterceptsMouseClicks(false, false);
+  setAccessible(false);  // decorative: the alert text says it
   setSize(kSize, kSize);
 }
 

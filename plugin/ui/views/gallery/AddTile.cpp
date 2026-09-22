@@ -18,6 +18,7 @@ AddTile::Routing AddTile::routingFor(int index, int count) {
 AddTile::AddTile(Services& services, std::string blockId, int size)
     : GalleryTile(services, std::move(blockId), size) {
   setHelpText(help::text(help::Key::addTile));
+  setTitle("Add Tone");
 }
 
 void AddTile::setRouting(Routing routing) {

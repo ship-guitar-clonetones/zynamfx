@@ -16,12 +16,11 @@ constexpr float kMarkAspect = 3.0f;
 }  // namespace
 
 PillButton::PillButton(juce::String label, Style style)
-    : juce::Button(label),
+    : Clickable(label),
       label_(std::move(label)),
       style_(style),
       metrics_(style == Style::filled ? kFilled : kOutline) {
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
   fitToContent();
 }
 

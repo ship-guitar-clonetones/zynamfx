@@ -9,10 +9,11 @@
 #include <optional>
 
 #include "core/Icons.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
-class PillButton : public juce::Button {
+class PillButton : public Clickable {
 public:
   enum class Style { outline, filled };
 

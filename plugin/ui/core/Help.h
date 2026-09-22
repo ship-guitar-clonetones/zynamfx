@@ -51,4 +51,13 @@ juce::String toneTile(const juce::String& title);
 // Curve-type selector buttons in the EQ editor.
 juce::String bandType(const juce::String& label);
 
+// A control's name from its hint, for screen readers: the lead before the
+// first ": " ("Undo: step back..." -> "Undo"), or the whole hint without one.
+juce::String lead(const juce::String& hint);
+
+// Speak a status change that only paints somewhere else (a toast, a banner,
+// results landing) through the platform's screen reader, if one is running.
+// Interrupts nothing: it queues after whatever is being read.
+void announce(const juce::String& text);
+
 }  // namespace t3k::ui::help

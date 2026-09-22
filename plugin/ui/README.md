@@ -30,9 +30,9 @@ cmake --build build-ui -j
 UI=build-ui/UiTestbed_artefacts/Debug/UiTestbed.app/Contents/MacOS/UiTestbed   # macOS path
 
 $UI --scenario main-mono                     # interactive window on one scenario
-$UI --capture out [--ref refDir] [filter…]   # 2x PNG per scenario (+ mismatch table)
+$UI --capture out [--ref refDir] [filter…]   # 2x PNG per scenario (+ mismatch table); fails on unnamed Tab stops
 $UI --compare ref.png out.png [diff.png]     # one pair
-$UI --selftest                               # unit tests for the pure logic
+$UI --selftest                               # unit tests: pure logic + the focus policy in a real window
 ```
 
 `-DT3K_BUILD_UI_TESTBED=ON` on the plugin build adds the same target and
@@ -103,9 +103,11 @@ plugin/ui/
     settings/         SettingsScreen, PluginSettingsPage, SystemSettingsPage,
                       MidiMapSection, …
     modals/           ConnectionModal, OAuthOverlay, UpdateNotice
-  testbed/            UiTestbed: Main (--capture/--compare/--selftest),
+  testbed/            UiTestbed: Main (--capture/--compare/--selftest), Host
+                      (the root over the mocks, fitted like NativeEditor),
                       MockBackend, MockSession, Scenarios (drives), Drive
-                      (Playwright-like helpers), Compare, SelfTests, fixtures/
+                      (Playwright-like helpers + the a11y audit), Compare,
+                      SelfTests, fixtures/
 script/gen-lucide-icons.mjs   regenerates core/LucideIcons.h from lucide-react
 ```
 
@@ -116,7 +118,11 @@ file it ports and the CSS facts that fixed its numbers.
 ## Conventions
 
 - **Design space.** Everything is laid out in the 1024 × 578 design box;
-  `NativeEditor` applies one `AffineTransform`. Never scale by hand.
+  `NativeEditor` applies one `AffineTransform`. Never scale by hand. The one
+  view that holds its size on screen instead (the tone browser's body, so a
+  bigger window shows more results) counter-scales by `Services::zoom`, the
+  factor the shell publishes on every fit; a `Popover` adopts its anchor's
+  scale, so menus opened from it are 1x too.
 - **Ownership.** `NativeEditor` → `Services` → `PluginRoot` → views. Views
   hold references to the services they use and register as listeners in
   their constructor, deregister in their destructor. No singletons, no
@@ -132,6 +138,16 @@ file it ports and the CSS facts that fixed its numbers.
   `Fonts::cssBaseline`, `TextFlow` for wrapping/clamping/ellipsis, `RichText`
   for mixed runs and links. Fractional layout positions are kept and snapped
   where Blink snaps them (`FormItem::subpixelTop`, `TextFlow::draw`).
+- **Focus and keys.** Nothing is focused until Tab or an explicit `focus()`
+  / `grabKeyboardFocus()`; a click focuses only text fields, so the host's
+  Space / Enter keep working after mouse work. Every button derives from
+  `widgets/Clickable` (Tab-focusable, never by click, named for screen
+  readers from its text or help lead); a new focusable control follows the
+  same two `set…KeyboardFocus` calls and gives itself a name (`setTitle`,
+  button text or a "Name: …" help hint). `PluginRoot::FocusPolicy` owns the
+  rest (Tab from nothing, Escape / press elsewhere blur). Decorative
+  components call `setAccessible(false)`; status that only paints elsewhere
+  goes through `help::announce()`. See native-ui.md §5.8a.
 - **Pixels.** New or changed visuals get a scenario in the React suite first
   (`ui/local/screenshots/scenarios.mjs`), exported with
   `export-fixtures.mjs`, and a matching drive in `Scenarios.cpp` if it needs
@@ -165,7 +181,12 @@ ignored.
 The whole screen needs a session: signed out it shows only the sign-in
 prompt. Signed in, `ToneBrowser` pins a search box and a `FilterBar` above
 the scrolling card grid and asks `ToneSession::searchTones` for one page at a
-time.
+time. The ← row zooms with the window; the body under it does not: it is
+laid out in screen pixels under the zoom, the search box and filter row keep
+their 1x height and widen with the column, the cards keep their 1x height
+and widen to fill two columns, and go three-up once three fit at the default
+width (`browser-zoom-wide`, `browser-zoom-three-up`, `browser-zoom-menu`; a
+scenario's `zoom` sizes the testbed window).
 
 - `BrowserState` (`services/`, one per editor) is what the screen keeps
   between visits: the `ToneQuery`, whether the filter row is unfolded, the

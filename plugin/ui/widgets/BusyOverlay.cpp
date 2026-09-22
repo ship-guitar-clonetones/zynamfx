@@ -8,6 +8,7 @@ BusyOverlay::BusyOverlay(Align align) : align_(align) {
   // Swallows the pointer like the web's covering div.
   setInterceptsMouseClicks(true, false);
   addAndMakeVisible(dots_);
+  setAccessible(false);  // the owner announces what is loading
 }
 
 BusyOverlay::~BusyOverlay() { stopTimer(); }

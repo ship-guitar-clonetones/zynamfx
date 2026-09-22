@@ -1,9 +1,16 @@
 // In-plugin tone browser: the Select tone takeover that replaces the signal
 // chain between the meters, keeping the faceplate around it. A pinned
 // header (← SELECT TONE, the search box, the filter bar) over a scrolling
-// two-up card grid (or loading dots / empty copy / an error with Try again)
-// and its paginator. The query, filter row and last page live in the
+// card grid (or loading dots / empty copy / an error with Try again) and
+// its paginator. The query, filter row and last page live in the
 // BrowserState so the screen comes back as it was left.
+//
+// The ← SELECT TONE row zooms with the window like everything else; the
+// body under it does not. It is counter-scaled by the window zoom and laid
+// out in screen pixels, so a bigger window shows more rather than bigger:
+// the search box and filter row keep their 1x height and widen with the
+// column, the cards keep their 1x height, widen to fill two columns, and go
+// three-up once three fit at their default width.
 //
 // The whole screen needs a TONE3000 session: signed out it shows only the
 // sign-in prompt, and a browse-intent login comes straight back here. Every
@@ -34,12 +41,14 @@
 
 namespace t3k::ui {
 
-class ToneBrowser : public juce::Component, private ToneSession::Listener {
+class ToneBrowser : public juce::Component, private ToneSession::Listener, private Zoom::Listener {
 public:
   // Plugin.tsx's shared 24px pad under the header; Select fills to the
   // faceplate, so the bottom pad lives inside the scroll content.
   static constexpr int kPadTop = 24;
   static constexpr int kColumnWidth = 800;  // CARD_WIDTH: lines up with ← BLOCK
+  static constexpr int kGridGap = 16;
+  static constexpr int kCardWidth = (kColumnWidth - kGridGap) / 2;  // the two-up card at 1x
   static constexpr int kPageSize = 12;
   static constexpr int kSearchHeight = 40;
 
@@ -52,23 +61,25 @@ public:
   std::function<void()> onSignIn;
 
   void resized() override;
-  void paintOverChildren(juce::Graphics& g) override;
 
 private:
+  class Body;
   class Content;
   static constexpr int kHeaderGap = 16;  // header row → search → filters
   static constexpr int kContentPadTop = 24, kContentPadBottom = 24;
   static constexpr int kPaginatorGap = 16;  // grid → paginator
   static constexpr int kPickErrorGap = 16;
-  static constexpr int kGridGap = 16;
   static constexpr int kDotsPadY = 64;
   static constexpr int kEmptyPadY = 64, kEmptyPadX = 24;
   static constexpr int kCopyMaxWidth = 420, kErrorMaxWidth = 340;
 
   void sessionChanged() override;
   void authFlowChanged() override;
+  void zoomChanged() override { resized(); }
 
   bool signedOut() const { return !services_.session.authenticated(); }
+  bool gated() const { return signedOut() && !authPending(); }
+  float zoom() const { return static_cast<float>(services_.zoom.factor()); }
   // Pre-mounted while an OAuth return still resolves its code exchange.
   bool authPending() const { return services_.session.authPending(); }
   // The search box's text becomes the query (Enter, ×, Escape).
@@ -81,7 +92,9 @@ private:
   void pick(const Tone& tone);
   void rebuildCards();
   void rebuildBody();
+  void layoutBody();
   void layoutContent();
+  void paintTopFade(juce::Graphics& g);
   const char* emptyCopy() const;
 
   Services& services_;
@@ -95,12 +108,12 @@ private:
   std::optional<int> pickingId_;
   juce::String pickError_;
 
-  // Pinned header
   BackLink back_;
+
+  // The 1x body: pinned search box and filter row over the scrolled column.
+  std::unique_ptr<Body> body_;
   TextField search_;
   FilterBar filters_;
-
-  // Scrolling content
   std::unique_ptr<DragScroller> scroller_;
   std::unique_ptr<Content> content_;
   std::vector<std::unique_ptr<ToneCard>> cards_;

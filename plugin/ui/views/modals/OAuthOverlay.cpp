@@ -8,6 +8,7 @@ OAuthOverlay::OAuthOverlay(Backdrop backdrop, const ToneSession::AuthFlow& flow)
       dismiss_(body_.addButton("Dismiss", PillButton::Style::outline)),
       cancel_(body_.addButton("Cancel", PillButton::Style::outline)) {
   setName("oauth overlay");
+  setTitle("Signing in to TONE3000");
   retry_.onClick = [this] {
     if (onRetry) onRetry();
   };

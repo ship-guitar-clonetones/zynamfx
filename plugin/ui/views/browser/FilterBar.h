@@ -60,7 +60,10 @@ private:
   void buildChips();
   void layoutChips();
   void refreshChips();
+  // A filter changed: refresh the row, close any open menu (a press on a
+  // chip's × while its menu is up), tell the owner.
   void changed();
+  void closeMenu();
   void setExpanded(bool expanded);
 
   // Chip factories (each wires its own handlers).

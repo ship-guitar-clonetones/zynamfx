@@ -50,6 +50,7 @@ DotMeter::DotMeter(int length, bool vertical)
   const int across = static_cast<int>(kDotSize);
   setSize(vertical ? across : extent, vertical ? extent : across);
   setPaintingIsUnclipped(true);
+  setAccessible(false);  // live levels
 }
 
 void DotMeter::setLevel(float db) {

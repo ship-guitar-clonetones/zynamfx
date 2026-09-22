@@ -12,12 +12,13 @@
 #include "FormStyle.h"
 #include "core/Icons.h"
 #include "core/Tween.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
 // Green pill switch mirroring the web ToggleSimple: 40×24 track (zinc-500
 // off, #00D13B on), 16px white knob with a 4px inset, 300ms ease.
-class PillToggle : public juce::Button {
+class PillToggle : public Clickable {
 public:
   static constexpr int kWidth = 40, kHeight = 24;
   static constexpr int kKnob = 16, kInset = 4;
@@ -74,7 +75,7 @@ private:
 // (transparent, zinc-700 border, 14px), `cta` the full-width white-bordered
 // call to action (ctaButtonStyle), `text` a borderless label (the "Reveal
 // log file" and "Cancel" links).
-class FormButton : public juce::Button {
+class FormButton : public Clickable {
 public:
   struct Look {
     std::optional<juce::Colour> border;

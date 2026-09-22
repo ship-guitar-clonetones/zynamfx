@@ -8,10 +8,11 @@
 
 #include "core/Help.h"
 #include "core/Icons.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
-class ChromeIconButton : public juce::Button {
+class ChromeIconButton : public Clickable {
 public:
   // plain: white icon (optional HIGHLIGHT fill via setFilled).
   // power: on = white/clear; off = GRAY + HIGHLIGHT (section power, normalise).

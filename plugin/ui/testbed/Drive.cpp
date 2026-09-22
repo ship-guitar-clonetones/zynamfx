@@ -140,6 +140,34 @@ void submit(PluginRoot& root, const juce::String& placeholder, const juce::Strin
 
 void wait(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
 
+namespace {
+void collectFocusables(juce::Component& container, std::vector<juce::Component*>& out) {
+  for (auto* c : juce::KeyboardFocusTraverser().getAllComponents(&container)) {
+    out.push_back(c);
+    // Nested containers (popovers) hide their rows from the outer order.
+    if (c->isKeyboardFocusContainer()) collectFocusables(*c, out);
+  }
+}
+}  // namespace
+
+juce::StringArray unnamedFocusables(juce::Component& root) {
+  std::vector<juce::Component*> focusables;
+  collectFocusables(root, focusables);
+  juce::StringArray problems;
+  for (auto* c : focusables) {
+    // Offscreen (no window) JUCE hands out no handlers; build the one the
+    // component would have had.
+    const auto handler = c->isAccessible() ? c->createAccessibilityHandler() : nullptr;
+    if (handler != nullptr && handler->getTitle().isNotEmpty()) continue;
+    // The mangled class name reads well enough ("N3t3k2ui10IconButtonE").
+    const auto pos = root.getLocalPoint(c, juce::Point<int>());
+    juce::String where = juce::String(typeid(*c).name()) + " at " + juce::String(pos.x) + "," + juce::String(pos.y);
+    if (auto* parent = c->getParentComponent()) where << " in " << typeid(*parent).name();
+    problems.add(where);
+  }
+  return problems;
+}
+
 void openSettings(PluginRoot& root) {
   clickByHelp(root, "Account:");
   wait(50);

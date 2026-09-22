@@ -10,10 +10,11 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include "core/Help.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
-class ChromeTextButton : public juce::Button {
+class ChromeTextButton : public Clickable {
 public:
   ChromeTextButton(juce::String label, help::Key help);
 

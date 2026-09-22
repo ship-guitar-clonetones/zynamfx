@@ -18,6 +18,7 @@ DbMeter::DbMeter(MeterStore& meters, bool input, int height, Labels labels)
       labels_(labels),
       rail_{kDotSize, kDotGap, DotRail::countForColumn(height, kDotSize, kDotGap), true} {
   setName(input ? "input meter" : "output meter");
+  setAccessible(false);  // live levels: noise to a screen reader
   setSize(kWidth, juce::roundToInt(rail_.length()));
   setPaintingIsUnclipped(true);
   setStereo(false);

@@ -3,6 +3,7 @@
 #include "FormStyle.h"
 #include "core/Icons.h"
 #include "core/Paint.h"
+#include "widgets/Clickable.h"
 #include "widgets/Popover.h"
 
 namespace t3k::ui {
@@ -22,6 +23,7 @@ public:
   explicit Dropdown(SelectField& owner) : owner_(owner) {
     viewport_.setViewedComponent(&content_, false);
     viewport_.setScrollBarsShown(false, false, true, false);
+    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
   }
 
@@ -50,11 +52,10 @@ public:
   void resized() override { viewport_.setBounds(contentBounds()); }
 
 private:
-  class Row : public juce::Button {
+  class Row : public Clickable {
   public:
-    Row(const Option& option, bool active) : juce::Button(option.label), option_(option), active_(active) {
+    Row(const Option& option, bool active) : Clickable(option.label), option_(option), active_(active) {
       setMouseCursor(juce::MouseCursor::PointingHandCursor);
-      setWantsKeyboardFocus(false);
     }
 
     void paintButton(juce::Graphics& g, bool highlighted, bool) override {

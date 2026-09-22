@@ -7,9 +7,11 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include "widgets/Clickable.h"
+
 namespace t3k::ui {
 
-class AlertActionButton : public juce::Button {
+class AlertActionButton : public Clickable {
 public:
   enum class Style { primary, secondaryBare, secondaryOutlined };
   static constexpr float kTextPx = 11.5f;

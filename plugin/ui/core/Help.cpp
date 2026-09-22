@@ -1,5 +1,7 @@
 #include "Help.h"
 
+#include <juce_gui_basics/juce_gui_basics.h>
+
 #include <map>
 
 #include "Design.h"
@@ -242,5 +244,15 @@ String toneTile(const String& title) {
 }
 
 String bandType(const String& label) { return label + ": band curve shape."; }
+
+String lead(const String& hint) {
+  const int colon = hint.indexOf(": ");
+  return (colon > 0 ? hint.substring(0, colon) : hint).trim();
+}
+
+void announce(const String& text) {
+  if (text.isNotEmpty())
+    juce::AccessibilityHandler::postAnnouncement(text, juce::AccessibilityHandler::AnnouncementPriority::medium);
+}
 
 }  // namespace t3k::ui::help

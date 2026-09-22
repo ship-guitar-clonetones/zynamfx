@@ -50,6 +50,9 @@ public:
   void mouseDrag(const juce::MouseEvent& e) override;
   void mouseUp(const juce::MouseEvent& e) override;
   bool keyPressed(const juce::KeyPress& key) override;
+  // A button to screen readers: press opens, show-menu opens the action
+  // sheet. The subclass names it with setTitle().
+  std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
   bool isInterestedInFileDrag(const juce::StringArray&) override { return true; }
   void fileDragEnter(const juce::StringArray&, int, int) override { setDropArmed(true); }

@@ -15,6 +15,7 @@ constexpr int kFps = 30;
 LoadingDots::LoadingDots() {
   setSize(kWidth, kDot);
   setInterceptsMouseClicks(false, false);
+  setAccessible(false);
 }
 
 // @keyframes: 0% → 0.2, 20% → 1, 100% → 0.2, with `both` fill so a dot

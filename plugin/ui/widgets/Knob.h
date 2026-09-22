@@ -13,6 +13,9 @@
 //   scrolling chain view.
 // On a touch screen: double tap resets, tapping the label opens the editor,
 // and a touch-and-hold fires onLongPress (the right-click of the platform).
+// From the keyboard (Tab to the knob; a click never focuses it): arrows step
+// the value (Shift: fine), Home/End go to the ends, Enter opens the type-in
+// editor. Screen readers see a slider named by the label, valued in units.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -92,8 +95,13 @@ public:
   void mouseDrag(const juce::MouseEvent& e) override;
   void mouseUp(const juce::MouseEvent& e) override;
   void mouseDoubleClick(const juce::MouseEvent& e) override;
+  bool keyPressed(const juce::KeyPress& key) override;
+  std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
 private:
+  // Set from outside the drag (keys, screen reader) as one host gesture,
+  // with the readout shown for a moment.
+  void nudgeTo(float normalised);
   bool resetToDefault();
   void applyLive(float raw, bool fine);
   void emit(float v);

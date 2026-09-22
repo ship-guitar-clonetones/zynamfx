@@ -9,10 +9,9 @@
 namespace t3k::ui {
 
 ChromeTextButton::ChromeTextButton(juce::String label, help::Key help)
-    : juce::Button(label), label_(std::move(label)) {
+    : Clickable(label), label_(std::move(label)) {
   setHelpText(help::text(help));
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
   // border-box: 4px padding inside a 1px border each side.
   const float text = Fonts::width(Fonts::mono(kFontPx), label_);
   setSize(juce::roundToInt(text + 2 * (kPadX + 1)), theme::kTextBoxHeight);

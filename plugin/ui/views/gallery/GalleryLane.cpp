@@ -5,6 +5,7 @@
 #include "core/Help.h"
 #include "core/Icons.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -16,12 +17,11 @@ constexpr int kBranchDot = theme::kIconBoxSize / 2;
 // Full-gap hover zone wrapping a branch dot: the whole 24px connector run is
 // the hit/hover area; the filled white disc stays hidden until then (always
 // shown on coarse pointers, which can't hover a 24px gap).
-class GalleryLane::BranchGap : public juce::Button {
+class GalleryLane::BranchGap : public Clickable {
 public:
-  BranchGap(help::Key helpKey, std::function<void()> action) : juce::Button({}) {
+  BranchGap(help::Key helpKey, std::function<void()> action) : Clickable({}) {
     setHelpText(help::text(helpKey));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
     onClick = std::move(action);
     setAlpha(design::kCoarsePointer ? 1.0f : 0.0f);
   }

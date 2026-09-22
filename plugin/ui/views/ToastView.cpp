@@ -1,6 +1,7 @@
 #include "ToastView.h"
 
 #include "core/Fonts.h"
+#include "core/Help.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
 
@@ -27,7 +28,9 @@ void ToastView::setBottomOffset(int bottom) {
 void ToastView::toastChanged() {
   const bool showing = toast_.message().isNotEmpty();
   setVisible(showing);
-  if (showing) layout();
+  if (!showing) return;
+  layout();
+  help::announce(toast_.message());
 }
 
 void ToastView::layout() {

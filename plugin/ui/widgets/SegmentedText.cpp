@@ -4,6 +4,7 @@
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -11,12 +12,11 @@ namespace {
 constexpr int kCellPadX = 4;
 }  // namespace
 
-class SegmentedText::Segment : public juce::Button {
+class SegmentedText::Segment : public Clickable {
 public:
-  Segment(const Cell& cell, const Style& style) : juce::Button(cell.label), cell_(cell), style_(style) {
+  Segment(const Cell& cell, const Style& style) : Clickable(cell.label), cell_(cell), style_(style) {
     setHelpText(cell.help);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
   }
 
   bool on = false;

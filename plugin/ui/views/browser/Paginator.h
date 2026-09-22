@@ -18,6 +18,11 @@ public:
   Paginator();
 
   void set(int page, int totalPages);
+  int page() const { return page_; }
+  int totalPages() const { return totalPages_; }
+  // Ask for `page` (the keys and screen readers come through here); out of
+  // range or current: nothing.
+  void turnTo(int page);
   std::function<void(int page)> onPageChange;
 
   // The page numbers to show, 0 standing in for an ellipsis: all of them up
@@ -28,6 +33,9 @@ public:
   void mouseUp(const juce::MouseEvent& e) override;
   void mouseMove(const juce::MouseEvent& e) override;
   void mouseExit(const juce::MouseEvent& e) override;
+  bool keyPressed(const juce::KeyPress& key) override;
+  // "Page 3 of 12", adjustable, to a screen reader.
+  std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
 private:
   enum class Kind { prev, next, page, ellipsis };

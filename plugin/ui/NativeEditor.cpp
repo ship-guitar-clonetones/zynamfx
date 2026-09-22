@@ -122,6 +122,7 @@ void NativeEditor::fitRoot() {
   }
   scale = juce::jmax(0.05, scale);
   root_.setTransform(juce::AffineTransform::scale(static_cast<float>(scale)));
+  services_.zoom.set(scale);
   // Top-anchored, horizontally centred. iOS centres vertically too: its
   // window never resizes, so nothing can jump.
   const int x = juce::roundToInt((getWidth() - design::kWidth * scale) / 2);
@@ -147,6 +148,9 @@ void NativeEditor::resized() {
 // Key presses reach the editor when no control took them (the peer falls
 // back to its component; children pass unused keys up). Space and Enter
 // are the host's transport keys, so they go back to it (keyPassthrough.ts).
+// Since clicks never focus buttons (Clickable), that is the state after any
+// mouse work; only a text field, or a control the user Tabbed to, takes
+// them for itself (PluginRoot's focus policy).
 bool NativeEditor::keyPressed(const juce::KeyPress& key) {
   if (key == juce::KeyPress::spaceKey) return backend_.forwardKeyToHost(Backend::HostKey::space);
   if (key == juce::KeyPress::returnKey) return backend_.forwardKeyToHost(Backend::HostKey::enter);

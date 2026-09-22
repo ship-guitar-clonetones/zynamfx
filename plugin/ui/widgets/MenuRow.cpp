@@ -7,13 +7,12 @@
 namespace t3k::ui {
 
 MenuRow::MenuRow(const juce::String& label, std::optional<Icon> icon, Metrics metrics)
-    : juce::Button(label),
+    : Clickable(label),
       label_(label),
       icon_(icon),
       metrics_(metrics),
       labelColour_(theme::kWhite) {
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
 }
 
 void MenuRow::setLabelColour(juce::Colour colour) {

@@ -5,6 +5,7 @@
 #include "core/Fonts.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 
 namespace t3k::ui {
 
@@ -17,11 +18,10 @@ constexpr RemindOption kRemindOptions[] = {{1, "1 day"}, {7, "7 days"}, {30, "30
 
 // Bare underlined text button (`background: transparent; border: none;
 // text-decoration: underline`).
-class LinkButton : public juce::Button {
+class LinkButton : public Clickable {
 public:
-  LinkButton(const juce::String& label, float px) : juce::Button(label), label_(label), font_(Fonts::sans(px)) {
+  LinkButton(const juce::String& label, float px) : Clickable(label), label_(label), font_(Fonts::sans(px)) {
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
     setSize(static_cast<int>(std::ceil(Fonts::width(font_, label_))), Fonts::normalLineHeight(font_));
   }
   void paintButton(juce::Graphics& g, bool, bool) override {
@@ -52,6 +52,7 @@ public:
     message_.onLink = [](const juce::String& href) { juce::URL(href).launchInDefaultBrowser(); };
     download_.onClick = [url = info.url] { juce::URL(url).launchInDefaultBrowser(); };
     close_.setActive(false);
+    close_.setName("Close");
     close_.onClick = [this] { owner_.remind(kDismissDays); };
     for (const auto& option : kRemindOptions) {
       auto button = std::make_unique<LinkButton>(option.label, kRemindPx);
@@ -133,6 +134,7 @@ private:
 UpdateNotice::UpdateNotice(Backdrop backdrop, const UpdateInfo& info)
     : ModalLayer(std::move(backdrop)), card_(std::make_unique<Card>(*this, info)) {
   setName("update notice");
+  setTitle("Update available");
   setContent(*card_);
 }
 

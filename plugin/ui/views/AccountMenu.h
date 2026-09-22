@@ -8,12 +8,13 @@
 #include <functional>
 
 #include "widgets/Avatar.h"
+#include "widgets/Clickable.h"
 #include "widgets/MenuRow.h"
 #include "widgets/Popover.h"
 
 namespace t3k::ui {
 
-class AccountMenu : public juce::Button {
+class AccountMenu : public Clickable {
 public:
   static constexpr int kHeight = 40;
   static constexpr int kWidth = 71;  // 12 + 18 + 10 + 24 + 5 + 2px border

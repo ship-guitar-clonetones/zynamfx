@@ -7,9 +7,8 @@
 
 namespace t3k::ui {
 
-AlertActionButton::AlertActionButton(Style style) : juce::Button({}), style_(style) {
+AlertActionButton::AlertActionButton(Style style) : Clickable({}), style_(style) {
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  setWantsKeyboardFocus(false);
 }
 
 juce::Font AlertActionButton::font() { return Fonts::sans(kTextPx, true); }

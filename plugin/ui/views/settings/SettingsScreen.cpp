@@ -5,6 +5,7 @@
 #include "core/Fonts.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 #include "widgets/IconButton.h"
 #include "widgets/form/FormStyle.h"
 #include "widgets/form/FormText.h"
@@ -47,11 +48,10 @@ public:
   static constexpr int kPadY = 12, kIcon = 16, kIconGap = 8, kUnderline = 2;
   static constexpr int kHeight = 2 * kPadY + 16 /* line-height */ + kUnderline;
 
-  class TabButton : public juce::Button {
+  class TabButton : public Clickable {
   public:
-    TabButton(const juce::String& label, std::optional<Icon> icon) : juce::Button(label), icon_(icon) {
+    TabButton(const juce::String& label, std::optional<Icon> icon) : Clickable(label), icon_(icon) {
       setMouseCursor(juce::MouseCursor::PointingHandCursor);
-      setWantsKeyboardFocus(false);
     }
 
     void setSelected(bool selected) {

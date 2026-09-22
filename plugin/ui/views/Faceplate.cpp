@@ -8,6 +8,7 @@
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
+#include "widgets/Clickable.h"
 #include "widgets/Popover.h"
 
 namespace t3k::ui {
@@ -80,13 +81,12 @@ constexpr std::array<ModeOption, 3> kModeOptions{
 // "engaged" look so a non-default routing is obvious at a glance. While a
 // chain branch is active the chain has a single mono source, so the "Stereo"
 // routing is unavailable (native enforces the same).
-class Faceplate::InputModeButton : public juce::Button {
+class Faceplate::InputModeButton : public Clickable {
 public:
-  explicit InputModeButton(Services& services) : juce::Button("Input Mode"), services_(services) {
+  explicit InputModeButton(Services& services) : Clickable("Input Mode"), services_(services) {
     setSize(kInputModeWidth, theme::kIconBoxSize);
     setHelpText(help::text(help::Key::inputMode));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    setWantsKeyboardFocus(false);
     onClick = [this] {
       if (menuOpen())
         closeMenu();
@@ -117,12 +117,11 @@ public:
   }
 
 private:
-  class Row : public juce::Button {
+  class Row : public Clickable {
   public:
     Row(const ModeOption& option, bool selected)
-        : juce::Button(option.label), option_(option), selected_(selected) {
+        : Clickable(option.label), option_(option), selected_(selected) {
       setMouseCursor(juce::MouseCursor::PointingHandCursor);
-      setWantsKeyboardFocus(false);
     }
     InputMode mode() const { return option_.mode; }
     void paintButton(juce::Graphics& g, bool highlighted, bool) override {

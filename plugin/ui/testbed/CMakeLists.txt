@@ -28,6 +28,8 @@ target_sources(UiTestbed PRIVATE
     Compare.cpp
     Drive.h
     Drive.cpp
+    Host.h
+    Host.cpp
     MockBackend.h
     MockBackend.cpp
     MockSession.h
