@@ -1,8 +1,15 @@
 name: Deploy to TestFlight
 
 # Publishing a GitHub Release builds, signs and uploads the iOS app to App Store
-# Connect. Signing and upload both use an App Store Connect API key, so nothing
-# needs a keychain, a .p12 or a stored provisioning profile on the runner.
+# Connect. The archive is development-signed with one Apple Development
+# certificate kept as a secret (.p12) and imported into a temporary keychain,
+# as build.yml does with the Developer ID certs; Xcode's automatic signing
+# then only fetches the managed profile. Without a certificate on the runner
+# Xcode mints a new one per run through the API key, and the team's
+# certificate cap ends that after a handful of releases. The App Store
+# signature is applied at export with the cloud-managed Apple Distribution
+# certificate, through the same API key that does the upload, so no
+# distribution certificate or profile is stored anywhere.
 #
 # workflow_dispatch runs the same pipeline against any ref. A build number
 # already on TestFlight is refused at upload, so the build number is the run
@@ -40,9 +47,11 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_DEV_CERTIFICATE: ${{ secrets.IOS_DEV_CERTIFICATE }}
         run: |
           if [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] \
-            && [ -n "$ASC_API_KEY_BASE64" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            && [ -n "$ASC_API_KEY_BASE64" ] && [ -n "$APPLE_TEAM_ID" ] \
+            && [ -n "$IOS_DEV_CERTIFICATE" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -118,6 +127,26 @@ jobs:
           echo "$ASC_API_KEY_BASE64" | base64 --decode > "$KEY_PATH"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
+      # The development certificate the archive signs with. APPLE_APP_PASSWORD
+      # is the .p12 password, as for the macOS certs in build.yml.
+      - name: Install the development certificate
+        env:
+          IOS_DEV_CERTIFICATE: ${{ secrets.IOS_DEV_CERTIFICATE }}
+          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PWD }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          echo "$IOS_DEV_CERTIFICATE" | base64 --decode -o "$RUNNER_TEMP/dev.p12"
+          security import "$RUNNER_TEMP/dev.p12" -P "$APPLE_APP_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          rm -f "$RUNNER_TEMP/dev.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | sed 's/[[:space:]"]//g')
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
       # The archive keeps the preset's automatic development signing: forcing
       # "Apple Distribution" here conflicts with automatic signing and Xcode
       # refuses to archive. The App Store signature is applied at export,
@@ -181,6 +210,8 @@ jobs:
           xcrun altool --upload-app -f "$IPA" -t ios \
             --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 
-      - name: Remove the API key
+      - name: Remove the API key and the keychain
         if: always()
-        run: rm -rf "$HOME/.appstoreconnect/private_keys"
+        run: |
+          rm -rf "$HOME/.appstoreconnect/private_keys"
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
