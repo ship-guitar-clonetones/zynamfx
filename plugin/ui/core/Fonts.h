@@ -14,6 +14,9 @@ namespace t3k::ui {
 struct Fonts {
   // Arial, sans-serif (weights 600/700 → Bold; Arial has no medium).
   static juce::Font sans(float px, bool bold = false, bool italic = false);
+  // The family sans() resolves to: Arial, or the nearest installed stand-in
+  // where it is missing (Linux). Resolved once per process.
+  static const juce::String& sansFamily();
   // Roboto Mono 400/700, embedded.
   static juce::Font mono(float px, bool bold = false);
 

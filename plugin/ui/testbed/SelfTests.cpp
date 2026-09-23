@@ -8,16 +8,19 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <atomic>
+#include <cmath>
 #include <iostream>
 #include <thread>
 
 #include "Drive.h"
 #include "Host.h"
+#include "core/Fonts.h"
 #include "core/Help.h"
 #include "core/KnobScale.h"
 #include "core/Labels.h"
 #include "core/Pitch.h"
 #include "core/RichText.h"
+#include "core/TextFlow.h"
 #include "model/ChainState.h"
 #include "model/Tone.h"
 #include "model/ToneQuery.h"
@@ -68,6 +71,36 @@ struct HtmlTests : juce::UnitTest {
     beginTest("unknown tags drop, entities decode");
     expectEquals(flat(Html::toRichText("<script>x</script><span>a &amp; b &lt;c&gt;</span>")),
                  juce::String("xa & b <c>|"));
+  }
+};
+
+// The body typeface resolves on this machine and its metrics are numbers. A
+// Font with no typeface (Arial asked for on a Linux without it) has height 0
+// and NaN ascent/descent; text laid out from those lands at NaN positions and
+// the software renderer writes out of bounds (the Linux x64 segfault).
+struct FontTests : juce::UnitTest {
+  FontTests() : juce::UnitTest("Fonts", "ui") {}
+  void runTest() override {
+    beginTest("sans resolves to a typeface with finite metrics");
+    for (const bool bold : {false, true}) {
+      const auto font = Fonts::sans(14, bold);
+      expect(font.getTypefacePtr() != nullptr, "no typeface for " + Fonts::sansFamily());
+      expect(font.getHeight() > 0);
+      expect(std::isfinite(font.getAscent()) && font.getAscent() > 0);
+      expect(std::isfinite(font.getDescent()) && font.getDescent() > 0);
+      expect(std::isfinite(Fonts::cssBaseline(font, 18)));
+    }
+
+    beginTest("a text flow lays its glyphs out at finite positions");
+    const TextFlow flow(Fonts::sans(14, true), 18.2f, "'02 Vox AC30/6 Top Boost", 240);
+    expect(flow.lineCount() >= 1);
+    juce::GlyphArrangement glyphs;
+    glyphs.addLineOfText(Fonts::sans(14, true), "Top Boost", 140, Fonts::cssBaseline(Fonts::sans(14, true), 18.2f));
+    expect(glyphs.getNumGlyphs() > 0);
+    for (int i = 0; i < glyphs.getNumGlyphs(); ++i) {
+      const auto& g = glyphs.getGlyph(i);
+      expect(std::isfinite(g.getLeft()) && std::isfinite(g.getRight()) && std::isfinite(g.getBaselineY()));
+    }
   }
 };
 
@@ -1146,6 +1179,7 @@ struct KnobReadoutTests : juce::UnitTest {
 };
 
 HtmlTests htmlTests;
+FontTests fontTests;
 RichFlowTests richFlowTests;
 AccessibilityTests accessibilityTests;
 FocusPolicyTests focusPolicyTests;
