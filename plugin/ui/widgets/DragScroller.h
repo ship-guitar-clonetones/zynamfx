@@ -1,9 +1,9 @@
 // A scroll area along one axis with hidden scrollbars that a touch drag
 // pans (the web's hide-scrollbar containers). Once a drag has become a
-// scroll the press it started with is spent: the content stops hit-testing
-// until the finger lifts, so the button under it reads as not hovered and
-// doesn't fire on release. Components that drag for themselves (knobs,
-// tiles) opt out of the pan with setViewportIgnoreDragFlag.
+// scroll the press it started with is spent: the button under the finger
+// (Clickable) sees the pan and lets go instead of firing on release.
+// Components that drag for themselves (knobs, tiles) opt out of the pan
+// with setViewportIgnoreDragFlag.
 //
 // A plain (vertical) wheel pans a sideways scroller, as the web's
 // useHorizontalWheelScroll did, by the gesture's dominant axis. JUCE's own
@@ -24,7 +24,6 @@ public:
   enum class Axis { horizontal, vertical };
 
   explicit DragScroller(Axis axis);
-  ~DragScroller() override;
 
   // The view moved (scroll, drag or programmatic).
   std::function<void()> onScroll;
@@ -37,13 +36,7 @@ private:
   // gesture pans as it did.
   static constexpr float kWheelPixelsPerUnit = 14 * 16;
 
-  // Listening to every nested child (a Component is a MouseListener).
-  void mouseDrag(const juce::MouseEvent& e) override;
-  void mouseUp(const juce::MouseEvent& e) override;
-
   const Axis axis_;
-  bool pressSpent_ = false;
-  bool contentIntercepts_ = true, childrenIntercept_ = true;
   float wheelRemainder_ = 0;  // sub-pixel carry between wheel events
 };
 

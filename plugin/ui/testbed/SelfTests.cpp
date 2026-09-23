@@ -28,6 +28,7 @@
 #include "services/UpdateCheck.h"
 #include "views/browser/FilterChip.h"
 #include "views/browser/Paginator.h"
+#include "views/browser/ToneCard.h"
 #include "widgets/Avatar.h"
 #include "widgets/ChromeTextButton.h"
 #include "widgets/DragScroller.h"
@@ -907,10 +908,75 @@ struct FocusPolicyTests : juce::UnitTest {
   }
 };
 
+// A press on the tone browser's results that pans the list, through the
+// peer and JUCE's own drag-to-scroll: a tap picks, a scroll gesture pans and
+// does not pick the card it started on. macOS has no touch input source, so
+// the mouse stands in with the scroller set to pan on any drag; the Button
+// state the fix corrects is the same either way (the card stays under the
+// pointer while the content pans).
+struct TouchScrollTests : juce::UnitTest {
+  TouchScrollTests() : juce::UnitTest("Touch scroll", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  struct Pointer {
+    juce::ComponentPeer& peer;
+    juce::int64 time = juce::Time::currentTimeMillis();
+    void at(juce::Point<float> pos, bool down) {
+      peer.handleMouseEvent(juce::MouseInputSource::InputSourceType::mouse, pos,
+                            down ? juce::ModifierKeys::leftButtonModifier : juce::ModifierKeys(), 0.0f, 0.0f, ++time);
+      pump(10);
+    }
+  };
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("browser-search");
+    if (scenario == nullptr) {
+      expect(false, "browser-search scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("touch scroll", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto* peer = host.getPeer();
+    auto* card = dynamic_cast<ToneCard*>(drive::find(host.pluginRoot(), [](juce::Component& c) {
+      return dynamic_cast<ToneCard*>(&c) != nullptr && c.isShowing();
+    }));
+    auto* scroller = card != nullptr ? card->findParentComponentOfClass<DragScroller>() : nullptr;
+    expect(peer != nullptr && card != nullptr && scroller != nullptr);
+    if (peer == nullptr || card == nullptr || scroller == nullptr) return;
+    scroller->setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
+    int picks = 0;
+    card->onClick = [&] { ++picks; };
+    Pointer pointer{*peer};
+    const auto centre = peer->getComponent().getLocalPoint(card, card->getLocalBounds().getCentre().toFloat());
+
+    beginTest("a tap picks the card");
+    pointer.at(centre, true);
+    pointer.at(centre, false);
+    expectEquals(picks, 1);
+    expectEquals(scroller->getViewPositionY(), 0);
+
+    beginTest("a scroll gesture pans the list and picks nothing");
+    pointer.at(centre, true);
+    for (int i = 1; i <= 6; ++i) pointer.at(centre.translated(0, -15.0f * i), true);
+    expect(!card->isDown());  // let go as soon as the pan began
+    pointer.at(centre.translated(0, -90.0f), false);
+    expectEquals(picks, 1);
+    expect(scroller->getViewPositionY() > 0);
+    window.setVisible(false);
+  }
+};
+
 HtmlTests htmlTests;
 RichFlowTests richFlowTests;
 AccessibilityTests accessibilityTests;
 FocusPolicyTests focusPolicyTests;
+TouchScrollTests touchScrollTests;
 UpdateCheckTests updateCheckTests;
 ConnectionGateTests connectionGateTests;
 PitchTests pitchTests;

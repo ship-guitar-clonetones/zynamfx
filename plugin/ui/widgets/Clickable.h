@@ -8,6 +8,11 @@
 // (juce::Button) while Space is still left for the host; Escape or a click
 // elsewhere drops the focus (PluginRoot).
 //
+// Touch. A press that a scroll area turns into a pan (DragScroller) is
+// spent: the button lets go and does not fire when the finger lifts.
+// juce::Button alone would, since for touch it counts "still over" by
+// bounds, and the content pans along under the finger.
+//
 // Name. Screen readers get accessibleName() and the full help hint as help.
 #pragma once
 
@@ -24,6 +29,13 @@ public:
   juce::String accessibleName() const;
 
   std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
+
+  void mouseDrag(const juce::MouseEvent& e) override;
+  void mouseUp(const juce::MouseEvent& e) override;
+
+private:
+  // An enclosing viewport is panning on this press.
+  bool scrolling() const;
 };
 
 }  // namespace t3k::ui
