@@ -99,8 +99,12 @@ public:
 
   void bandsChanged() {
     const auto& bands = owner_.bands();
-    if (selected_ >= static_cast<int>(bands.size())) selected_ = 0;
-    if (!bands.empty() && bands[static_cast<size_t>(selected_)].type != selectorType_) rebuildTypeSelector();
+    if (selected_ >= static_cast<int>(bands.size())) {
+      selected_ = 0;
+      rebuildTypeSelector();
+    } else {
+      syncTypeSelector();
+    }
     syncChips();
     repaint();
   }
@@ -310,22 +314,29 @@ private:
   }
 
   // Curve type: outer bands choose shelf vs pass; bells show their single
-  // option so the selected shape is always visible.
+  // option so the selected shape is always visible. The cells follow the
+  // selected band; a type change only moves the selection, so a click never
+  // rebuilds the control it came from (that would free its running closure).
   void rebuildTypeSelector() {
-    const auto& bands = owner_.bands();
     const auto options = eqBandTypeOptions(selected_);
-    selectorType_ = bands.empty() ? EqBandType::bell : bands[static_cast<size_t>(selected_)].type;
     std::vector<SegmentedText::Cell> cells;
     for (auto type : options)
       cells.emplace_back(eq::typeLabel(type), help::bandType(eq::typeLabel(type)), eq::typeGlyphSvg(type),
                          static_cast<float>(theme::kIconSize));
     typeSel_ = std::make_unique<SegmentedText>(cells, SegmentedText::selection());
-    for (size_t i = 0; i < options.size(); ++i)
-      if (options[i] == selectorType_) typeSel_->select(static_cast<int>(i));
     typeSel_->setInteractive(options.size() > 1);
     typeSel_->onCellClick = [this, options](int i) { changeType(options[static_cast<size_t>(i)]); };
     chrome_.addAndMakeVisible(*typeSel_);
+    syncTypeSelector();
     resized();
+  }
+
+  void syncTypeSelector() {
+    const auto& bands = owner_.bands();
+    if (bands.empty()) return;
+    const auto options = eqBandTypeOptions(selected_);
+    for (size_t i = 0; i < options.size(); ++i)
+      if (options[i] == bands[static_cast<size_t>(selected_)].type) typeSel_->select(static_cast<int>(i));
   }
 
   void changeType(EqBandType type) {
@@ -374,7 +385,6 @@ private:
 
   BlockEqView& owner_;
   int selected_ = 1;
-  EqBandType selectorType_ = EqBandType::bell;
   std::optional<Drag> drag_;
   std::unique_ptr<HintPin> pin_;
   juce::Component chrome_;

@@ -183,6 +183,23 @@ void MockBackend::setNamSlimSizeDefault(double slimSize) {
   bumpChain();
 }
 
+// Written through like the processor does it, so the store's synchronous
+// refresh after the call replays into the open block card.
+bool MockBackend::setBlockSlimSize(const std::string& blockId, double slimSize) {
+  for (const auto* lane : {"chain", "chainRight"}) {
+    if (auto* blocks = chain_[lane].getArray()) {
+      for (auto& block : *blocks) {
+        auto* params = block["params"].getDynamicObject();
+        if (block["blockId"].toString().toStdString() != blockId || params == nullptr) continue;
+        params->setProperty("slimSize", slimSize);
+        bumpChain();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void MockBackend::setMultiCore(bool enabled) {
   chain_.getDynamicObject()->setProperty("multiCore", enabled);
   bumpChain();

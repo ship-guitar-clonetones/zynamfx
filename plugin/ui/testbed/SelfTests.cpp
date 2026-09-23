@@ -18,6 +18,7 @@
 #include "core/Labels.h"
 #include "core/Pitch.h"
 #include "core/RichText.h"
+#include "model/ChainState.h"
 #include "model/Tone.h"
 #include "model/ToneQuery.h"
 #include "services/ConnectionGate.h"
@@ -37,6 +38,7 @@
 #include "widgets/Knob.h"
 #include "widgets/form/FormControls.h"
 #include "widgets/Popover.h"
+#include "widgets/SegmentedText.h"
 
 namespace t3k::ui::testbed {
 
@@ -972,11 +974,184 @@ struct TouchScrollTests : juce::UnitTest {
   }
 };
 
+// The block card's LITE / FULL toggle, clicked through the peer with the
+// per-block size setting on. The store refreshes synchronously inside the
+// click, so the card re-syncs while the toggle's own click is still on the
+// stack: the toggle must survive its own press.
+struct BlockSizeToggleTests : juce::UnitTest {
+  BlockSizeToggleTests() : juce::UnitTest("Block size toggle", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  static Clickable* cell(juce::Component& root, const juce::String& label) {
+    return dynamic_cast<Clickable*>(drive::find(root, [&](juce::Component& c) {
+      auto* b = dynamic_cast<Clickable*>(&c);
+      return b != nullptr && b->accessibleName() == label && c.isShowing()
+             && c.findParentComponentOfClass<SegmentedText>() != nullptr;
+    }));
+  }
+
+  static void click(juce::ComponentPeer& peer, juce::Component& target) {
+    const auto pos = peer.getComponent().getLocalPoint(&target, target.getLocalBounds().getCentre().toFloat());
+    const auto now = juce::Time::currentTimeMillis();
+    using Type = juce::MouseInputSource::InputSourceType;
+    peer.handleMouseEvent(Type::mouse, pos, juce::ModifierKeys::leftButtonModifier, 0.0f, 0.0f, now);
+    peer.handleMouseEvent(Type::mouse, pos, juce::ModifierKeys(), 0.0f, 0.0f, now + 1);
+    pump(30);
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("main-detail");
+    if (scenario == nullptr) {
+      expect(false, "main-detail scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("block size", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto* peer = host.getPeer();
+    auto& root = host.pluginRoot();
+    expect(peer != nullptr);
+    if (peer == nullptr) return;
+    auto slimSize = [&] {  // the block the detail card shows
+      for (const auto& item : root.services().chain.state().chain)
+        if (item.blockId == "blk-2") return item.params.slimSize;
+      return -1.0;
+    };
+
+    beginTest("the toggle appears with the per-block setting");
+    expect(cell(root, "FULL") == nullptr);
+    root.services().prefs.setBool(UiPrefs::kShowBlockSizeControl, true);
+    pump(30);
+    auto* full = cell(root, "FULL");
+    auto* lite = cell(root, "LITE");
+    expect(full != nullptr && lite != nullptr);
+    if (full == nullptr || lite == nullptr) return;
+    juce::Component::SafePointer<SegmentedText> toggle(full->findParentComponentOfClass<SegmentedText>());
+    expect(toggle->isOn(0) && !toggle->isOn(1));
+
+    beginTest("a click on FULL selects it, reaches the backend and keeps the toggle alive");
+    click(*peer, *full);
+    expect(isSlimSizeFull(slimSize()));
+    expect(toggle != nullptr);  // the click handler's owner was not rebuilt under it
+    if (toggle == nullptr) return;
+    expect(!toggle->isOn(0) && toggle->isOn(1));
+
+    beginTest("and back to LITE");
+    click(*peer, *lite);
+    expect(!isSlimSizeFull(slimSize()));
+    expect(toggle != nullptr);
+    if (toggle == nullptr) return;
+    expect(toggle->isOn(0) && !toggle->isOn(1));
+    window.setVisible(false);
+  }
+};
+
+// A readout wider than its knob ("-100 dB" under the 36px gate, whose dim
+// group is exactly the knob's width) shows whole: it floats in the overlay
+// layer, past the column and the parents that clip the knob.
+struct KnobReadoutTests : juce::UnitTest {
+  KnobReadoutTests() : juce::UnitTest("Knob readout", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  static int whitePixels(const juce::Image& image, juce::Rectangle<int> area) {
+    int n = 0;
+    for (int y = area.getY(); y < area.getBottom(); ++y)
+      for (int x = area.getX(); x < area.getRight(); ++x)
+        if (image.getBounds().contains(x, y) && image.getPixelAt(x, y).getBrightness() > 0.85f)
+          ++n;
+    return n;
+  }
+
+  // The overlay child over the knob's column, if the readout is floating.
+  static juce::Component* floatingReadout(PluginRoot& root, Knob& knob) {
+    const auto column = root.getLocalArea(&knob, knob.getLocalBounds());
+    for (auto* c : root.overlayLayer().getChildren())
+      if (c->isVisible() && root.getLocalArea(c, c->getLocalBounds()).intersects(column))
+        return c;
+    return nullptr;
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("main-stereo");
+    if (scenario == nullptr) {
+      expect(false, "main-stereo scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("knob readout", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto* peer = host.getPeer();
+    auto& root = host.pluginRoot();
+    expect(peer != nullptr);
+    if (peer == nullptr) return;
+    auto* knob = dynamic_cast<Knob*>(drive::find(root, [](juce::Component& c) {
+      return dynamic_cast<Knob*>(&c) != nullptr && c.getTitle() == "Gate" && c.isShowing();
+    }));
+    expect(knob != nullptr, "gate knob showing");
+    if (knob == nullptr) return;
+
+    // The strips either side of the column on the label row (host px), where
+    // a readout that spills past the knob lands.
+    const auto labelRow = host.getLocalArea(
+        knob, knob->getLocalBounds().removeFromBottom(Knob::kLabelSlot + Knob::kEditorOverflow));
+    const int reach = juce::roundToInt(labelRow.getHeight() * 1.5f);
+    const auto sides = [&](const juce::Image& shot) {
+      return whitePixels(shot, labelRow.withX(labelRow.getX() - reach).withWidth(reach))
+             + whitePixels(shot, labelRow.withX(labelRow.getRight()).withWidth(reach));
+    };
+    const int idle = sides(host.createComponentSnapshot(host.getLocalBounds()));
+    expect(floatingReadout(root, *knob) == nullptr);
+
+    beginTest("a drag to the end of travel floats the readout past the column");
+    auto time = juce::Time::currentTimeMillis();
+    const auto at = [&](juce::Point<float> knobPos, bool down) {
+      const auto pos = peer->getComponent().getLocalPoint(knob, knobPos);
+      const auto mods = down ? juce::ModifierKeys::leftButtonModifier : juce::ModifierKeys();
+      peer->handleMouseEvent(juce::MouseInputSource::InputSourceType::mouse, pos, mods, 0.0f, 0.0f,
+                             ++time);
+      pump(10);
+    };
+    const auto face = knob->faceBounds().getCentre().toFloat();
+    at(face, true);
+    for (int step = 1; step <= 20; ++step) at(face.translated(0.0f, 20.0f * step), true);
+    pump(250);  // the readout swap is debounced on press
+    expect(juce::exactlyEqual(knob->value(), 0.0f), "dragged to the minimum");
+    auto* readout = floatingReadout(root, *knob);
+    expect(readout != nullptr, "readout floats in the overlay");
+    if (readout != nullptr) {
+      const auto box = root.getLocalArea(readout, readout->getLocalBounds());
+      const auto column = root.getLocalArea(knob, knob->getLocalBounds());
+      expect(box.getWidth() > column.getWidth() && box.getCentreX() == column.getCentreX());
+    }
+    expect(sides(host.createComponentSnapshot(host.getLocalBounds())) > idle,
+           "text reaches past the knob");
+
+    beginTest("the release lets it go");
+    at(face.translated(0.0f, 400.0f), false);
+    pump(400);  // past the hold
+    expect(floatingReadout(root, *knob) == nullptr);
+    expectEquals(sides(host.createComponentSnapshot(host.getLocalBounds())), idle);
+    window.setVisible(false);
+  }
+};
+
 HtmlTests htmlTests;
 RichFlowTests richFlowTests;
 AccessibilityTests accessibilityTests;
 FocusPolicyTests focusPolicyTests;
 TouchScrollTests touchScrollTests;
+BlockSizeToggleTests blockSizeToggleTests;
+KnobReadoutTests knobReadoutTests;
 UpdateCheckTests updateCheckTests;
 ConnectionGateTests connectionGateTests;
 PitchTests pitchTests;

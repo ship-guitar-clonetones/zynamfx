@@ -129,7 +129,11 @@ file it ports and the CSS facts that fixed its numbers.
   globals beyond the constexpr tables in `core/`.
 - **Data flow.** Stores are the only callers of `Backend`; views subscribe
   to stores, read plain structs, call store actions. Optimistic edits live
-  in the store, reconciled on the next revision.
+  in the store, reconciled on the next revision. A store action refreshes
+  and notifies synchronously, so a view's `chainChanged` runs inside the
+  click that caused it: a sync must never rebuild the control whose handler
+  is on the stack (re-select it instead), or the handler's closure is freed
+  under it (see `BlockCard::syncHeader`).
 - **Async.** Anything that lands later goes through `AsyncScope::wrap` (or
   `juce::Component::SafePointer`) so a closed editor never gets a callback.
   HTTP runs on `HttpClient`'s pool, images on the same pool, the OAuth

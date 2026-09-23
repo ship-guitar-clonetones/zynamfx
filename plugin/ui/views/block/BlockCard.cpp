@@ -299,7 +299,12 @@ void BlockCard::syncHeader() {
   const bool defaultFull = isSlimSizeFull(services_.chain.state().namSlimSizeDefault);
   const bool showSize = isNam() && (sizeControlEnabled || slimFull_ != defaultFull);
   const int wantCells = !showSize ? 0 : sizeControlEnabled ? 2 : 1;
-  const int signature = wantCells * 2 + (slimFull_ ? 1 : 0);
+  // A size change re-selects the toggle but relabels (rebuilds) the chip. The
+  // toggle must never be rebuilt here: its click handler calls back into this
+  // through the store's synchronous refresh, and destroying it there frees the
+  // closure still running (a reliable crash on Windows, where the compiler
+  // reloads the captured pointer from the closure after the call).
+  const int signature = wantCells * 2 + (wantCells == 1 && slimFull_ ? 1 : 0);
   if (signature != sizeSignature_) {
     sizeSignature_ = signature;
     size_.reset();
@@ -307,7 +312,6 @@ void BlockCard::syncHeader() {
       size_ = std::make_unique<SegmentedText>(
           std::vector<SegmentedText::Cell>{{"LITE", help::Key::blockSize}, {"FULL", help::Key::blockSize}},
           SegmentedText::selection());
-      size_->select(slimFull_ ? 1 : 0);
       size_->onCellClick = [this](int index) {
         slimFull_ = index == 1;
         services_.chain.setBlockSlimSize(block_.blockId, slimFull_ ? kSlimSizeFull : kSlimSizeLite);
@@ -323,6 +327,7 @@ void BlockCard::syncHeader() {
     }
     if (size_) addAndMakeVisible(*size_);
   }
+  if (wantCells == 2) size_->select(slimFull_ ? 1 : 0);
 
   const bool showCalibration = isNam() && calibrateInput_.boolValue();
   calibration_->setVisible(showCalibration);

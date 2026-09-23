@@ -3,11 +3,41 @@
 #include <cmath>
 
 #include "KnobFace.h"
+#include "Popover.h"
 #include "SecondaryPress.h"
 #include "core/Fonts.h"
 #include "core/Paint.h"
 
 namespace t3k::ui {
+
+// The value text, drawn in the overlay layer over the knob's label slot. A
+// readout wider than the face ("-65 dB" under a 36px gate) has to spill
+// past the column, but JUCE only redraws a component inside its own bounds
+// and every parent clips to theirs, so painted from the knob it is cut at
+// the column edge. Up in the overlay it has its own bounds and nothing
+// above it.
+class Knob::Readout : public juce::Component {
+public:
+  Readout() {
+    setInterceptsMouseClicks(false, false);
+    setAccessible(false);  // the knob's slider handler already reports the value
+  }
+
+  void setText(const juce::String& text) {
+    if (text_ == text) return;
+    text_ = text;
+    repaint();
+  }
+
+  void paint(juce::Graphics& g) override {
+    g.setFont(Fonts::sans(kLabelSize));
+    g.setColour(theme::kWhite);
+    g.drawText(text_, getLocalBounds(), juce::Justification::centred, false);
+  }
+
+private:
+  juce::String text_;
+};
 
 namespace {
 
@@ -53,7 +83,9 @@ float arcFromFor(Knob::Variant variant) { return variant == Knob::Variant::full 
 Knob::Knob(Options options) : options_(std::move(options)) {
   setSize(options_.size, heightFor(options_.size));
   // Labels wider than the knob ("Crossover" under a 36px knob) overflow the
-  // column, as the web's `overflow: visible` slot did.
+  // column, as the web's `overflow: visible` slot did. That only reaches as
+  // far as the parents let it; the readout, which changes while it shows,
+  // floats in the overlay instead (see Readout).
   setPaintingIsUnclipped(true);
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
   setViewportIgnoreDragFlag(true);  // a touch drag turns the knob, not the page
@@ -86,12 +118,14 @@ void Knob::setValue(float normalised) {
   if (juce::exactlyEqual(v, value_)) return;
   value_ = v;
   repaint();
+  syncReadout();
 }
 
 void Knob::emit(float v) {
   emitted_ = v;
   value_ = v;
   repaint();
+  syncReadout();
   if (onChange) onChange(v);
 }
 
@@ -267,7 +301,33 @@ void Knob::setReadoutVisible(bool show) {
   if (readoutVisible_ == show) return;
   readoutVisible_ = show;
   repaint();
+  syncReadout();
 }
+
+// Shows, updates or removes the floating readout for the current state. With
+// no overlay host above (a bare knob in a test window) the readout is drawn
+// in the label slot instead, cut at the column like any child.
+void Knob::syncReadout() {
+  const bool wanted = readoutVisible_ && editor_ == nullptr && isShowing();
+  auto* host = wanted ? findParentComponentOfClass<OverlayHost>() : nullptr;
+  if (host == nullptr || getWidth() <= 0) {
+    readout_.reset();
+    return;
+  }
+  if (readout_ == nullptr) readout_ = std::make_unique<Readout>();
+  auto& overlay = host->overlayLayer();
+  if (readout_->getParentComponent() != &overlay) overlay.addAndMakeVisible(*readout_);
+  // Like a Popover: the label slot in overlay px, then the adopted scale
+  // taken out and put back as a transform so the text renders at that scale.
+  const auto slot = overlay.getLocalArea(this, labelBounds().toFloat());
+  const float k = slot.getWidth() / static_cast<float>(getWidth());
+  readout_->setTransform(juce::approximatelyEqual(k, 1.0f) ? juce::AffineTransform()
+                                                            : juce::AffineTransform::scale(k));
+  readout_->setBounds((slot / k).expanded(static_cast<float>(kLabelOverflow), 0.0f).toNearestInt());
+  readout_->setText(options_.scale->format(value_));
+}
+
+void Knob::parentHierarchyChanged() { syncReadout(); }
 
 void Knob::openEditor() {
   if (editor_ != nullptr) return;
@@ -286,6 +346,7 @@ void Knob::openEditor() {
   resized();
   editor_->focus();
   repaint();
+  syncReadout();  // the slot is the editor's now
 }
 
 void Knob::commitEdit() {
@@ -316,6 +377,7 @@ void Knob::closeEditor() {
   auto* raw = editor.release();
   juce::MessageManager::callAsync([raw] { delete raw; });
   repaint();
+  syncReadout();
 }
 
 // Painting
@@ -329,7 +391,7 @@ void Knob::paint(juce::Graphics& g) {
                arcFromFor(options_.variant), options_.thumb == Thumb::primary
                                                   ? KnobTone::primary
                                                   : KnobTone::secondary);
-  if (editor_ != nullptr) return;
+  if (editor_ != nullptr || readout_ != nullptr) return;  // the slot is theirs
 
   // Idle labels are muted by default; pan-rail labels pass labelBright to
   // read as section titles. The readout is always white.
@@ -339,7 +401,7 @@ void Knob::paint(juce::Graphics& g) {
   // Wide labels centre on the knob and overflow the column symmetrically.
   g.setFont(Fonts::sans(kLabelSize));
   g.setColour(colour);
-  g.drawText(text, labelBounds().expanded(60, 0), juce::Justification::centred, false);
+  g.drawText(text, labelBounds().expanded(kLabelOverflow, 0), juce::Justification::centred, false);
 }
 
 }  // namespace t3k::ui

@@ -91,6 +91,7 @@ public:
 
   void paint(juce::Graphics& g) override;
   void resized() override;
+  void parentHierarchyChanged() override;
   void mouseDown(const juce::MouseEvent& e) override;
   void mouseDrag(const juce::MouseEvent& e) override;
   void mouseUp(const juce::MouseEvent& e) override;
@@ -110,7 +111,11 @@ private:
   void closeEditor();
   void endDrag();
   void setReadoutVisible(bool show);
+  void syncReadout();
   juce::Rectangle<int> labelBounds() const;
+
+  // A label (or readout) may run this far past each side of the column.
+  static constexpr int kLabelOverflow = 60;
 
   Options options_;
   float value_ = 0.0f;    // shown value
@@ -128,6 +133,10 @@ private:
 
   DelayedCall readoutTimer_, holdTimer_;
   std::unique_ptr<TextField> editor_;
+  // The readout floats in the overlay layer (see syncReadout); present while
+  // it shows there, in which case the label slot here stays blank.
+  class Readout;
+  std::unique_ptr<Readout> readout_;
 };
 
 }  // namespace t3k::ui
