@@ -8,14 +8,11 @@ MainScreen::MainScreen(Services& services)
       inputMeter_(services.meters, /*input=*/true, kMeterHeight, DbMeter::Labels::left),
       outputMeter_(services.meters, /*input=*/false, kMeterHeight, DbMeter::Labels::right),
       chain_(services) {
+  // The meters sit above the chain (its gutter fades), so stereo columns
+  // overflowing into the centre aren't covered by it.
+  addAndMakeVisible(chain_);
   addAndMakeVisible(inputMeter_);
   addAndMakeVisible(outputMeter_);
-  addAndMakeVisible(centre_);
-  centre_.addAndMakeVisible(chain_);
-  // The meters sit above the centre's content (a tone-browser header scrim),
-  // so stereo columns overflowing into the centre aren't covered by it.
-  inputMeter_.toFront(false);
-  outputMeter_.toFront(false);
 
   spreadEnabled_.onChange = [this] { syncMeters(); };
   services_.chain.addListener(this);
@@ -34,19 +31,6 @@ void MainScreen::syncMeters() {
   outputMeter_.setStereo((chain.stereoEnabled || spreadEnabled_.boolValue()) && chain.stereoOutput);
 }
 
-void MainScreen::setBrowserShown(bool shown) {
-  if (shown == browserShown()) return;
-  if (shown) {
-    browser_ = std::make_unique<ToneBrowser>(services_);
-    if (onBrowserMounted) onBrowserMounted(*browser_);
-    centre_.addAndMakeVisible(*browser_);
-    browser_->setBounds(centre_.getLocalBounds());
-  } else {
-    browser_.reset();
-  }
-  chain_.setVisible(!shown);
-}
-
 void MainScreen::resized() {
   auto area = getLocalBounds().reduced(kPadX, 0);
   // Each meter slot is the mono footprint; the component is wider by kInset
@@ -56,9 +40,7 @@ void MainScreen::resized() {
   outputMeter_.setTopLeftPosition(area.getRight() - DbMeter::kFootprint - DbMeter::kInset, meterY);
   area.removeFromLeft(DbMeter::kFootprint);
   area.removeFromRight(DbMeter::kFootprint);
-  centre_.setBounds(area);
-  chain_.setBounds(centre_.getLocalBounds());
-  if (browser_) browser_->setBounds(centre_.getLocalBounds());
+  chain_.setBounds(area);
 }
 
 }  // namespace t3k::ui

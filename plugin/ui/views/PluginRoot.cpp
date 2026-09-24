@@ -51,18 +51,6 @@ PluginRoot::PluginRoot(Services& services)
   // A browse-intent login (a sign-in CTA inside the browser) comes back to
   // the browser.
   services_.session.onAuthenticated = [this] { setBrowserShown(true); };
-  main_.onBrowserMounted = [this](ToneBrowser& browser) {
-    // Closing without picking abandons any pending swap / insert target.
-    browser.onClose = [this] {
-      services_.loadFlow.clearPendingTargets();
-      setBrowserShown(false);
-    };
-    // The browser's sign-in gate runs the login flow and returns to this
-    // same browser.
-    browser.onSignIn = [this] {
-      services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::browse); });
-    };
-  };
 
   header_.onOpenSettings = [this] { openSettings(); };
 
@@ -338,9 +326,41 @@ void PluginRoot::setTunerShown(bool shown) {
   } else {
     tuner_.reset();
   }
-  main_.setVisible(!shown);
+  syncTakeovers();
   header_.setTunerShown(shown);
   resized();
+}
+
+void PluginRoot::setBrowserShown(bool shown) {
+  if (shown == browserShown()) return;
+  if (shown) {
+    browser_ = std::make_unique<ToneBrowser>(services_);
+    // Closing without picking abandons any pending swap / insert target.
+    browser_->onClose = [this] {
+      services_.loadFlow.clearPendingTargets();
+      setBrowserShown(false);
+    };
+    // The browser's sign-in gate runs the login flow and returns to this
+    // same browser.
+    browser_->onSignIn = [this] {
+      services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::browse); });
+    };
+    // Right above the faceplate: under a tuner, Settings and the overlay.
+    addChildComponent(*browser_, getIndexOfChildComponent(&faceplate_) + 1);
+  } else {
+    browser_.reset();
+  }
+  syncTakeovers();
+  resized();
+}
+
+// What a takeover covers is hidden, not left painting underneath: the meters
+// tick at 30 Hz and would otherwise repaint for nothing.
+void PluginRoot::syncTakeovers() {
+  const bool tuner = tunerShown(), browser = browserShown();
+  main_.setVisible(!tuner && !browser);
+  faceplate_.setVisible(tuner || !browser);
+  if (browser_) browser_->setVisible(!tuner);
 }
 
 void PluginRoot::closeTunerThen(const std::function<void()>& fn) {
@@ -350,15 +370,13 @@ void PluginRoot::closeTunerThen(const std::function<void()>& fn) {
 
 void PluginRoot::showChainThen(const std::function<void()>& fn) {
   setTunerShown(false);
-  if (main_.browserShown()) {
+  if (browserShown()) {
     services_.loadFlow.clearPendingTargets();
     setBrowserShown(false);
   }
   main_.chainScreen().returnToGallery();
   if (fn) fn();
 }
-
-void PluginRoot::setBrowserShown(bool shown) { main_.setBrowserShown(shown); }
 
 void PluginRoot::logout() {
   services_.loadFlow.clearPendingTargets();
@@ -408,6 +426,7 @@ void PluginRoot::resized() {
   auto column = juce::Rectangle<int>(0, slotH, design::kWidth, design::kHeight + hintH);
   if (hintsVisible_) hintBar_.setBounds(column.removeFromBottom(hintH));
   header_.setBounds(column.removeFromTop(PluginHeader::kHeight));
+  if (browser_) browser_->setBounds(column);  // the rest, faceplate included
   faceplate_.setBounds(column.removeFromBottom(Faceplate::kHeight));
   main_.setBounds(column);
   if (tuner_) tuner_->setBounds(column);

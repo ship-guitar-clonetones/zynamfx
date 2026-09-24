@@ -1,6 +1,7 @@
-// Top-level native UI (port of Plugin.tsx): header, meters + chain (or a
-// takeover: tuner, tone browser), faceplate, hint bar, and the overlay layer
-// for popovers, the toast, banners and modals. Laid out in design space
+// Top-level native UI (port of Plugin.tsx): header, meters + chain (or the
+// tuner takeover), faceplate (the tone browser takes over both), hint bar,
+// and the overlay layer for popovers, the toast, banners and modals. Laid
+// out in design space
 // (1024 x 578 + chrome strips); the shell scales the whole thing.
 //
 // The chrome strips grow the window instead of squishing the 578px core, so
@@ -39,6 +40,7 @@
 #include "PluginHeader.h"
 #include "ToastView.h"
 #include "TunerView.h"
+#include "browser/ToneBrowser.h"
 #include "core/DelayedCall.h"
 #include "modals/ConnectionModal.h"
 #include "modals/OAuthOverlay.h"
@@ -76,9 +78,11 @@ public:
   // detector runs only while it is up.
   void setTunerShown(bool shown);
   bool tunerShown() const { return tuner_ != nullptr; }
-  // The tone browser takeover replaces the chain between the meters.
+  // The tone browser takeover covers everything under the header (meters,
+  // chain and faceplate); mounted only while open. A tuner opened over it
+  // hides it until the tuner closes.
   void setBrowserShown(bool shown);
-  bool browserShown() const { return main_.browserShown(); }
+  bool browserShown() const { return browser_ != nullptr; }
 
   // The Settings takeover covers the whole window (chrome strips included)
   // under the overlay layer; mounted only while open. Banner actions and the
@@ -121,11 +125,14 @@ private:
   // Loading a preset / resetting replaces the chain: leave any takeover.
   void showChainThen(const std::function<void()>& fn);
   void logout();
+  // Which of main screen, faceplate and browser show under the takeovers.
+  void syncTakeovers();
 
   Services& services_;
   PluginHeader header_;
   HintBar hintBar_;
-  MainScreen main_;  // meters + chain gallery / tone browser
+  MainScreen main_;  // meters + chain gallery
+  std::unique_ptr<ToneBrowser> browser_;
   std::unique_ptr<TunerView> tuner_;
   std::unique_ptr<SettingsScreen> settings_;
   Faceplate faceplate_;

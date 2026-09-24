@@ -125,9 +125,9 @@ plugin/ui/
                       PluginHeader, Faceplate, MainScreen, TunerView, …
     gallery/          ChainView, GalleryLane, ToneTile, AddTile, StereoPanRail
     block/            BlockDetail, BlockCard, BlockInfoPanel, BlockEqView
-    browser/          ToneBrowser (the Select tone screen: search + FilterBar over the
-                      card grid), FilterBar / FilterChip / FilterMenu, ToneCard,
-                      Paginator, BrowserPrompt
+    browser/          ToneBrowser (the Select tone takeover: search + FilterBar over
+                      the card grid, Paginator pinned under it), FilterBar /
+                      FilterChip / FilterMenu, ToneCard, Paginator, BrowserPrompt
     settings/         SettingsScreen, PluginSettingsPage, SystemSettingsPage,
                       MidiMapSection, …
     modals/           ConnectionModal, OAuthOverlay, UpdateNotice
@@ -212,15 +212,18 @@ ignored.
 
 ## The tone browser (Select tone)
 
-The whole screen needs a session: signed out it shows only the sign-in
-prompt. Signed in, `ToneBrowser` pins a search box and a `FilterBar` above
-the scrolling card grid and asks `ToneSession::searchTones` for one page at a
-time. The ← row zooms with the window; the body under it does not: it is
-laid out in screen pixels under the zoom, the search box and filter row keep
-their 1x height and widen with the column, the cards keep their 1x height
-and widen to fill two columns, and go three-up once three fit at the default
-width (`browser-zoom-wide`, `browser-zoom-three-up`, `browser-zoom-menu`; a
-scenario's `zoom` sizes the testbed window).
+The screen takes over everything under the header (meters, chain and
+faceplate; `PluginRoot` mounts it only while open and hides what it
+covers). The whole screen needs a session: signed out it shows only the
+sign-in prompt. Signed in, `ToneBrowser` pins a search box and a `FilterBar`
+above the card grid and the `Paginator` below it; the grid scrolls between
+the two, fading out under each, and asks `ToneSession::searchTones` for one
+page at a time. The ← row zooms with the window; the body under it does
+not: it is laid out in screen pixels under the zoom, the search box and
+filter row keep their 1x height and widen with the column, the cards keep
+their 1x height and widen to fill two columns, and go three-up once three
+fit at the default width (`browser-zoom-wide`, `browser-zoom-three-up`,
+`browser-zoom-menu`; a scenario's `zoom` sizes the testbed window).
 
 - `BrowserState` (`services/`, one per editor) is what the screen keeps
   between visits: the `ToneQuery`, whether the filter row is unfolded, the

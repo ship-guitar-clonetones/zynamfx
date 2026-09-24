@@ -1,7 +1,7 @@
 // The chain area between the meters: the gallery, or the detail takeover
 // for one block (ChainView.tsx's two branches). Owns the detail block id,
 // remembered for the editor's lifetime so a swap from the detail view
-// (which replaces the whole area with the tone browser and may bounce
+// (which the tone browser takes over the screen for, and may bounce
 // through OAuth) reopens the same card on return; cleared when the user
 // backs out, so gallery-initiated swaps land on the gallery.
 #pragma once

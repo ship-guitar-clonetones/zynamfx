@@ -21,12 +21,25 @@ constexpr float kSearchPx = 14;
 constexpr int kSearchIcon = 18;
 constexpr int kSearchPadX = 16;
 constexpr int kSearchIconGap = 10;
-// Cards slide under the filter row through this much black: a solid band
-// right under the pills, then a fade that starts steep (alpha (1-t)^1.5) so
-// the cards read as gone before they reach it.
-constexpr int kTopFade = 32;
-constexpr float kTopSolid = 0.2f;  // 6px
-constexpr float kTopFadePower = 1.5f;
+// Cards slide under the filter row and the paginator through this much
+// black: a solid band right at the edge, then a fade that starts steep
+// (alpha (1-t)^1.5) so the cards read as gone before they reach it.
+constexpr int kScrollFade = 32;
+constexpr float kFadeSolid = 0.2f;  // 6px
+constexpr float kFadePower = 1.5f;
+
+// One fade band, solid at its top (or bottom) edge running to clear at the
+// other.
+void fillScrollFade(juce::Graphics& g, juce::Rectangle<float> band, bool solidAtTop) {
+  const float edge = solidAtTop ? band.getY() : band.getBottom();
+  const float far = solidAtTop ? band.getBottom() : band.getY();
+  auto fade = juce::ColourGradient::vertical(juce::Colours::black, edge, juce::Colours::transparentBlack, far);
+  fade.addColour(kFadeSolid, juce::Colours::black);
+  for (const float t : {0.25f, 0.5f, 0.75f})
+    fade.addColour(kFadeSolid + t * (1 - kFadeSolid), juce::Colours::black.withAlpha(std::pow(1 - t, kFadePower)));
+  g.setGradientFill(fade);
+  g.fillRect(band);
+}
 
 std::unique_ptr<PillButton> makeFilledButton(const juce::String& label) {
   return std::make_unique<PillButton>(label, PillButton::Style::filled);
@@ -37,7 +50,7 @@ std::unique_ptr<PillButton> makeFilledButton(const juce::String& label) {
 class ToneBrowser::Body : public juce::Component {
 public:
   explicit Body(ToneBrowser& owner) : owner_(owner) {}
-  void paintOverChildren(juce::Graphics& g) override { owner_.paintTopFade(g); }
+  void paintOverChildren(juce::Graphics& g) override { owner_.paintScrollFades(g); }
 
 private:
   ToneBrowser& owner_;
@@ -65,6 +78,7 @@ ToneBrowser::ToneBrowser(Services& services)
       filters_(services, services.browser),
       scroller_(std::make_unique<DragScroller>(DragScroller::Axis::vertical)),
       content_(std::make_unique<Content>()) {
+  setOpaque(true);  // covers the meters, chain and faceplate outright
   back_.onClick = [this] {
     if (onClose) onClose();
   };
@@ -93,7 +107,7 @@ ToneBrowser::ToneBrowser(Services& services)
   body_->addAndMakeVisible(*scroller_);
   content_->addChildComponent(dots_);
   paginator_.onPageChange = [this](int page) { setPage(page); };
-  content_->addChildComponent(paginator_);
+  body_->addChildComponent(paginator_);
 
   services_.session.addListener(this);
   services_.zoom.addListener(this);
@@ -284,6 +298,8 @@ void ToneBrowser::rebuildBody() {
 }
 
 // Layout
+void ToneBrowser::paint(juce::Graphics& g) { g.fillAll(theme::kBlack); }
+
 void ToneBrowser::resized() {
   // Design space: the ← row, and the box the body fills under it.
   const int w = getWidth();
@@ -303,7 +319,7 @@ void ToneBrowser::resized() {
 // Screen pixels from here down. The column under the ← row is kColumnWidth
 // design px wide: that times the zoom.
 void ToneBrowser::layoutBody() {
-  const int w = body_->getWidth();
+  const int w = body_->getWidth(), h = body_->getHeight();
   const int colW = std::min(juce::roundToInt(kColumnWidth * zoom()), w);
   const int colX = (w - colW) / 2;
   int y = 0;
@@ -314,21 +330,25 @@ void ToneBrowser::layoutBody() {
     filters_.setColumn({colX, y, colW, FilterBar::kHeight});
     y += FilterBar::kHeight;
   }
-  scroller_->setBounds(0, y, w, std::max(0, body_->getHeight() - y));
+  // The paginator is pinned at the bottom, right-aligned to the column; the
+  // results scroll between it and the filter row.
+  int bottom = h;
+  if (paginator_.isVisible()) {
+    bottom = h - kPadBottom - Paginator::kHeight;
+    paginator_.setTopLeftPosition(colX + colW - paginator_.getWidth(), bottom);
+  }
+  scroller_->setBounds(0, y, w, std::max(0, bottom - y));
   layoutContent();
 }
 
-// Scrolled cards fade out under the filter row instead of clipping at it.
-void ToneBrowser::paintTopFade(juce::Graphics& g) {
-  if (!search_.isVisible() || scroller_->getViewPositionY() == 0) return;
-  const auto top = scroller_->getBounds().toFloat().withHeight(kTopFade);
-  auto fade = juce::ColourGradient::vertical(juce::Colours::black, top.getY(), juce::Colours::transparentBlack,
-                                             top.getBottom());
-  fade.addColour(kTopSolid, juce::Colours::black);
-  for (const float t : {0.25f, 0.5f, 0.75f})
-    fade.addColour(kTopSolid + t * (1 - kTopSolid), juce::Colours::black.withAlpha(std::pow(1 - t, kTopFadePower)));
-  g.setGradientFill(fade);
-  g.fillRect(top);
+// Scrolled cards fade out under the filter row and the paginator instead
+// of clipping at them; each band shows only while there is more that way.
+void ToneBrowser::paintScrollFades(juce::Graphics& g) {
+  const auto view = scroller_->getBounds().toFloat();
+  const int viewY = scroller_->getViewPositionY();
+  if (viewY > 0) fillScrollFade(g, view.withHeight(kScrollFade), /*solidAtTop=*/true);
+  if (viewY + scroller_->getViewHeight() < content_->getHeight())
+    fillScrollFade(g, view.withTop(view.getBottom() - kScrollFade), /*solidAtTop=*/false);
 }
 
 void ToneBrowser::layoutContent() {
@@ -359,12 +379,12 @@ void ToneBrowser::layoutContent() {
     y += kEmptyPadY + line + kEmptyPadY;
   } else if (!cards_.empty() && cards_.front()->isVisible()) {
     // Two columns of cards that widen with the window, three once three fit
-    // at the default width. Grid rows are as tall as their tallest card,
+    // at kMinCardWidth. Grid rows are as tall as their tallest card,
     // fractionally (a wrapped 14px title is 36.4px): the rows accumulate at
     // that precision and each card's edges snap where they land, as the CSS
     // grid does.
     const int gridTop = y;
-    const size_t cols = colW >= 3 * kCardWidth + 2 * kGridGap ? 3 : 2;
+    const size_t cols = colW >= 3 * kMinCardWidth + 2 * kGridGap ? 3 : 2;
     const int cardW = (colW - static_cast<int>(cols - 1) * kGridGap) / static_cast<int>(cols);
     float rowY = static_cast<float>(y);
     for (size_t i = 0; i < cards_.size(); i += cols) {
@@ -380,12 +400,6 @@ void ToneBrowser::layoutContent() {
     }
     y = juce::roundToInt(rowY - kGridGap);
     if (gridBusy_) gridBusy_->setBounds(colX, gridTop, colW, y - gridTop);
-  }
-
-  if (paginator_.isVisible()) {
-    y += kPaginatorGap;
-    paginator_.setTopLeftPosition(colX + colW - paginator_.getWidth(), y);
-    y += Paginator::kHeight;
   }
 
   y += kContentPadBottom;
