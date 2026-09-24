@@ -10,8 +10,8 @@
 # defaults, times 2). Mutter-family window managers (Muffin on Mint, Mutter
 # on GNOME) re-add the frame border to those hints, overflow int, and clamp
 # the window to the 1px PMinSize floor instead: the app maps as a full-width,
-# 1-pixel-high strip under a bare title bar and the WebKitGTK view never
-# becomes visible. Fixed by the T3K_X11_HINT_OVERFLOW patch in CMakeLists.txt
+# 1-pixel-high strip under a bare title bar and the editor never becomes
+# visible. Fixed by the T3K_X11_HINT_OVERFLOW patch in CMakeLists.txt
 # (plus the editor's maxStartScale fit clamp for restored window scales).
 #
 # This script emulates the failing desktop on a virtual X server - Xvfb +
@@ -105,10 +105,10 @@ sleep 12
 
 xwininfo -root -tree > "$WORK/tree.txt" 2>&1
 
-# The app owns several X windows (the JUCE top-level, the embedded WebKitGTK
-# view, the GTK plug placeholder). The bug's signature is the JUCE top-level
-# collapsing to a 1px-high, full-width strip, so assert on the widest
-# TONE3000 window: its height must be plausible for the 1024x614 design box.
+# The app may own more than one X window (the JUCE top-level plus any GTK
+# helper). The bug's signature is the JUCE top-level collapsing to a
+# 1px-high, full-width strip, so assert on the widest TONE3000 window: its
+# height must be plausible for the 1024x614 design box.
 GEOM=$(grep '"TONE3000"' "$WORK/tree.txt" | grep -oE '[0-9]+x[0-9]+\+' \
         | sort -t x -k 1 -n | tail -1 | tr -d '+')
 WIDTH=${GEOM%x*}

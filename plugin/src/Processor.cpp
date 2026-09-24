@@ -1,6 +1,6 @@
 #include "Processor.h"
 #if !HEADLESS
-#include "Editor.h"
+#include "NativeEditor.h"
 #endif
 #include "StandaloneStateAutosave.h"
 #include <cmath>
@@ -12,6 +12,7 @@
 // so we can detect a mono input or output (see standaloneMonoInput /
 // standaloneMonoOutput).
 #if !HEADLESS && JucePlugin_Build_Standalone && ! JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP
+#include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
 #endif
 
@@ -142,8 +143,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
 
   // Normalized 0..1 knob params get an explicit 1e-4 interval. The
   // (min, max, default) AudioParameterFloat constructor silently bakes a
-  // 0.01 interval into the range, and the webview slider relay snaps every
-  // UI-set value to that grid: 0.48 dB steps on the ±24 dB knobs, which
+  // 0.01 interval into the range, and convertFrom0to1 snaps every UI-set
+  // value to that grid: 0.48 dB steps on the ±24 dB knobs, which
   // mangled typed values (-4.0 landed on -3.8; GitHub issue #16). 1e-4
   // matches the UI's own text-entry/fine-drag rounding (KnobControl rounds
   // to 4 decimals), so the snap never moves a value the UI can produce.
@@ -1830,7 +1831,7 @@ bool TONE3000Processor::hasEditor() const {
 // ##############
 juce::AudioProcessorEditor* TONE3000Processor::createEditor() {
 #if !HEADLESS
-  return new TONE3000Editor(*this);
+  return new t3k::ui::NativeEditor(*this);
 #else
   return nullptr;
 #endif

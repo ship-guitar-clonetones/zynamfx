@@ -85,8 +85,14 @@ work saves (a dozen realtime threads wake to find the one job already
 claimed), enough to cancel the lane fork's speedup outright on a 14-core
 machine. The park/publish race is closed with a seq_cst fence pairing
 (worker: set bit, then re-check for armed jobs; publisher: arm jobs, then
-read the mask), and the 1 ms park timeout plus the join steal bound a
-doubly-missed wakeup to one serial-cost block.
+read the mask), and the join steal bounds a doubly-missed wakeup to one
+serial-cost block. Parked workers also re-check on a 100 ms timeout as a
+last resort. That timeout was 1 ms originally, and with every wake
+signalled explicitly it only added kernel time: 13 parked workers timing
+out 1,000 times a second cost about 11% of a core while the plugin was
+idle, more than the neural net itself. Profiled on a 14-core M-series Mac
+with `ps -M`: the worker threads showed ~0.8% system time each and ~0.1%
+user time; at 100 ms they show 0.0%.
 
 One easy-to-miss detail: FTZ/DAZ denormal flags are per-thread CPU state.
 Each worker sets `ScopedNoDenormals` in its own loop; without it, NAM decay

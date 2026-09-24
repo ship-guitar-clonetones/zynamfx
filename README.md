@@ -10,10 +10,12 @@ pre-built installer, or see the
 [Plugin Guide](https://www.tone3000.com/guides/tone3000-plugin) for how to
 install, load tones, and use it.
 
-- **Load NAM and IR from TONE3000.** Click **+** to browse the catalog in the
-  plugin (OAuth 2.0 + PKCE via the
-  [TONE3000 Select flow](https://www.tone3000.com/api#select)). Pick a tone
-  and it lands in the chain with the right model or IR.
+- **Load NAM and IR from TONE3000.** Click **+** to search the catalog in
+  the plugin: text search, gear / format / tag / make / creator filters,
+  verified creators, your recently used, favorited and created tones, all
+  over the [TONE3000 API](https://www.tone3000.com/api) after a one-time
+  sign-in (OAuth 2.0 + PKCE). Pick a tone and it lands in the chain with the
+  right model or IR.
 - **Or load local files.** Drag a `.nam` file (A2 architecture), an IR
   `.wav`, or a folder of them onto a **+** slot, or right-click a tile and
   pick **Load File / Load Folder**; no account needed. Design notes in
@@ -21,9 +23,11 @@ install, load tones, and use it.
 - **Build a signal chain.** Multiple NAM and IR blocks, per-block EQ and
   gain/mix, drag to reorder, dual chains in stereo mode with branching,
   undo/redo, and presets.
-- **Cross-platform.** One plugin on macOS, Windows, and Linux. The UI is a
-  React app rendered in a native WebView (WebView2 on Windows, WebKit
-  elsewhere).
+- **Cross-platform.** One plugin on macOS, Windows, Linux, and iOS
+  (Standalone). The UI is JUCE/C++ (`plugin/ui/`), drawn natively on every
+  platform: no browser engine, no web runtime, nothing to install beside the
+  plugin (see [`plugin/ui/README.md`](plugin/ui/README.md) and the design
+  record in [`plugin/docs/native-ui.md`](plugin/docs/native-ui.md)).
 
 NAM processing comes from **NeuralAmpModelerCore** (in-tree), resampling from
 **AudioDSPTools** (in-tree), and tone browsing/loading from the
@@ -32,14 +36,10 @@ NAM processing comes from **NeuralAmpModelerCore** (in-tree), resampling from
 ## Prerequisites
 
 - [CMake](https://cmake.org/download/) 3.22+ and Git
-- Node.js and npm (the React UI is built after CMake has fetched JUCE)
 - **JUCE** is fetched automatically by CMake into `libs/`; no manual install
-- **Windows only:** the Microsoft.Web.WebView2 SDK NuGet package
-  (`script/install-webview2.ps1` installs it), needed at build time to
-  statically link the WebView2 loader. At run time the plugin UI needs the
-  [WebView2 Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/):
-  Windows 11 ships it, dev machines get it with Edge, and the release
-  installer bootstraps it when missing (typically clean Windows 10).
+- A C++20 compiler: Xcode on macOS, MSVC on Windows, GCC or Clang on Linux
+  (plus the dev packages listed under
+  [Linux runtime dependencies](#linux-runtime-dependencies))
 
 ## Quick start
 
@@ -51,17 +51,17 @@ git submodule update --init --recursive
 
 ### 2. Configure CMake
 
-CMake downloads JUCE into `libs/` on first configure. The UI's
-`@juce-framework/webview` package is a `file:` dependency on that tree, so
-this step has to happen **before** `npm install`. Configure uses a
-placeholder for the embedded UI until you build it in the next step.
+CMake downloads JUCE into `libs/` on first configure.
 
 The default build includes the GUI targets (Standalone, VST3, AU, AAX, LV2,
 CLAP). Add `-DHEADLESS=ON` for headless/embedded builds; switch individual
 formats off with `-DBUILD_AAX=OFF`, `-DBUILD_LV2=OFF`, `-DBUILD_CLAP=OFF`.
 CLAP support comes from
 [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions),
-fetched at configure time.
+fetched at configure time. `-DT3K_BUILD_UI_TESTBED=ON` adds the UI testbed
+(`UiTestbed`: scenario captures, pixel diffs, `--selftest`, `--bench`) and
+registers its self-tests with ctest; see
+[`plugin/ui/README.md`](plugin/ui/README.md).
 
 ```sh
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release   # or Debug
@@ -77,51 +77,27 @@ cmake -B build -S . -DCMAKE_BUILD_TYPE=Release \
 If you switch CMake presets later, remove the `build` directory and
 reconfigure.
 
-### 3. Build the UI
+### 3. TONE3000 publishable key
 
-The plugin embeds the built React UI as binary data:
-
-```sh
-cd ui
-npm install
-npm run build
-cd ..
-```
-
-If `npm install` warns that esbuild's install script is not approved
-(`npm warn install-scripts ... esbuild`), run
-`npm install-scripts approve esbuild` and then `npm install` again. Vite
-needs that postinstall to download the esbuild binary.
-
-#### TONE3000 publishable key and redirect URIs
-
-The webview reads your TONE3000 publishable key at build time. Set it before
-the first build (or before running the dev server):
+The plugin reads your TONE3000 publishable key at configure time from a
+`.env` file at the repo root (`.env.local` overrides it and a variable in
+the configure environment overrides both; [`.env.example`](.env.example)
+documents every key). Set it before the first build, and reconfigure after
+changing it:
 
 ```sh
-# ui/.env (or pass on the command line for a single build)
-VITE_T3K_PUBLISHABLE_KEY=t3k_pub_your_key_here
+# .env
+T3K_PUBLISHABLE_KEY=t3k_pub_your_key_here
 # Optional: point at staging or self-hosted TONE3000
-# VITE_T3K_API_DOMAIN=https://staging.tone3000.com
+# T3K_API_DOMAIN=https://staging.tone3000.com
 ```
 
-Then, in TONE3000 > Settings > API Keys, register the redirect URIs the
-WebView uses. The OAuth flows run in the same single WebView that serves the
-main UI, so the redirect URI is just the page React already loads from:
-
-| Build         | Redirect URI                      |
-| ------------- | --------------------------------- |
-| Vite dev      | `http://localhost:5173/`          |
-| macOS / Linux | `juce://juce.backend/index.html`  |
-| Windows       | `https://juce.backend/index.html` |
-
-Localhost origins are auto-allowed during development, so only the JUCE
-entries need to be registered for release builds.
+Sign-in opens in the system browser and returns to the plugin through a
+loopback redirect on an ephemeral port (`http://localhost:<port>/`).
+Localhost redirect URIs are auto-allowed for publishable keys, so nothing
+needs registering in TONE3000 > Settings > API Keys.
 
 ### 4. Build the plugin
-
-Re-run the same `cmake -B build ...` command from step 2 so CMake picks up
-`plugin/webview/`, then compile:
 
 ```sh
 cmake --build build
@@ -162,23 +138,16 @@ land in `build/plugin/TONE3000_artefacts/<config>/<format>/`.
 
 ## Linux runtime dependencies
 
-Windows statically links only the WebView2 loader (the Evergreen Runtime is
-a system component; the installer bootstraps it when missing) and macOS uses
-the OS WKWebView, but the Linux build renders its UI in the system WebKitGTK,
-loaded dynamically at runtime. If it's missing, the plugin window is a black
-screen.
-
-Required: WebKitGTK 4.1 (or 4.0), GTK3, ALSA, FreeType.
-
-```sh
-sudo apt install libwebkit2gtk-4.1-0      # Ubuntu / Debian
-sudo dnf install webkit2gtk4.1            # Fedora
-sudo pacman -S webkit2gtk-4.1             # Arch
-sudo zypper install libwebkit2gtk-4_1-0   # openSUSE
-```
-
-The release tarball's `install.sh` checks for these automatically
+Required at run time: GTK3 (file dialogs), ALSA, FreeType, X11, and libcurl
+(TONE3000 API and downloads; loaded lazily by SONAME, so no `-dev` package
+is needed on an end-user machine). All of these ship with every mainstream
+desktop distribution. The release tarball's `install.sh` checks for them
 (`./install.sh --check` to verify without installing).
+
+Building needs the matching development packages; the list CI installs is
+in `.github/workflows/build.yml` (`libgtk-3-dev`, `libasound2-dev`,
+`libjack-jackd2-dev`, `libcurl4-openssl-dev`, `libfreetype6-dev`, and the
+X11 `-dev` set).
 
 Optional: a JACK server. The standalone's Audio Driver picker offers JACK
 next to ALSA (libjack is loaded at runtime; without a server the driver just
@@ -340,9 +309,9 @@ Debug`.
 
 | Path            | Contents                                              |
 | --------------- | ----------------------------------------------------- |
-| `plugin/`       | C++ plugin: processor, DSP, editor, webview bridge; vendors NeuralAmpModelerCore and AudioDSPTools |
-| `plugin/docs/`  | Design docs (spread, oversampling, multi-core, local models) |
-| `ui/`           | React/TypeScript UI (see [ui/README.md](ui/README.md))|
+| `plugin/`       | C++ plugin: processor, DSP, presets, MIDI mapping; vendors NeuralAmpModelerCore and AudioDSPTools |
+| `plugin/ui/`    | The JUCE UI: views, widgets, services, testbed (see [plugin/ui/README.md](plugin/ui/README.md)) |
+| `plugin/docs/`  | Design docs (UI, spread, oversampling, multi-core, local models) |
 | `test/`         | GoogleTest DSP suite + test assets                    |
 | `script/`       | Build, packaging, and install helpers                 |
 | `libs/`         | CPM-fetched dependencies (JUCE, GoogleTest, ...)      |
@@ -376,7 +345,7 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   allpass coefficients are adapted from its AudioDSPTools fork (MIT). See
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
 - [JUCE](https://juce.com): plugin framework, DSP building blocks, and the
-  WebView UI bridge.
+  UI toolkit.
 - [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions):
   the CLAP wrapper.
 - O. Das, ["An Open-Source Stereo Widening Plugin"](https://www.dafx.de/paper-archive/2024/papers/DAFx24_paper_92.pdf)
@@ -386,9 +355,11 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   (108th AES Convention, 2000) and C. Knapp & G. Carter, "The Generalized
   Correlation Method for Estimation of Time Delay" (IEEE TASSP, 1976): the
   sweep probe and GCC-PHAT estimator behind auto-align.
-- [dnd-kit](https://dndkit.com), [lucide](https://lucide.dev), and
-  [react-knob-headless](https://github.com/satelllte/react-knob-headless) in
-  the UI.
+- [Roboto Mono](https://fonts.google.com/specimen/Roboto+Mono) and
+  [Arimo](https://fonts.google.com/specimen/Arimo) (Apache-2.0), embedded in
+  the UI; Arimo stands in for Arial where it isn't installed.
+- [lucide](https://lucide.dev) icons (ISC), embedded as SVG paths in
+  `plugin/ui/core/LucideIcons.h`.
 
 ## Links
 
@@ -397,8 +368,9 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   installers for Mac, Windows, and Linux.
 - [Plugin Guide](https://www.tone3000.com/guides/tone3000-plugin): how to
   install, load tones, and use the plugin.
-- [TONE3000 API](https://www.tone3000.com/api): full API reference, including
-  the Select flow.
+- [TONE3000 API](https://www.tone3000.com/api): full API reference (the
+  browser uses `/tones/search`, `/tones/{downloaded,favorited,created}`,
+  `/tags`, `/makes` and `/users`).
 - [TONE3000 API examples](https://github.com/tone-3000/api): reference
   integrations, including the `tone3000-client.ts` this plugin's client is
   adapted from.
