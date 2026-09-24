@@ -205,7 +205,8 @@ void MockBackend::setMultiCore(bool enabled) {
   bumpChain();
 }
 
-juce::var MockBackend::getBlockSpectrum(const std::string&) {
+juce::var MockBackend::getBlockSpectrum(const std::string& blockId) {
+  if (signal_ != nullptr) return signal_->spectrum(blockId);
   // The JS mock's static guitar-ish spectrum: low-mid hump falling off.
   juce::Array<juce::var> bins;
   for (int i = 0; i < 64; ++i) {
@@ -240,6 +241,10 @@ bool MockBackend::loadPreset(const juce::String& presetId) {
 }
 
 juce::var MockBackend::getAudioInputLevels() {
+  if (signal_ != nullptr) {
+    const auto* channels = device_["inputChannels"].getArray();
+    return signal_->inputLevels(channels != nullptr ? channels->size() : 0);
+  }
   juce::Array<juce::var> levels;
   if (const auto* channels = device_["inputChannels"].getArray())
     for (int i = 0; i < channels->size(); ++i)
@@ -273,6 +278,8 @@ bool MockBackend::removeMidiMapping(const juce::String& targetId) {
 }
 
 juce::var MockBackend::getMeterLevels() {
+  if (signal_ != nullptr)
+    return signal_->meters(chain_);
   if (meters_.isObject())
     return meters_;
   auto* blocks = new juce::DynamicObject();

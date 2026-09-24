@@ -3,13 +3,15 @@
 //   UiTestbed --capture <outDir> [--ref <refDir>] [filter...] PNGs (+ diff table)
 //   UiTestbed --compare <ref.png> <candidate.png> [diff.png]
 //   UiTestbed --selftest                                     unit tests (pure logic)
-//   UiTestbed [--scenario <id>]                              interactive window
+//   UiTestbed --bench [--seconds N] [--json out] [phase...]  CPU / memory under load (Bench.h)
+//   UiTestbed [--scenario <id>] [--live]                     interactive window (--live: moving signal)
 //
 // Captures are 2x like the React suite (Playwright deviceScaleFactor 2), so a
 // reference in ui/local/ui-states/img and a capture here diff pixel for pixel.
 
 #include <juce_gui_extra/juce_gui_extra.h>
 
+#include "Bench.h"
 #include "Compare.h"
 #include "Drive.h"
 #include "Host.h"
@@ -26,10 +28,11 @@ namespace {
 
 class TestbedWindow : public juce::DocumentWindow {
 public:
-  TestbedWindow(const Scenario& scenario, const juce::var& fixtures)
+  TestbedWindow(const Scenario& scenario, const juce::var& fixtures, bool live)
       : DocumentWindow("TONE3000 UI Testbed", juce::Colours::black, allButtons),
         backend(std::make_unique<MockBackend>(scenario.data)),
         host(*backend, scenario, fixtures) {
+    backend->setLive(live);
     setUsingNativeTitleBar(true);
     setContentNonOwned(&host, true);
     setResizable(true, false);
@@ -163,6 +166,13 @@ public:
       quit();
       return;
     }
+    if (args.size() >= 1 && args[0] == "--bench") {
+      bench = Bench::start(args, [this](int code) {
+        setApplicationReturnValue(code);
+        quit();
+      });
+      return;
+    }
     if (args.size() >= 1 && args[0] == "--selftest") {
       setApplicationReturnValue(runSelfTests());
       quit();
@@ -180,13 +190,17 @@ public:
       quit();
       return;
     }
-    window = std::make_unique<TestbedWindow>(*scenario, fixtures.root);
+    window = std::make_unique<TestbedWindow>(*scenario, fixtures.root, args.contains("--live"));
   }
 
-  void shutdown() override { window.reset(); }
+  void shutdown() override {
+    bench.reset();
+    window.reset();
+  }
 
 private:
   std::unique_ptr<TestbedWindow> window;
+  std::unique_ptr<Bench> bench;
 };
 
 }  // namespace t3k::ui::testbed

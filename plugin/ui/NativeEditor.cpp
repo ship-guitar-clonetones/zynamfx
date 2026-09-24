@@ -16,6 +16,10 @@ NativeEditor::NativeEditor(TONE3000Processor& owner)
   juce::LookAndFeel::setDefaultLookAndFeel(&darkLookAndFeel_.get());
   setOpaque(true);
   addAndMakeVisible(root_);
+  // Nothing polls or repaints while the window is minimised or the editor
+  // hidden (isShowing covers both); visibilityChanged /
+  // parentHierarchyChanged wake the clock when it is back.
+  services_.clock.visible = [this] { return isShowing(); };
   // extraContentHeight_ is already set: the root reported its chrome from
   // its constructor (see setExtraContentHeight).
 
@@ -157,7 +161,10 @@ bool NativeEditor::keyPressed(const juce::KeyPress& key) {
   return false;
 }
 
+void NativeEditor::visibilityChanged() { services_.clock.wake(); }
+
 void NativeEditor::parentHierarchyChanged() {
+  services_.clock.wake();
 #if !JUCE_IOS
   if (auto* window = dynamic_cast<juce::DocumentWindow*>(getTopLevelComponent())) {
     // Flipping the native title bar on relayouts the window's content split

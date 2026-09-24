@@ -165,16 +165,21 @@ void GalleryLane::paint(juce::Graphics& g) {
   const int icon = gallery::plusIconSize(tile_);
   const float inset = gallery::plusCircleInset(icon);
   const float cy = tile_ / 2.0f;
+  // Tiles repaint on every meter tick; only draw the slots that actually
+  // fall in the dirty area rather than re-rendering the SVG for every slot.
+  const auto clip = g.getClipBounds().toFloat();
   g.setColour(theme::kWhite);
   for (int i = 0; i < count; ++i) {
     const float cx = gallery::tileX(i, tile_) + tile_ / 2.0f;
     if (i > 0) {
       const float x0 = cx - (tile_ + gallery::kTileGap) + icon / 2.0f - inset;
       const float x1 = cx - icon / 2.0f + inset;
-      g.fillRect(juce::Rectangle<float>(x0, cy - gallery::kLineWidth / 2, x1 - x0, gallery::kLineWidth));
+      const juce::Rectangle<float> line(x0, cy - gallery::kLineWidth / 2, x1 - x0, gallery::kLineWidth);
+      if (line.intersects(clip)) g.fillRect(line);
     }
-    Icons::draw(g, Icon::PlusCircle, juce::Rectangle<float>(icon, icon).withCentre({cx, cy}),
-                theme::kWhite, /*strokeWidth=*/1.0f);
+    const auto circle = juce::Rectangle<float>(icon, icon).withCentre({cx, cy});
+    if (circle.intersects(clip))
+      Icons::draw(g, Icon::PlusCircle, circle, theme::kWhite, /*strokeWidth=*/1.0f);
   }
 }
 

@@ -33,8 +33,7 @@ constexpr float kAxisFontPx = 9;
 // ramp, blue at the floor → yellow → red at the top, 30% opaque. Display
 // window -80..0 dB across the graph height. Filled only: at idle every bin
 // sits on the floor, so a stroked curve would draw a hairline there.
-void paintSpectrum(juce::Graphics& g, const std::vector<float>& bins) {
-  if (bins.size() < 2) return;
+juce::Path spectrumArea(const std::vector<float>& bins) {
   constexpr float topDb = 0, bottomDb = -80;
   juce::Path area;
   area.startNewSubPath(0, kGraphH);
@@ -45,15 +44,15 @@ void paintSpectrum(juce::Graphics& g, const std::vector<float>& bins) {
   }
   area.lineTo(kGraphW, kGraphH);
   area.closeSubPath();
+  return area;
+}
+
+juce::ColourGradient spectrumRamp() {
   juce::ColourGradient ramp(theme::kBrandBlue, 0, kGraphH, theme::kBrandRed, 0, 0, false);
   ramp.addColour(0.4, theme::kBrandYellow);
   ramp.addColour(0.7, theme::kBrandRed);
-  g.setGradientFill(ramp);
-  g.setOpacity(0.3f);
-  g.fillPath(area);
-  g.setOpacity(1.0f);
+  return ramp;
 }
-
 constexpr double kGridFreqs[] = {50, 100, 200, 500, 1000, 2000, 5000, 10000};
 const char* const kGridLabels[] = {"50", "100", "200", "500", "1k", "2k", "5k", "10k"};
 
@@ -81,6 +80,62 @@ void paintGrid(juce::Graphics& g) {
 
 // Web WheelEvent / pointer deltas: Shift = 8x finer.
 double fineFactor(const juce::ModifierKeys& mods) { return mods.isShiftDown() ? 1.0 / 8.0 : 1.0; }
+
+// Layers of the body, bottom to top: grid, spectrum, then the editor
+// (Graph or Sliders). The spectrum ticks 30x a second, so it is the only
+// layer a tick invalidates; the others are rasterised once and blitted
+// (setBufferedToImage), which keeps the grid's text out of the per-frame
+// cost. Pure decoration: no mouse, no accessibility.
+class GridLayer : public juce::Component {
+public:
+  GridLayer() {
+    setInterceptsMouseClicks(false, false);
+    setAccessible(false);
+    setBufferedToImage(true);  // measured: the blit beats redrawing the labels
+  }
+  void paint(juce::Graphics& g) override {
+    g.addTransform(juce::AffineTransform::scale(1.0f, eq::kSvgStretch));
+    paintGrid(g);
+  }
+};
+
+// A gradient fill costs CoreGraphics a per-pixel axial shade on every tick
+// (a third of the EQ view's paint time, profiled). The ramp never changes,
+// so it is rasterised once at device resolution, 30% opacity baked in, and
+// each tick clips to the spectrum's area and blits it 1:1.
+class SpectrumLayer : public juce::Component {
+public:
+  explicit SpectrumLayer(const SpectrumFeed& feed) : feed_(feed) {
+    setInterceptsMouseClicks(false, false);
+    setAccessible(false);
+  }
+
+  void paint(juce::Graphics& g) override {
+    const auto& bins = feed_.bins();
+    if (bins.size() < 2) return;
+    const float scale = g.getInternalContext().getPhysicalPixelScaleFactor();
+    ensureRamp(scale);
+    g.reduceClipRegion(spectrumArea(bins), juce::AffineTransform::scale(1.0f, eq::kSvgStretch));
+    g.drawImageTransformed(ramp_, juce::AffineTransform::scale(1.0f / scale));
+  }
+
+private:
+  void ensureRamp(float scale) {
+    if (ramp_.isValid() && juce::exactlyEqual(rampScale_, scale)) return;
+    rampScale_ = scale;
+    ramp_ = juce::Image(juce::Image::ARGB, juce::roundToInt(kGraphW * scale),
+                        juce::roundToInt(eq::kBodyH * scale), true);
+    juce::Graphics g(ramp_);
+    g.addTransform(juce::AffineTransform::scale(scale, scale * eq::kSvgStretch));
+    g.setGradientFill(spectrumRamp());
+    g.setOpacity(0.3f);
+    g.fillRect(juce::Rectangle<float>(0, 0, kGraphW, kGraphH));
+  }
+
+  const SpectrumFeed& feed_;
+  juce::Image ramp_;
+  float rampScale_ = 0;
+};
 
 }  // namespace
 
@@ -614,14 +669,21 @@ private:
 BlockEqView::BlockEqView(Services& services, std::string blockId)
     : services_(services),
       blockId_(std::move(blockId)),
-      feed_(services.backend, blockId_),
+      feed_(services.backend, services.clock, blockId_),
+      grid_(std::make_unique<GridLayer>()),
+      spectrum_(std::make_unique<SpectrumLayer>(feed_)),
       graph_(std::make_unique<Graph>(*this)),
       sliders_(std::make_unique<Sliders>(*this)) {
-  feed_.onChange = [this] { repaint(); };
-  // The spectrum repaints this view 30x a second; the curve and slider
-  // layers above it only change on interaction, so they blit from a cache.
+  // Every pixel is painted here (black under the layers), so nothing
+  // beneath the view needs repainting on a spectrum tick.
+  setOpaque(true);
+  feed_.onChange = [this] { spectrum_->repaint(); };
+  // The spectrum repaints 30x a second; the curve and slider layers above
+  // it only change on interaction, so they blit from a cache.
   graph_->setBufferedToImage(true);
   sliders_->setBufferedToImage(true);
+  addChildComponent(*grid_);
+  addAndMakeVisible(*spectrum_);
   addChildComponent(*graph_);
   addAndMakeVisible(*sliders_);
   setSize(kGraphW, eq::kBodyH);
@@ -645,6 +707,7 @@ void BlockEqView::setEqEnabled(bool enabled) {
 
 void BlockEqView::setView(View view) {
   view_ = view;
+  grid_->setVisible(view == View::graph);
   graph_->setVisible(view == View::graph);
   sliders_->setVisible(view == View::sliders);
   repaint();
@@ -671,17 +734,12 @@ std::pair<double, double> BlockEqView::freqRange(int index) const {
   return {lo, hi};
 }
 
-void BlockEqView::paint(juce::Graphics& g) {
-  g.fillAll(theme::kBlack);
-  // Grid and spectrum are SVG content: graph space stretched over the body.
-  g.addTransform(juce::AffineTransform::scale(1.0f, eq::kSvgStretch));
-  if (view_ == View::graph) paintGrid(g);
-  paintSpectrum(g, feed_.bins());
-}
+void BlockEqView::paint(juce::Graphics& g) { g.fillAll(theme::kBlack); }
 
 void BlockEqView::resized() {
-  graph_->setBounds(getLocalBounds());
-  sliders_->setBounds(getLocalBounds());
+  for (auto* layer : {grid_.get(), spectrum_.get(), static_cast<juce::Component*>(graph_.get()),
+                      static_cast<juce::Component*>(sliders_.get())})
+    layer->setBounds(getLocalBounds());
 }
 
 }  // namespace t3k::ui

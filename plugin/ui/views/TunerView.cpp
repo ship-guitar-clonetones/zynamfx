@@ -21,6 +21,25 @@ constexpr float kAccidentalEm = 0.35f, kAccidentalTopEm = 0.05f;
 constexpr float kSubPx = 13;
 constexpr int kSubLift = 6;
 constexpr int kTriangleFadeMs = 90;
+
+// Bars lit per side: flat lights the left, sharp the right, in tune both blues.
+struct Lit {
+  int left = 0, right = 0;
+};
+Lit litFor(const TunerFeed::State& s) {
+  if (!s.hasSignal) return {};
+  const float absCents = std::abs(s.cents);
+  if (absCents <= pitch::kInTuneCents) return {1, 1};
+  const int n = pitch::litCount(absCents);
+  return s.cents < 0 ? Lit{n, 0} : Lit{0, n};
+}
+
+// "329.6 Hz +12¢", the line under the letter.
+juce::String subText(const TunerFeed::State& s) {
+  const int cents = juce::roundToInt(s.cents);
+  return juce::String(s.frequency, 1) + " Hz " + (cents >= 0 ? "+" : "") + juce::String(cents) +
+         juce::String::fromUTF8("\xc2\xa2");
+}
 }  // namespace
 
 // 61×53 BRAND_BLUE triangle, faded in/out over 90ms like the web's opacity
@@ -54,7 +73,7 @@ private:
 };
 
 TunerView::TunerView(Services& services)
-    : feed_(services.backend), up_(std::make_unique<Triangle>(true)), down_(std::make_unique<Triangle>(false)) {
+    : feed_(services.backend, services.clock), up_(std::make_unique<Triangle>(true)), down_(std::make_unique<Triangle>(false)) {
   setOpaque(true);
   close_.setName("Close tuner");
   close_.onClick = [this] {
@@ -69,6 +88,9 @@ TunerView::TunerView(Services& services)
 
 TunerView::~TunerView() = default;
 
+// The feed notifies on every smoothed-cents change, most of which move
+// nothing visible; only the parts whose drawn state changed get dirtied,
+// never the whole takeover.
 void TunerView::feedChanged() {
   const auto& s = feed_.state();
   const bool inTune = s.hasSignal && std::abs(s.cents) <= pitch::kInTuneCents;
@@ -77,7 +99,27 @@ void TunerView::feedChanged() {
   // Top triangle points down: "tune down" when sharp; bottom points up when flat.
   down_->setLit(inTune || sharp);
   up_->setLit(inTune || flat);
-  repaint();
+
+  const auto lit = litFor(s);
+  if (lit.left != shownLeftLit_) {
+    shownLeftLit_ = lit.left;
+    repaint(leftRow_);
+  }
+  if (lit.right != shownRightLit_) {
+    shownRightLit_ = lit.right;
+    repaint(rightRow_);
+  }
+  const auto readout = s.hasSignal ? s.note + "\n" + subText(s) : juce::String();
+  if (readout != shownReadout_) {
+    shownReadout_ = readout;
+    repaint(readoutArea());
+  }
+}
+
+// The note box plus where its text spills: the accidental hangs off the
+// letter's right edge and the frequency line runs below the box.
+juce::Rectangle<int> TunerView::readoutArea() const {
+  return noteBox_.expanded(kCentreW / 2, 0).withHeight(noteBox_.getHeight() + 2 * static_cast<int>(kSubPx));
 }
 
 void TunerView::resized() {
@@ -100,14 +142,11 @@ void TunerView::resized() {
 void TunerView::paint(juce::Graphics& g) {
   g.fillAll(theme::kBlack);
   const auto& s = feed_.state();
-  const float absCents = std::abs(s.cents);
-  const bool inTune = s.hasSignal && absCents <= pitch::kInTuneCents;
-  // Flat lights the left side, sharp the right; in tune lights both blues.
-  const int leftLit = !s.hasSignal ? 0 : inTune ? 1 : s.cents < -pitch::kInTuneCents ? pitch::litCount(absCents) : 0;
-  const int rightLit = !s.hasSignal ? 0 : inTune ? 1 : s.cents > pitch::kInTuneCents ? pitch::litCount(absCents) : 0;
-  paintBars(g, Side::left, leftRow_, leftLit);
-  paintBars(g, Side::right, rightRow_, rightLit);
-  if (s.hasSignal) paintReadout(g, noteBox_);
+  const auto lit = litFor(s);
+  const auto clip = g.getClipBounds();
+  if (clip.intersects(leftRow_)) paintBars(g, Side::left, leftRow_, lit.left);
+  if (clip.intersects(rightRow_)) paintBars(g, Side::right, rightRow_, lit.right);
+  if (s.hasSignal && clip.intersects(readoutArea())) paintReadout(g, noteBox_);
 }
 
 void TunerView::paintBars(juce::Graphics& g, Side side, juce::Rectangle<int> row, int litCount) const {
@@ -149,10 +188,8 @@ void TunerView::paintReadout(juce::Graphics& g, juce::Rectangle<int> box) const 
   }
   glyphs.draw(g);
 
-  // "329.6 Hz +12¢", centred under the letter.
-  const int cents = juce::roundToInt(s.cents);
-  const auto sub = juce::String(s.frequency, 1) + " Hz " + (cents >= 0 ? "+" : "") + juce::String(cents) +
-                   juce::String::fromUTF8("\xc2\xa2");
+  // Frequency and cents, centred under the letter.
+  const auto sub = subText(s);
   const auto subFont = Fonts::mono(kSubPx);
   const float subTop = static_cast<float>(box.getBottom() - kSubLift);
   const float subBaseline = subTop + Fonts::cssBaseline(subFont, static_cast<float>(Fonts::normalLineHeight(subFont)));

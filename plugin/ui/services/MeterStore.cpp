@@ -5,8 +5,6 @@
 namespace t3k::ui {
 
 namespace {
-// ~30 Hz is indistinguishable for meter ballistics.
-constexpr int kPollHz = 30;
 // Quantize to 0.5 dB so imperceptible changes don't repaint.
 constexpr float kQuantize = 2;
 // CPU: EMA every poll (~0.5 s time constant), publish a rounded % slowly so
@@ -39,8 +37,8 @@ juce::String MeterStore::blockOutId(const std::string& blockId) {
   return "block:" + juce::String(blockId) + ":out";
 }
 
-MeterStore::MeterStore(Backend& backend) : backend_(backend) {}
-MeterStore::~MeterStore() { stopTimer(); }
+MeterStore::MeterStore(Backend& backend, UiClock& clock) : backend_(backend), clock_(clock) {}
+MeterStore::~MeterStore() { clock_.removeListener(this); }
 
 float MeterStore::level(const juce::String& id) const {
   auto it = levels_.find(id);
@@ -54,17 +52,19 @@ void MeterStore::clearClip(const juce::String& id) {
   }
 }
 
+// Polls only while something listens; ListenerList::add is idempotent, so
+// every addListener can just make sure we are on the clock.
 void MeterStore::addListener(Listener* l) {
   listeners.add(l);
-  if (!isTimerRunning()) startTimerHz(kPollHz);
+  clock_.addListener(this);
 }
 
 void MeterStore::removeListener(Listener* l) {
   listeners.remove(l);
-  if (listeners.isEmpty()) stopTimer();
+  if (listeners.isEmpty()) clock_.removeListener(this);
 }
 
-void MeterStore::timerCallback() {
+void MeterStore::tick() {
   const auto res = backend_.getMeterLevels();
   if (res.isObject()) apply(MeterLevels::parse(res));
 }

@@ -42,6 +42,7 @@ private:
   enum class Side { left, right };
 
   void feedChanged();
+  juce::Rectangle<int> readoutArea() const;
   void paintBars(juce::Graphics& g, Side side, juce::Rectangle<int> row, int litCount) const;
   void paintReadout(juce::Graphics& g, juce::Rectangle<int> box) const;
 
@@ -49,6 +50,9 @@ private:
   IconButton close_{Icon::X, kCloseBox, kCloseGlyph};
   std::unique_ptr<Triangle> up_, down_;
   juce::Rectangle<int> leftRow_, rightRow_, noteBox_;
+  // What is on screen, so a feed change dirties only what it moved.
+  int shownLeftLit_ = 0, shownRightLit_ = 0;
+  juce::String shownReadout_;
 };
 
 }  // namespace t3k::ui

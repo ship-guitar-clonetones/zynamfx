@@ -5,18 +5,18 @@
 
 namespace t3k::ui {
 
-TunerFeed::TunerFeed(Backend& backend) : backend_(backend) {
+TunerFeed::TunerFeed(Backend& backend, UiClock& clock) : backend_(backend), clock_(clock) {
   backend_.setTunerEnabled(true);
-  timerCallback();
-  startTimer(kPollMs);
+  tick();
+  clock_.addListener(this);
 }
 
 TunerFeed::~TunerFeed() {
-  stopTimer();
+  clock_.removeListener(this);
   backend_.setTunerEnabled(false);
 }
 
-void TunerFeed::timerCallback() {
+void TunerFeed::tick() {
   const auto reading = TunerReading::parse(backend_.getTunerReading());
   const auto hz = static_cast<float>(reading.frequency);
   const auto confidence = static_cast<float>(reading.confidence);
@@ -25,7 +25,7 @@ void TunerFeed::timerCallback() {
   State next = state_;
   if (hz > 0 && confidence > kMinConfidence) {
     const auto note = pitch::fromFrequency(hz);
-    next.cents = state_.cents * 0.6f + note.cents * 0.4f;
+    next.cents = state_.cents * (1.0f - kCentsSmoothing) + note.cents * kCentsSmoothing;
     next.note = note.name;
     next.frequency = hz;
     next.hasSignal = true;

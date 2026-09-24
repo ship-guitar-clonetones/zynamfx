@@ -21,6 +21,7 @@
 #include "T3kConfig.h"
 #include "ToneLoadFlow.h"
 #include "ToneSession.h"
+#include "UiClock.h"
 #include "UiPrefs.h"
 #include "UpdateCheck.h"
 #include "Zoom.h"
@@ -49,8 +50,8 @@ public:
         shell(s),
         prefs(p),
         hints(prefs),
-        chain(b),
-        meters(b),
+        chain(b, clock),
+        meters(b, clock),
         presets(b, chain),
         audioDevice(b),
         banners(audioDevice, prefs),
@@ -67,6 +68,7 @@ public:
   ToneSession& session;
   Shell& shell;
   UiPrefs& prefs;
+  UiClock clock;  // before the stores and feeds that subscribe to it
   HintBus hints;
   ChainStore chain;
   MeterStore meters;

@@ -68,6 +68,7 @@ private:
   double sampleRate_ = 48000;
   View view_ = View::sliders;
   SpectrumFeed feed_;
+  std::unique_ptr<juce::Component> grid_, spectrum_;  // cached grid, live spectrum
   std::unique_ptr<Graph> graph_;
   std::unique_ptr<Sliders> sliders_;
 };

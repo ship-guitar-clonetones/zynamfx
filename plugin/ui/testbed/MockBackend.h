@@ -5,6 +5,9 @@
 // screens the reference PNGs show.
 #pragma once
 
+#include <memory>
+
+#include "MockSignal.h"
 #include "backend/Backend.h"
 
 namespace t3k::ui::testbed {
@@ -19,6 +22,9 @@ public:
   void setTuner(juce::var tuner) { tuner_ = std::move(tuner); }
   void setAutoMeasure(juce::var state) { autoMeasure_ = std::move(state); }
   void setDevice(juce::var device);
+  // Live: meters, spectrum, tuner and input levels follow a moving signal
+  // (MockSignal) instead of the scenario's frozen values.
+  void setLive(bool live) { signal_ = live ? std::make_unique<MockSignal>() : nullptr; }
 
   juce::RangedAudioParameter* parameter(const juce::String& id) override;
 
@@ -92,7 +98,7 @@ public:
 
   juce::var getMeterLevels() override;
   void setTunerEnabled(bool) override {}
-  juce::var getTunerReading() override { return tuner_; }
+  juce::var getTunerReading() override { return signal_ != nullptr ? signal_->tuner() : tuner_; }
   void startAutoBalance() override {}
   void cancelAutoBalance() override {}
   juce::var pollAutoBalance() override { return autoMeasure_; }
@@ -127,6 +133,7 @@ private:
   juce::var tuner_;
   juce::var autoMeasure_;
   juce::String version_;
+  std::unique_ptr<MockSignal> signal_;
 };
 
 }  // namespace t3k::ui::testbed

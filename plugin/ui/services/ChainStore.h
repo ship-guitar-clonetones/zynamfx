@@ -1,8 +1,8 @@
 // Single owner of the chain state on the UI side (port of useChainState.ts).
 //
 // Sync model: native is the source of truth; we hold a revision-tagged
-// snapshot. A 20 Hz timer compares the processor's atomic revision counter
-// with ours (a load, no allocation) and resyncs on a mismatch; every
+// snapshot. Every UiClock tick compares the processor's atomic revision
+// counter with ours (a load, no allocation) and resyncs on a mismatch; every
 // mutation resyncs immediately too. Continuous params (knob drags) go
 // through setBlockParam fire-and-forget: the control keeps its optimistic
 // value, native defers the revision bump until the gesture settles, and the
@@ -11,19 +11,20 @@
 
 #include <juce_events/juce_events.h>
 
+#include "UiClock.h"
 #include "backend/Backend.h"
 #include "model/ChainState.h"
 
 namespace t3k::ui {
 
-class ChainStore : private juce::Timer {
+class ChainStore : private UiClock::Listener {
 public:
   struct Listener {
     virtual ~Listener() = default;
     virtual void chainChanged(const ChainState& state) = 0;
   };
 
-  explicit ChainStore(Backend& backend);
+  ChainStore(Backend& backend, UiClock& clock);
   ~ChainStore() override;
 
   const ChainState& state() const { return state_; }
@@ -73,12 +74,13 @@ public:
   bool resetToDefault();
 
 private:
-  void timerCallback() override;
+  void tick() override;
   template <typename Fn>
   auto run(Fn&& fn) -> decltype(fn());
   juce::String localLoadResult(const juce::var& res);
 
   Backend& backend_;
+  UiClock& clock_;
   ChainState state_;
   juce::ListenerList<Listener> listeners;
 };

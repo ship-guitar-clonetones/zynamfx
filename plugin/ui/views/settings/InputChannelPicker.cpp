@@ -215,7 +215,8 @@ void InputChannelPicker::switchMode(bool toStereo) {
 void InputChannelPicker::syncMetering() {
   const bool wanted = isShowing() && !channels_.empty();
   if (wanted && levels_ == nullptr)
-    levels_ = std::make_unique<AudioInputLevels>(services_.backend, [this] { levelsChanged(); });
+    levels_ = std::make_unique<AudioInputLevels>(services_.backend, services_.clock,
+                                                 [this] { levelsChanged(); });
   else if (!wanted)
     levels_.reset();
 }

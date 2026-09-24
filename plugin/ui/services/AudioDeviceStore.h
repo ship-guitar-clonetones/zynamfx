@@ -11,6 +11,7 @@
 
 #include <optional>
 
+#include "UiClock.h"
 #include "backend/Backend.h"
 #include "model/AudioDeviceState.h"
 
@@ -61,20 +62,22 @@ private:
 
 // Per-channel input peak levels for the channel picker's meters (port of
 // useAudioInputLevels). Enables the native raw-device tap while alive, polls
-// at ~30 Hz, and applies a simple falloff so short peaks stay readable.
-class AudioInputLevels : private juce::Timer {
+// on the UiClock tick, and applies a simple falloff so short peaks stay
+// readable.
+class AudioInputLevels : private UiClock::Listener {
 public:
   static constexpr float kFloorDb = -120;
 
-  AudioInputLevels(Backend& backend, std::function<void()> onChange);
+  AudioInputLevels(Backend& backend, UiClock& clock, std::function<void()> onChange);
   ~AudioInputLevels() override;
 
   const std::vector<float>& levels() const { return displayed_; }
 
 private:
-  void timerCallback() override;
+  void tick() override;
 
   Backend& backend_;
+  UiClock& clock_;
   std::function<void()> onChange_;
   std::vector<float> displayed_;
 };

@@ -2,17 +2,13 @@
 
 namespace t3k::ui {
 
-namespace {
-constexpr int kRevisionPollHz = 20;
-}
-
-ChainStore::ChainStore(Backend& backend) : backend_(backend) {
+ChainStore::ChainStore(Backend& backend, UiClock& clock) : backend_(backend), clock_(clock) {
   state_.revision = -1;
   refresh(true);
-  startTimerHz(kRevisionPollHz);
+  clock_.addListener(this);
 }
 
-ChainStore::~ChainStore() { stopTimer(); }
+ChainStore::~ChainStore() { clock_.removeListener(this); }
 
 void ChainStore::refresh(bool force) {
   const auto res = backend_.getChainState(force ? -1 : state_.revision);
@@ -21,7 +17,7 @@ void ChainStore::refresh(bool force) {
   listeners.call([this](Listener& l) { l.chainChanged(state_); });
 }
 
-void ChainStore::timerCallback() {
+void ChainStore::tick() {
   if (static_cast<int>(backend_.chainRevision()) != state_.revision) refresh();
 }
 

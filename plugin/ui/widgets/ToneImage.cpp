@@ -1,5 +1,6 @@
 #include "ToneImage.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "core/Bitmap.h"
@@ -45,8 +46,22 @@ void ToneImage::setCornerRadius(float radius) {
 
 void ToneImage::setGlow(const Glow& glow) {
   if (glow == glow_) return;
+  // Only the border band changes (compositeInto leaves the interior alone),
+  // so dirty just that: four strips as wide as the wider of the old and new
+  // falloffs, rounded out a pixel. A meter tick then repaints ~1/3 of the
+  // tile instead of all of it, and everything stacked under the tile gets
+  // the same smaller clip.
+  const int band = static_cast<int>(std::ceil(std::max(glow_.blur, glow.blur))) + 1;
   glow_ = glow;
-  repaint();
+  auto box = getLocalBounds();
+  if (band * 2 >= std::min(box.getWidth(), box.getHeight())) {
+    repaint();
+    return;
+  }
+  repaint(box.removeFromTop(band));
+  repaint(box.removeFromBottom(band));
+  repaint(box.removeFromLeft(band));
+  repaint(box.removeFromRight(band));
 }
 
 void ToneImage::rebuildBase(float scale) {

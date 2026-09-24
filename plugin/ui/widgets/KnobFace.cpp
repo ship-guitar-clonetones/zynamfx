@@ -2,7 +2,10 @@
 
 #include <array>
 #include <cmath>
+#include <utility>
+#include <vector>
 
+#include "core/Bitmap.h"
 #include "core/Theme.h"
 
 namespace t3k::ui {
@@ -52,6 +55,66 @@ void fillCircle(juce::Graphics& g, juce::Point<float> c, float r, juce::ColourGr
   g.fillEllipse(c.x - r, c.y - r, 2 * r, 2 * r);
 }
 
+// Static base: never rotates, lighting stays put.
+void drawBase(juce::Graphics& g, juce::Point<float> c, float s) {
+  fillCircle(g, c, kRimRadius * s, kRim);
+  fillCircle(g, c, kChannelRadius * s, theme::kBlack);
+}
+
+// Face stack: shadow ring, then the tone's three layers.
+void drawFace(juce::Graphics& g, juce::Point<float> c, float s, KnobTone tone) {
+  fillCircle(g, c, kShadowRadius * s, kRim);
+  const auto& fills = tone == KnobTone::primary ? kPrimaryFills : kSecondaryFills;
+  for (size_t i = 0; i < fills.size(); ++i) {
+    const float r = kFaceRadii[i] * s;
+    if (fills[i].flat)
+      fillCircle(g, c, r, fills[i].top);
+    else
+      fillCircle(g, c, r, juce::ColourGradient::vertical(fills[i].top, c.y - r, fills[i].bottom, c.y + r));
+  }
+}
+
+// The base and the face stack never change with the value, and the face is
+// three gradient discs, which CoreGraphics shades pixel by pixel on every
+// paint: at 60 drag events a second that is most of a knob's paint time.
+// They are rasterised once per (device size, tone) and blitted; the arc
+// (which sits between them) and the pointer are drawn live. A handful of
+// knob sizes times the display scales in use keeps the cache tiny.
+struct StaticLayers {
+  int devicePx = 0;
+  KnobTone tone = KnobTone::primary;
+  juce::Image base, face;
+};
+
+const StaticLayers& staticLayers(float boxWidth, float pixelScale, KnobTone tone) {
+  static std::vector<StaticLayers> cache;
+  static constexpr size_t kMaxEntries = 32;
+  const int devicePx = juce::roundToInt(boxWidth * pixelScale * 64.0f);  // 1/64 device px
+  for (const auto& e : cache)
+    if (e.devicePx == devicePx && e.tone == tone) return e;
+  if (cache.size() >= kMaxEntries) cache.clear();
+
+  StaticLayers e;
+  e.devicePx = devicePx;
+  e.tone = tone;
+  const int side = static_cast<int>(std::ceil(boxWidth * pixelScale));
+  const float s = boxWidth / 200.0f;
+  const juce::Point<float> c(boxWidth / 2, boxWidth / 2);
+  for (auto [image, face] : {std::pair{&e.base, false}, std::pair{&e.face, true}}) {
+    *image = juce::Image(juce::Image::ARGB, side, side, true);
+    juce::Graphics g(*image);
+    g.addTransform(juce::AffineTransform::scale(pixelScale));
+    if (face) drawFace(g, c, s, tone);
+    else drawBase(g, c, s);
+  }
+  cache.push_back(std::move(e));
+  return cache.back();
+}
+
+void blit(juce::Graphics& g, const juce::Image& image, juce::Rectangle<float> box, float pixelScale) {
+  g.drawImageTransformed(image, juce::AffineTransform::scale(1.0f / pixelScale).translated(box.getPosition()));
+}
+
 }  // namespace
 
 void drawKnobFace(juce::Graphics& g, juce::Rectangle<float> box, float angleDeg, float arcFromDeg,
@@ -59,10 +122,10 @@ void drawKnobFace(juce::Graphics& g, juce::Rectangle<float> box, float angleDeg,
   const float s = box.getWidth() / 200.0f;
   const auto c = box.getCentre();
   const auto R = [s](float r) { return r * s; };
+  const float pixelScale = bitmap::pixelScale(g);
+  const auto& layers = staticLayers(box.getWidth(), pixelScale, tone);
 
-  // Static base: never rotates, lighting stays put.
-  fillCircle(g, c, R(kRimRadius), kRim);
-  fillCircle(g, c, R(kChannelRadius), theme::kBlack);
+  blit(g, layers.base, box, pixelScale);
 
   // Value arc from the zero reference out to the pointer. Endpoints are
   // ordered ascending so one clockwise sweep serves both a centred knob
@@ -77,16 +140,7 @@ void drawKnobFace(juce::Graphics& g, juce::Rectangle<float> box, float angleDeg,
                                            juce::PathStrokeType::butt));
   }
 
-  // Face stack: shadow ring, then the tone's three layers.
-  fillCircle(g, c, R(kShadowRadius), kRim);
-  const auto& fills = tone == KnobTone::primary ? kPrimaryFills : kSecondaryFills;
-  for (size_t i = 0; i < fills.size(); ++i) {
-    const float r = R(kFaceRadii[i]);
-    if (fills[i].flat)
-      fillCircle(g, c, r, fills[i].top);
-    else
-      fillCircle(g, c, r, juce::ColourGradient::vertical(fills[i].top, c.y - r, fills[i].bottom, c.y + r));
-  }
+  blit(g, layers.face, box, pixelScale);
 
   // Pointer. Its bevel has directional light baked in (dark top, light
   // bottom: the "chamfered edge catches light from below" convention the

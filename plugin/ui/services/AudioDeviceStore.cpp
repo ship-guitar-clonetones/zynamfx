@@ -81,23 +81,22 @@ juce::String AudioDeviceStore::openBluetoothMidiPairing() {
 
 // Input levels
 namespace {
-constexpr int kMeterPollHz = 30;
-// dB the displayed level falls per poll when the signal drops.
+// dB the displayed level falls per tick when the signal drops.
 constexpr float kFalloffDb = 4;
 }  // namespace
 
-AudioInputLevels::AudioInputLevels(Backend& backend, std::function<void()> onChange)
-    : backend_(backend), onChange_(std::move(onChange)) {
+AudioInputLevels::AudioInputLevels(Backend& backend, UiClock& clock, std::function<void()> onChange)
+    : backend_(backend), clock_(clock), onChange_(std::move(onChange)) {
   backend_.setAudioInputMetering(true);
-  startTimerHz(kMeterPollHz);
+  clock_.addListener(this);
 }
 
 AudioInputLevels::~AudioInputLevels() {
-  stopTimer();
+  clock_.removeListener(this);
   backend_.setAudioInputMetering(false);
 }
 
-void AudioInputLevels::timerCallback() {
+void AudioInputLevels::tick() {
   const auto raw = backend_.getAudioInputLevels();
   if (!raw.isArray()) return;
   const int n = raw.size();

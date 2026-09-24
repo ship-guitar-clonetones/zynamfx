@@ -1,8 +1,8 @@
 // Meter transport (port of useMeters.tsx): ONE `getMeterLevels` pull per
-// tick feeds every meter in the plugin (global input/output + per-block
-// in/out), plus the CPU readout and the spread correlation that ride the
-// same payload. Values are quantized so steady signals cause no repaints,
-// and the poll runs only while something listens.
+// UiClock tick feeds every meter in the plugin (global input/output +
+// per-block in/out), plus the CPU readout and the spread correlation that
+// ride the same payload. Values are quantized so steady signals cause no
+// repaints, and the poll runs only while something listens.
 #pragma once
 
 #include <juce_events/juce_events.h>
@@ -10,12 +10,13 @@
 #include <map>
 #include <set>
 
+#include "UiClock.h"
 #include "backend/Backend.h"
 #include "model/ChainState.h"
 
 namespace t3k::ui {
 
-class MeterStore : private juce::Timer {
+class MeterStore : private UiClock::Listener {
 public:
   struct Listener {
     virtual ~Listener() = default;
@@ -36,7 +37,7 @@ public:
   static juce::String blockInId(const std::string& blockId);
   static juce::String blockOutId(const std::string& blockId);
 
-  explicit MeterStore(Backend& backend);
+  MeterStore(Backend& backend, UiClock& clock);
   ~MeterStore() override;
 
   float level(const juce::String& id) const;
@@ -52,13 +53,14 @@ public:
   void removeListener(Listener* l);
 
 private:
-  void timerCallback() override;
+  void tick() override;
   void apply(const MeterLevels& levels);
   void update(const juce::String& id, float raw);
   void applyCpu(float raw);
   void applyCorrelation(float raw);
 
   Backend& backend_;
+  UiClock& clock_;
   std::map<juce::String, float> levels_;
   std::set<juce::String> clips_;
   float cpuPercent_ = 0, cpuEma_ = 0;

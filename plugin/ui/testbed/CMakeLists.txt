@@ -24,6 +24,8 @@ t3k_add_native_ui(UiTestbed)
 
 target_sources(UiTestbed PRIVATE
     Main.cpp
+    Bench.h
+    Bench.cpp
     Compare.h
     Compare.cpp
     Drive.h
@@ -34,6 +36,10 @@ target_sources(UiTestbed PRIVATE
     MockBackend.cpp
     MockSession.h
     MockSession.cpp
+    MockSignal.h
+    MockSignal.cpp
+    ProcessStats.h
+    ProcessStats.cpp
     Scenarios.h
     Scenarios.cpp
     SelfTests.h
