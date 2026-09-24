@@ -29,7 +29,7 @@ public:
     juce::String publishableKey;
     int architecture = 2;  // NAM model architecture filter; < 0 disables
 
-    // The build's ui/.env values (T3kConfig.h).
+    // The build's .env values (T3kConfig.h).
     static Config fromBuild();
   };
 

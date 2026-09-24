@@ -1,6 +1,6 @@
-// Port of ui/src/components/theme.ts. Shared theme tokens: black surfaces,
-// white/gray chrome and three brand accents. Every colour/size literal in the
-// native UI comes from here so both UIs read one palette.
+// Shared theme tokens (port of theme.ts): black surfaces, white/gray chrome
+// and three brand accents. Every colour/size literal in the UI comes from
+// here, so the palette changes in one place.
 #pragma once
 
 #include <juce_graphics/juce_graphics.h>

@@ -21,9 +21,8 @@ endif()
 set(PLUGIN_NAME "TONE3000")            # Name of the plugin (used in the UI)
 set(PLUGIN_CODE T3K0)                # Unique 4-letter code for the plugin
 
-# Version comes from the repo-root VERSION file (single source of truth;
-# bump with script/set-version.sh). Read here too so this directory still
-# configures standalone.
+# Version comes from the repo-root VERSION file (single source of truth).
+# Read here too so this directory still configures standalone.
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" T3K_VERSION)
 string(STRIP "${T3K_VERSION}" T3K_VERSION)
 # Only when configured standalone. As a subdirectory the root CMakeLists
@@ -37,12 +36,10 @@ endif()
 project(TONE3000 VERSION ${T3K_VERSION})   # Set version of the plugin
 
 option(HEADLESS "Disable GUI (headless/embedded build)" OFF)
-# T3K_NATIVE_UI (native editor vs. the legacy webview) is declared in the root
-# CMakeLists.txt, where the webview-only JUCE patches read it.
-# The native UI's testbed app (plugin/ui/testbed: scenario captures, pixel
-# compare, --selftest) as part of this build; registers its self-tests with
+# The UI's testbed app (plugin/ui/testbed: scenario captures, pixel compare,
+# --selftest, --bench) as part of this build; registers its self-tests with
 # ctest. Also configurable on its own: cmake -S plugin/ui/testbed -B build-ui.
-option(T3K_BUILD_UI_TESTBED "Build the native UI testbed (UiTestbed) and register its self-tests" OFF)
+option(T3K_BUILD_UI_TESTBED "Build the UI testbed (UiTestbed) and register its self-tests" OFF)
 option(BUILD_AAX "Build AAX (Avid) format" ON)
 option(BUILD_LV2 "Build LV2 format (native Linux plugin standard)" ON)
 option(BUILD_CLAP "Build CLAP format (via clap-juce-extensions)" ON)
@@ -61,15 +58,6 @@ endif()
 
 # Build for Desktop or Embedded
 if (NOT HEADLESS)
-    if (T3K_NATIVE_UI)
-        set(JUCE_WEB_BROWSER_VALUE 0)           # Native UI: no webview at all
-        set(NEEDS_WEB_BROWSER_VALUE FALSE)
-        add_compile_definitions(T3K_NATIVE_UI=1)
-    else()
-        set(JUCE_WEB_BROWSER_VALUE 1)           # Webview UI for Desktop
-        set(NEEDS_WEB_BROWSER_VALUE TRUE)       # enable, need browser for webview on linux
-        add_compile_definitions(T3K_NATIVE_UI=0)
-    endif()
     list(APPEND _plugin_formats "Standalone")   # Add Standalone format
     # Enable AU (Apple) format on macOS
     if (APPLE AND NOT T3K_IOS)
@@ -83,19 +71,11 @@ if (NOT HEADLESS)
     endif()
     set(VST3_MANIFEST TRUE)                     # Create moduleinfo.json for VST3
     add_compile_definitions(HEADLESS=0)
-    if (WIN32 AND NOT T3K_NATIVE_UI)
-        set(NEEDS_WEBVIEW2_VALUE TRUE)
-    else()
-        set(NEEDS_WEBVIEW2_VALUE FALSE)
-    endif()
 else()
-    set(JUCE_WEB_BROWSER_VALUE 0)               # No Webview UI for Embedded
-    set(NEEDS_WEB_BROWSER_VALUE FALSE)          # disable, need browser for webview on linux
     find_package(JUCE CONFIG REQUIRED)          # maybe remove?
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF) # Disable LTO
     set(VST3_MANIFEST FALSE)                    # Maybe remove?
     add_compile_definitions(HEADLESS=1)
-    add_compile_definitions(T3K_NATIVE_UI=0)
 endif()
 
 # NeuralAmpModelerCore's own CMakeLists only knows Darwin, Linux and Windows
@@ -258,9 +238,7 @@ juce_add_plugin(${PROJECT_NAME}
     # sessions and presets). Never change it once released.
     LV2URI "https://www.tone3000.com/plugin"
     PRODUCT_NAME ${PROJECT_NAME}
-    NEEDS_WEB_BROWSER ${NEEDS_WEB_BROWSER_VALUE}
     VST3_AUTO_MANIFEST ${VST3_MANIFEST}
-    NEEDS_WEBVIEW2 ${NEEDS_WEBVIEW2_VALUE}
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "TONE3000 needs microphone access for audio input processing."
     # Without this Info.plist key, macOS TCC kills the app the moment the
@@ -377,27 +355,19 @@ if (NOT HEADLESS)
             src/StandaloneAudioSettings.cpp
             include/WindowKeyEvents.h
     )
-    if (T3K_NATIVE_UI)
-        include("${CMAKE_CURRENT_SOURCE_DIR}/ui/NativeUi.cmake")
-        t3k_add_native_ui(${PROJECT_NAME})
-        target_sources(${PROJECT_NAME}
-            PRIVATE
-                ui/backend/ProcessorBackend.h
-                ui/backend/ProcessorBackend.cpp
-                ui/NativeEditor.h
-                ui/NativeEditor.cpp
-        )
-        if (T3K_BUILD_UI_TESTBED AND NOT T3K_IOS)
-            add_subdirectory(ui/testbed)
-        endif()
-    else()
-        target_sources(${PROJECT_NAME}
-            PRIVATE
-                include/Editor.h
-                src/Editor.cpp
-                include/EditorWebViewSetup.h
-                src/EditorWebViewSetup.cpp
-        )
+    # The editor (plugin/ui, see plugin/docs/native-ui.md): the shared UI
+    # sources plus the processor-backed pieces only the plugin has.
+    include("${CMAKE_CURRENT_SOURCE_DIR}/ui/NativeUi.cmake")
+    t3k_add_native_ui(${PROJECT_NAME})
+    target_sources(${PROJECT_NAME}
+        PRIVATE
+            ui/backend/ProcessorBackend.h
+            ui/backend/ProcessorBackend.cpp
+            ui/NativeEditor.h
+            ui/NativeEditor.cpp
+    )
+    if (T3K_BUILD_UI_TESTBED AND NOT T3K_IOS)
+        add_subdirectory(ui/testbed)
     endif()
     # OS microphone-permission shim: AVFoundation (ObjC++) on macOS, a
     # best-effort stub elsewhere (see AudioPermissions.h).
@@ -405,13 +375,6 @@ if (NOT HEADLESS)
     # iOS audio-route shim; header-only no-op on Windows and Linux.
     target_sources(${PROJECT_NAME} PRIVATE include/IosAudioRoute.h)
     if (APPLE)
-        if (NOT T3K_NATIVE_UI)
-            # Webview session clearing is platform-specific: WKWebsiteDataStore
-            # needs ObjC++ on Apple; elsewhere a best-effort JUCE fallback.
-            target_sources(${PROJECT_NAME} PRIVATE src/WebViewCookies.mm)
-            # Hover/cursor fix for DAW-hosted windows (see WindowMouseEvents.mm).
-            target_sources(${PROJECT_NAME} PRIVATE src/WindowMouseEvents.mm)
-        endif()
         # Space passthrough to the host DAW (see WindowKeyEvents.mm).
         target_sources(${PROJECT_NAME} PRIVATE src/WindowKeyEvents.mm)
         target_sources(${PROJECT_NAME} PRIVATE src/AudioPermissions.mm)
@@ -419,9 +382,6 @@ if (NOT HEADLESS)
         # IosAudioRoute.h).
         target_sources(${PROJECT_NAME} PRIVATE src/IosAudioRoute.mm)
     else()
-        if (NOT T3K_NATIVE_UI)
-            target_sources(${PROJECT_NAME} PRIVATE src/WebViewCookies.cpp)
-        endif()
         # Space passthrough to the host DAW (see WindowKeyEvents.cpp).
         target_sources(${PROJECT_NAME} PRIVATE src/WindowKeyEvents.cpp)
         if (UNIX)
@@ -520,31 +480,12 @@ target_link_libraries(${PROJECT_NAME}
 # Ensure NAM is built before plugin (force_load path requires lib to exist)
 add_dependencies(${PROJECT_NAME} NAM)
 
-
-if (NOT HEADLESS AND NOT T3K_NATIVE_UI)
-    # Add Webview GUI files as binary data (built by npm run build in ui/)
-    file(GLOB_RECURSE WEB_ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/webview/*.*")
-    # Fallback: CI configures before UI build; use placeholder so juce_add_binary_data succeeds.
-    # Reconfigure after "Build UI" step to pick up real assets.
-    if (NOT WEB_ASSETS)
-        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/_webview_placeholder.txt" " ")
-        list(APPEND WEB_ASSETS "${CMAKE_CURRENT_BINARY_DIR}/_webview_placeholder.txt")
-    endif()
-
-    juce_add_binary_data(WebAssets
-    SOURCES ${WEB_ASSETS}
-    )
-
-    target_link_libraries(${PROJECT_NAME} PRIVATE WebAssets)
-    target_include_directories(${PROJECT_NAME}
-        PRIVATE ${WebAssets_BINARY_DIR}
-    )
-endif()
-
-# These definitions are recommended by JUCE.
+# No browser engine anywhere in the plugin: the UI is drawn by JUCE, so
+# juce_gui_extra's WebBrowserComponent (and its WebKitGTK / WebView2 runtime
+# dependencies) stays out of the build.
 target_compile_definitions(${PROJECT_NAME}
     PUBLIC
-        JUCE_WEB_BROWSER=${JUCE_WEB_BROWSER_VALUE}
+        JUCE_WEB_BROWSER=0
         JUCE_VST3_CAN_REPLACE_VST2=0
 )
 
@@ -577,8 +518,8 @@ endif()
 # mic dying system-wide while the app holds the guitar channel). The JACK
 # backend connects as a client instead, so on any PipeWire system
 # (pipewire-jack) or real JACK server the interface stays shared. libjack is
-# dlopened at runtime (libjack.so.0, JackNoStartServer) like curl/WebKit
-# above, so this adds no runtime dependency: without a JACK server the
+# dlopened at runtime (libjack.so.0, JackNoStartServer) like curl above,
+# so this adds no runtime dependency: without a JACK server the
 # driver just lists no devices. Build hosts need the JACK headers
 # (libjack-jackd2-dev; CI installs it). The JACK client name defaults to
 # JucePlugin_Name ("TONE3000"). Gated on NOT HEADLESS so embedded
@@ -618,11 +559,6 @@ if (WIN32)
     # Prevent windows.h min/max macros from breaking std::min/std::max in AudioDSPTools and plugin code
     target_compile_definitions(${PROJECT_NAME} PUBLIC NOMINMAX)
     if (NOT HEADLESS)
-        if (NOT T3K_NATIVE_UI)
-            # WebView2 as the webview backend (the native UI needs no runtime).
-            target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1)
-        endif()
-
         # ASIO driver support in the standalone's audio settings. JUCE keeps
         # ASIO off by default because it needs Steinberg's ASIO SDK headers,
         # which are a separate (non-redistributable) download:

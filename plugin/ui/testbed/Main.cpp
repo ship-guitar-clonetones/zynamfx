@@ -6,8 +6,8 @@
 //   UiTestbed --bench [--seconds N] [--json out] [phase...]  CPU / memory under load (Bench.h)
 //   UiTestbed [--scenario <id>] [--live]                     interactive window (--live: moving signal)
 //
-// Captures are 2x like the React suite (Playwright deviceScaleFactor 2), so a
-// reference in ui/local/ui-states/img and a capture here diff pixel for pixel.
+// Captures are 2x (retina density), so a capture before a rendering change
+// and one after diff pixel for pixel (--ref points at the earlier run).
 
 #include <juce_gui_extra/juce_gui_extra.h>
 
@@ -57,7 +57,7 @@ juce::Image captureScenario(const Scenario& scenario, const juce::var& fixtures,
   auto& root = host.pluginRoot();
 
   auto* mm = juce::MessageManager::getInstance();
-  mm->runDispatchLoopUntil(500);  // the React suite's post-load wait
+  mm->runDispatchLoopUntil(500);  // let the first async loads (images, chain) land
   if (const auto* drive = driveFor(scenario.id)) {
     (*drive)(root, backend);
   } else if (scenario.hasDrive) {
@@ -91,10 +91,6 @@ int runCapture(const juce::StringArray& args) {
   int captured = 0, unnamedTotal = 0;
   for (const auto& scenario : fixtures.scenarios) {
     if (!selected(scenario.id)) continue;
-    if (webviewOnly(scenario.id)) {
-      std::cout << scenario.id.paddedRight(' ', 34) << " (webview-only, skipped)" << std::endl;
-      continue;
-    }
     bool driveMissing = false;
     juce::StringArray unnamed;
     const auto image = captureScenario(scenario, fixtures.root, driveMissing, unnamed);

@@ -2,7 +2,8 @@
 // uiPreferences.ts and the sessionStorage uses in helpText.ts /
 // useToneSession.ts): `persistent` is a PropertiesFile in the plugin's
 // app-data folder, `session` is plain memory that lives as long as the
-// editor. Keys keep their web names so a reader of either UI finds them.
+// editor. Keys keep the names the web UI stored them under, so a user
+// upgrading from it keeps their session and preferences.
 //
 // The file is one per machine user and every host process (each DAW, the
 // standalone) holds its own copy of it, so a write is a merge: under the

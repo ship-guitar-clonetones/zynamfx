@@ -66,6 +66,6 @@ target_link_libraries(UiTestbed PRIVATE
 
 # Pure-logic unit tests (parsers, wrapping, OAuth, token refresh, the
 # connection gate's state machine, tuner math). Captures are not registered:
-# the reference PNGs live outside the repo (ui/local/ui-states).
+# they are reviewed by eye or diffed against a previous run, not asserted.
 enable_testing()
 add_test(NAME UiSelfTests COMMAND UiTestbed --selftest)

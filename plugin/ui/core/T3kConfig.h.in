@@ -1,5 +1,5 @@
-// Generated from ui/.env by plugin/ui/NativeUi.cmake (port of
-// ui/src/t3k/config.ts). Edit the .env, not this file.
+// Generated from the repo-root .env by plugin/ui/NativeUi.cmake. Edit the
+// .env (see .env.example), not this file.
 #pragma once
 
 namespace t3k::ui::config {

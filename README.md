@@ -24,10 +24,10 @@ install, load tones, and use it.
   gain/mix, drag to reorder, dual chains in stereo mode with branching,
   undo/redo, and presets.
 - **Cross-platform.** One plugin on macOS, Windows, Linux, and iOS
-  (Standalone). The UI is native JUCE/C++ (`plugin/ui/`); no web runtime
-  on any platform. The legacy React/WebView UI stays buildable behind
-  `-DT3K_NATIVE_UI=OFF` as a QA reference (see
-  [`plugin/docs/native-ui.md`](plugin/docs/native-ui.md)).
+  (Standalone). The UI is JUCE/C++ (`plugin/ui/`), drawn natively on every
+  platform: no browser engine, no web runtime, nothing to install beside the
+  plugin (see [`plugin/ui/README.md`](plugin/ui/README.md) and the design
+  record in [`plugin/docs/native-ui.md`](plugin/docs/native-ui.md)).
 
 NAM processing comes from **NeuralAmpModelerCore** (in-tree), resampling from
 **AudioDSPTools** (in-tree), and tone browsing/loading from the
@@ -37,11 +37,9 @@ NAM processing comes from **NeuralAmpModelerCore** (in-tree), resampling from
 
 - [CMake](https://cmake.org/download/) 3.22+ and Git
 - **JUCE** is fetched automatically by CMake into `libs/`; no manual install
-- Only for the legacy webview UI (`-DT3K_NATIVE_UI=OFF`): Node.js and npm,
-  and on Windows the Microsoft.Web.WebView2 SDK NuGet package
-  (`script/install-webview2.ps1` installs it) plus the
-  [WebView2 Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)
-  at run time. The native UI needs neither.
+- A C++20 compiler: Xcode on macOS, MSVC on Windows, GCC or Clang on Linux
+  (plus the dev packages listed under
+  [Linux runtime dependencies](#linux-runtime-dependencies))
 
 ## Quick start
 
@@ -56,13 +54,14 @@ git submodule update --init --recursive
 CMake downloads JUCE into `libs/` on first configure.
 
 The default build includes the GUI targets (Standalone, VST3, AU, AAX, LV2,
-CLAP) with the native JUCE UI. Add `-DHEADLESS=ON` for headless/embedded
-builds; switch individual formats off with `-DBUILD_AAX=OFF`,
-`-DBUILD_LV2=OFF`, `-DBUILD_CLAP=OFF`. CLAP support comes from
+CLAP). Add `-DHEADLESS=ON` for headless/embedded builds; switch individual
+formats off with `-DBUILD_AAX=OFF`, `-DBUILD_LV2=OFF`, `-DBUILD_CLAP=OFF`.
+CLAP support comes from
 [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions),
 fetched at configure time. `-DT3K_BUILD_UI_TESTBED=ON` adds the UI testbed
-(`UiTestbed`: scenario captures, pixel compare, `--selftest`) and registers
-its self-tests with ctest.
+(`UiTestbed`: scenario captures, pixel diffs, `--selftest`, `--bench`) and
+registers its self-tests with ctest; see
+[`plugin/ui/README.md`](plugin/ui/README.md).
 
 ```sh
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release   # or Debug
@@ -80,37 +79,29 @@ reconfigure.
 
 ### 3. TONE3000 publishable key
 
-The plugin reads your TONE3000 publishable key at configure time from
-`ui/.env` (the same file the legacy web UI reads; `ui/.env.local` overrides
-it and a variable in the configure environment overrides both). Set it before
-the first build:
+The plugin reads your TONE3000 publishable key at configure time from a
+`.env` file at the repo root (`.env.local` overrides it and a variable in
+the configure environment overrides both; [`.env.example`](.env.example)
+documents every key). Set it before the first build, and reconfigure after
+changing it:
 
 ```sh
-# ui/.env
-VITE_T3K_PUBLISHABLE_KEY=t3k_pub_your_key_here
+# .env
+T3K_PUBLISHABLE_KEY=t3k_pub_your_key_here
 # Optional: point at staging or self-hosted TONE3000
-# VITE_T3K_API_DOMAIN=https://staging.tone3000.com
+# T3K_API_DOMAIN=https://staging.tone3000.com
 ```
 
 Sign-in opens in the system browser and returns to the plugin through a
-loopback redirect on an ephemeral port
-(`http://localhost:<port>/`). Localhost redirect URIs are auto-allowed for
-publishable keys, so nothing needs registering in TONE3000 > Settings > API
-Keys for the native UI. (The legacy webview UI uses the
-`juce://juce.backend/index.html` / `https://juce.backend/index.html`
-redirects described in [ui/README.md](ui/README.md).)
+loopback redirect on an ephemeral port (`http://localhost:<port>/`).
+Localhost redirect URIs are auto-allowed for publishable keys, so nothing
+needs registering in TONE3000 > Settings > API Keys.
 
 ### 4. Build the plugin
 
 ```sh
 cmake --build build
 ```
-
-To build the legacy webview UI instead, configure with
-`-DT3K_NATIVE_UI=OFF`, run `npm install && npm run build` in `ui/` (after the
-first configure has fetched JUCE, which the UI's `@juce-framework/webview`
-`file:` dependency points at), reconfigure so CMake picks up
-`plugin/webview/`, then build. See [ui/README.md](ui/README.md).
 
 ### 5. Run it
 
@@ -147,20 +138,16 @@ land in `build/plugin/TONE3000_artefacts/<config>/<format>/`.
 
 ## Linux runtime dependencies
 
-Required: GTK3 (file dialogs), ALSA, FreeType, X11. The legacy webview build
-(`-DT3K_NATIVE_UI=OFF`) additionally renders its UI in the system WebKitGTK
-4.1 (or 4.0), loaded dynamically at runtime; without it that build's plugin
-window is a black screen.
-
-```sh
-sudo apt install libwebkit2gtk-4.1-0      # Ubuntu / Debian (webview build only)
-sudo dnf install webkit2gtk4.1            # Fedora
-sudo pacman -S webkit2gtk-4.1             # Arch
-sudo zypper install libwebkit2gtk-4_1-0   # openSUSE
-```
-
-The release tarball's `install.sh` checks for these automatically
+Required at run time: GTK3 (file dialogs), ALSA, FreeType, X11, and libcurl
+(TONE3000 API and downloads; loaded lazily by SONAME, so no `-dev` package
+is needed on an end-user machine). All of these ship with every mainstream
+desktop distribution. The release tarball's `install.sh` checks for them
 (`./install.sh --check` to verify without installing).
+
+Building needs the matching development packages; the list CI installs is
+in `.github/workflows/build.yml` (`libgtk-3-dev`, `libasound2-dev`,
+`libjack-jackd2-dev`, `libcurl4-openssl-dev`, `libfreetype6-dev`, and the
+X11 `-dev` set).
 
 Optional: a JACK server. The standalone's Audio Driver picker offers JACK
 next to ALSA (libjack is loaded at runtime; without a server the driver just
@@ -322,10 +309,9 @@ Debug`.
 
 | Path            | Contents                                              |
 | --------------- | ----------------------------------------------------- |
-| `plugin/`       | C++ plugin: processor, DSP, legacy webview bridge; vendors NeuralAmpModelerCore and AudioDSPTools |
-| `plugin/ui/`    | Native JUCE UI: views, widgets, services, testbed (see [plugin/ui/README.md](plugin/ui/README.md)) |
-| `plugin/docs/`  | Design docs (native UI, spread, oversampling, multi-core, local models) |
-| `ui/`           | Legacy React/TypeScript webview UI, the QA reference (see [ui/README.md](ui/README.md)) |
+| `plugin/`       | C++ plugin: processor, DSP, presets, MIDI mapping; vendors NeuralAmpModelerCore and AudioDSPTools |
+| `plugin/ui/`    | The JUCE UI: views, widgets, services, testbed (see [plugin/ui/README.md](plugin/ui/README.md)) |
+| `plugin/docs/`  | Design docs (UI, spread, oversampling, multi-core, local models) |
 | `test/`         | GoogleTest DSP suite + test assets                    |
 | `script/`       | Build, packaging, and install helpers                 |
 | `libs/`         | CPM-fetched dependencies (JUCE, GoogleTest, ...)      |
@@ -359,7 +345,7 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   allpass coefficients are adapted from its AudioDSPTools fork (MIT). See
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
 - [JUCE](https://juce.com): plugin framework, DSP building blocks, and the
-  native UI toolkit.
+  UI toolkit.
 - [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions):
   the CLAP wrapper.
 - O. Das, ["An Open-Source Stereo Widening Plugin"](https://www.dafx.de/paper-archive/2024/papers/DAFx24_paper_92.pdf)
@@ -371,11 +357,9 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   sweep probe and GCC-PHAT estimator behind auto-align.
 - [Roboto Mono](https://fonts.google.com/specimen/Roboto+Mono) and
   [Arimo](https://fonts.google.com/specimen/Arimo) (Apache-2.0), embedded in
-  the native UI; Arimo stands in for Arial where it isn't installed.
-- [lucide](https://lucide.dev) icons (ported to paths in
-  `plugin/ui/core/Icons`); [dnd-kit](https://dndkit.com) and
-  [react-knob-headless](https://github.com/satelllte/react-knob-headless) in
-  the legacy web UI.
+  the UI; Arimo stands in for Arial where it isn't installed.
+- [lucide](https://lucide.dev) icons (ISC), embedded as SVG paths in
+  `plugin/ui/core/LucideIcons.h`.
 
 ## Links
 

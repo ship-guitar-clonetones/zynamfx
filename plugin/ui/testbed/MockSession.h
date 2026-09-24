@@ -1,5 +1,4 @@
-// Fixture-driven ToneSession for the testbed: the native twin of the
-// Playwright suite's tone3000.com route handler (capture.mjs handleApi).
+// Fixture-driven ToneSession for the testbed: stands in for tone3000.com.
 // Signed in when the scenario says `auth`, answers the catalog calls from
 // `apiTones`, and honours the scenario's per-endpoint `api` overrides
 // ('stall' never replies, 'error' fails, a payload is returned as is).

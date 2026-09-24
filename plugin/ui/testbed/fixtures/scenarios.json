@@ -6638,7 +6638,7 @@
    "id": "load-oauth-leaving",
    "section": "loading",
    "title": "OAuth - leaving for TONE3000",
-   "description": "The busy scrim shown the instant a login/browse redirect to tone3000.com kicks off, so the UI never sits interactive while the webview navigates away.",
+   "description": "The busy scrim shown the instant a login/browse hand-off to tone3000.com kicks off, so the UI never sits interactive while the system browser opens.",
    "chain": {
     "revision": 1,
     "canUndo": true,
@@ -7782,37 +7782,6 @@
    "banner": false,
    "auth": false,
    "hasDrive": true
-  },
-  {
-   "id": "load-crash",
-   "section": "loading",
-   "title": "Crash screen (error boundary)",
-   "description": "The last-resort screen if the UI throws during render: apology copy plus a Copy Logs button that ships the on-disk log to the clipboard for a bug report.",
-   "chain": {
-    "revision": 1,
-    "canUndo": true,
-    "canRedo": false,
-    "stereoEnabled": false,
-    "activeSide": "left",
-    "stereoInput": false,
-    "standalone": false,
-    "inputMode": "stereo",
-    "namFullSize": false,
-    "multiCore": true,
-    "sampleRate": 48000,
-    "chain": [
-     null
-    ],
-    "preset": {
-     "id": "factory-1",
-     "name": "Crunch Rhythm"
-    }
-   },
-   "settle": 600,
-   "hints": true,
-   "banner": false,
-   "auth": false,
-   "hasDrive": false
   },
   {
    "id": "banner-mic-denied",

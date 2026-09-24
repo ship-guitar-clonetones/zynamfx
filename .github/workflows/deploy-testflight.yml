@@ -69,8 +69,10 @@ jobs:
     environment: builds
     env:
       BUILD_TYPE: Release
-      VITE_T3K_PUBLISHABLE_KEY: ${{ secrets.VITE_T3K_PUBLISHABLE_KEY }}
-      VITE_T3K_UPDATE_NOTICE: ${{ vars.VITE_T3K_UPDATE_NOTICE }}
+      # Build-time configuration, from the "builds" environment secrets (see
+      # build.yml).
+      T3K_PUBLISHABLE_KEY: ${{ secrets.T3K_PUBLISHABLE_KEY }}
+      T3K_UPDATE_NOTICE: ${{ secrets.T3K_UPDATE_NOTICE }}
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
 

@@ -1,8 +1,7 @@
-// Fixture-driven ui::Backend for the testbed: the native twin of
-// ui/local/screenshots/juce-mock.js. State comes from one scenario entry of
-// fixtures/scenarios.json; mutations behave like the JS mock (acknowledge,
-// bump the revision where the mock did) so drive steps produce the same
-// screens the reference PNGs show.
+// Fixture-driven ui::Backend for the testbed. State comes from one scenario
+// entry of fixtures/scenarios.json; mutations acknowledge and bump the
+// revision the way the processor would, so drive steps produce the same
+// screens the plugin shows, with no audio engine behind them.
 #pragma once
 
 #include <memory>

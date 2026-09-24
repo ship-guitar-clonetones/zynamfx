@@ -35,8 +35,8 @@ const Scenario* Fixtures::find(const juce::String& id) const {
 
 namespace {
 
-// Mirrors of the Playwright `drive` steps in scenarios.mjs, keyed by id.
-// Filled in phase by phase as the screens they touch are ported.
+// Drive steps keyed by scenario id: what a user does from the scenario's
+// initial state to reach the screen being captured.
 const std::map<juce::String, Drive>& drives() {
   using namespace drive;
   static const std::map<juce::String, Drive> table = {
@@ -391,8 +391,6 @@ const std::map<juce::String, Drive>& drives() {
 }
 
 }  // namespace
-
-bool webviewOnly(const juce::String& scenarioId) { return scenarioId == "load-crash"; }
 
 const Drive* driveFor(const juce::String& scenarioId) {
   const auto& table = drives();

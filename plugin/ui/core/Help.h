@@ -1,4 +1,4 @@
-// Hint-bar copy (port of ui/src/components/helpText.ts). Every control
+// Hint-bar copy (port of helpText.ts). Every control
 // publishes a one-line hint while hovered; all wording lives here so it stays
 // consistent. Desktop copy is authored once and re-worded for touch devices
 // in a single pass (`Right-click` -> `Touch and hold`, `click` -> `tap`).

@@ -1,8 +1,6 @@
 #include "Processor.h"
-#if !HEADLESS && T3K_NATIVE_UI
+#if !HEADLESS
 #include "NativeEditor.h"
-#elif !HEADLESS
-#include "Editor.h"
 #endif
 #include "StandaloneStateAutosave.h"
 #include <cmath>
@@ -1832,10 +1830,8 @@ bool TONE3000Processor::hasEditor() const {
 // CREATE EDITOR
 // ##############
 juce::AudioProcessorEditor* TONE3000Processor::createEditor() {
-#if !HEADLESS && T3K_NATIVE_UI
+#if !HEADLESS
   return new t3k::ui::NativeEditor(*this);
-#elif !HEADLESS
-  return new TONE3000Editor(*this);
 #else
   return nullptr;
 #endif

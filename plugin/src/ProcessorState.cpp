@@ -16,9 +16,6 @@ namespace {
 
 constexpr auto kMultiCoreKey = "multiCore";
 constexpr auto kNamSlimSizeDefaultKey = "namSlimSizeDefault";
-#if !T3K_NATIVE_UI
-constexpr auto kWebInspectorKey = "webInspector";
-#endif
 
 // Magic prefix for the binary ValueTree state format (see getStateInformation).
 constexpr char kStateMagic[] = {'T', '3', 'K', 'B'};
@@ -75,30 +72,6 @@ double TONE3000Processor::readPersistedNamSlimSizeDefault() {
       0.0, 1.0,
       juce::PropertiesFile(userSettingsOptions()).getDoubleValue(kNamSlimSizeDefaultKey, 0.0));
 }
-
-#if !T3K_NATIVE_UI
-bool TONE3000Processor::readPersistedWebInspectorEnabled() {
-  // Debug builds already get the inspector from stock JUCE; default on so a
-  // fresh debug install still has Inspect Element / Reload. Release stays off
-  // until Settings -> Diagnostics flips it.
-  return juce::PropertiesFile(userSettingsOptions())
-      .getBoolValue(kWebInspectorKey,
-#if JUCE_DEBUG
-                    true
-#else
-                    false
-#endif
-      );
-}
-
-void TONE3000Processor::persistWebInspectorEnabled(bool enabled) {
-  juce::PropertiesFile settings(userSettingsOptions());
-  settings.setValue(kWebInspectorKey, enabled);
-  settings.saveIfNeeded();
-  juce::Logger::writeToLog(juce::String("[Processor] Web Inspector ") +
-                           (enabled ? "enabled" : "disabled"));
-}
-#endif
 
 void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {
   if (multiCoreEnabled.load() == enabled)

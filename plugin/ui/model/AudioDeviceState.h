@@ -1,4 +1,4 @@
-// Standalone audio device snapshot (port of ui/src/types/audioDevice.ts).
+// Standalone audio device snapshot (port of audioDevice.ts).
 #pragma once
 
 #include <juce_core/juce_core.h>

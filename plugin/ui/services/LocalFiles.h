@@ -1,8 +1,7 @@
-// Local .nam / IR .wav loading (port of pickLocalFile / loadLocalFile in
-// useChainActions.ts plus TONE3000Editor::pickLocalToneFile): the tile
-// menus' Load File / Load Folder rows open the OS picker here, and OS file
-// drops onto a tile land here too. Same targeting rules for both: an insert
-// slot adds, a tone tile swaps in place. Errors surface as a toast.
+// Local .nam / IR .wav loading: the tile menus' Load File / Load Folder rows
+// open the OS picker here, and OS file drops onto a tile land here too. Same
+// targeting rules for both: an insert slot adds, a tone tile swaps in place.
+// Errors surface as a toast.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>

@@ -18,8 +18,11 @@
     <key>NSPrivacyAccessedAPITypes</key>
     <array>
         <dict>
-            <!-- [[NSUserDefaults standardUserDefaults] synchronize] in
-                 juce_WebBrowserComponent_mac.mm, which iOS compiles too. -->
+            <!-- NSUserDefaults. Declared defensively: the plugin's own code
+                 never touches it, and the JUCE call that once did (the
+                 WebBrowserComponent) compiles out with JUCE_WEB_BROWSER=0,
+                 but a missing declaration rejects the upload while a spare
+                 one costs nothing. Re-derive when the JUCE version moves. -->
             <key>NSPrivacyAccessedAPIType</key>
             <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
             <key>NSPrivacyAccessedAPITypeReasons</key>

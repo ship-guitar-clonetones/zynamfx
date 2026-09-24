@@ -1,5 +1,5 @@
-// The plugin's editor when built with T3K_NATIVE_UI: owns the backend, the
-// services and the PluginRoot, and manages the window box: the 1024 x
+// The plugin's editor: owns the backend, the services and the PluginRoot,
+// and manages the window box: the 1024 x
 // 578(+chrome) design box times an aspect-locked user scale between 1x and
 // kMaxScale, persisted on the processor, grown by the chrome strips' height
 // on request.

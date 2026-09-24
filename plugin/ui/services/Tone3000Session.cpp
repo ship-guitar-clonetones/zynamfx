@@ -8,7 +8,7 @@ namespace t3k::ui {
 
 namespace {
 constexpr const char* kNoKeyMessage =
-    "TONE3000 publishable key not configured. Set VITE_T3K_PUBLISHABLE_KEY at build time.";
+    "TONE3000 publishable key not configured. Set T3K_PUBLISHABLE_KEY at build time.";
 constexpr const char* kBrowserFailed = "Could not open your browser to reach TONE3000.";
 constexpr const char* kLoopbackFailed = "Could not start the local sign-in listener. Try again.";
 // Only the first model: native stores and loads the active model; the

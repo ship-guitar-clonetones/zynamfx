@@ -1,5 +1,5 @@
 // The fixed design space every native component is laid out in (port of
-// ui/src/hooks/useUiScale.ts constants). One unit here is one design px; the
+// useUiScale.ts constants). One unit here is one design px; the
 // editor scales the whole root with a single AffineTransform, so components
 // never see the window size.
 #pragma once
@@ -28,10 +28,9 @@ inline constexpr int kPlateHeight = 108;   // Faceplate.tsx
 // Editor window scale range (aspect-locked corner drags).
 inline constexpr double kMaxScale = 2.0;
 
-// Platform flags (useUiScale.ts IS_IOS / IS_COARSE_POINTER, helpText.ts
-// IS_MAC). The web UI read these at runtime; a native build knows them at
-// compile time, and the testbed overrides them per scenario via
-// T3K_UI_COARSE_POINTER so touch layouts can be captured on a desktop.
+// Platform flags, known at compile time; the testbed overrides the pointer
+// one per scenario via T3K_UI_COARSE_POINTER so touch layouts can be
+// captured on a desktop.
 #if JUCE_IOS
 inline constexpr bool kIos = true;
 #else

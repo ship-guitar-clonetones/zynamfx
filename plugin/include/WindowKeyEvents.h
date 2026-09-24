@@ -1,9 +1,9 @@
 #pragma once
 #include <juce_core/juce_core.h>
 
-// Transport-key passthrough to the host DAW, shared by both editors (the
-// webview's EditorWebViewSetup and plugin/ui/NativeEditor). Implemented in
-// WindowKeyEvents.mm (macOS / iOS) and WindowKeyEvents.cpp (Windows / Linux).
+// Transport-key passthrough to the host DAW (used by plugin/ui/NativeEditor).
+// Implemented in WindowKeyEvents.mm (macOS / iOS) and WindowKeyEvents.cpp
+// (Windows / Linux).
 namespace HostKeys {
 
 enum class HostKey { space, enter };

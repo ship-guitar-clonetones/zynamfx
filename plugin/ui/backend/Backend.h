@@ -3,7 +3,6 @@
 // hold them); the model/ layer parses them into structs. Two
 // implementations: ProcessorBackend (the plugin) and the testbed's
 // MockBackend (fixture driven), so every view can render without audio.
-// The surface is a one-to-one port of the webview bridge (IAudioBackend.ts).
 //
 // Every method is called on the message thread and completes inline. Async
 // work (file choosers, HTTP) lives in services/.

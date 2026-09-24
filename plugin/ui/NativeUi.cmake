@@ -1,13 +1,12 @@
-# Native JUCE UI (see plugin/docs/native-ui.md). Included by the plugin and
+# The plugin UI (see plugin/docs/native-ui.md). Included by the plugin and
 # by the testbed app; both call t3k_add_native_ui(<target>) to compile the
 # backend-agnostic UI sources into themselves. The plugin adds
 # ProcessorBackend/NativeEditor on top, the testbed adds MockBackend.
 
 set(T3K_UI_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
-# Embedded fonts (Roboto Mono and Arimo, both Apache-2.0) and brand artwork.
-# Own namespace/header so it never collides with the webview build's
-# BinaryData.
+# Embedded fonts (Roboto Mono and Arimo, both Apache-2.0) and brand artwork,
+# in their own namespace/header (UiBinaryData) so they read as UI assets.
 if (NOT TARGET NativeUiAssets)
     juce_add_binary_data(NativeUiAssets
         NAMESPACE UiBinaryData
@@ -26,14 +25,12 @@ if (NOT TARGET NativeUiAssets)
     set_target_properties(NativeUiAssets PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 
-# TONE3000 configuration comes from ui/.env (and .env.local overrides), the
-# same file the web UI reads, so one key configures both UIs; a variable in
-# the configure environment wins over both, as it does for Vite (CI passes
-# the publishable key that way). Missing keys fall back to the web UI's
-# defaults (see ui/src/t3k/config.ts).
+# TONE3000 configuration comes from the repo-root .env (and .env.local
+# overrides); a variable in the configure environment wins over both (CI
+# passes the publishable key that way). See .env.example for the keys.
 function(_t3k_read_env key default out)
     set(_value "${default}")
-    foreach(_file "${T3K_UI_DIR}/../../ui/.env" "${T3K_UI_DIR}/../../ui/.env.local")
+    foreach(_file "${T3K_UI_DIR}/../../.env" "${T3K_UI_DIR}/../../.env.local")
         if (EXISTS "${_file}")
             set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_file}")
             file(STRINGS "${_file}" _lines REGEX "^[ \t]*${key}=")
@@ -48,9 +45,9 @@ function(_t3k_read_env key default out)
     set(${out} "${_value}" PARENT_SCOPE)
 endfunction()
 
-_t3k_read_env(VITE_T3K_PUBLISHABLE_KEY "" T3K_PUBLISHABLE_KEY)
-_t3k_read_env(VITE_T3K_API_DOMAIN "https://www.tone3000.com" T3K_API_DOMAIN)
-_t3k_read_env(VITE_T3K_UPDATE_NOTICE "false" T3K_UPDATE_NOTICE)
+_t3k_read_env(T3K_PUBLISHABLE_KEY "" T3K_PUBLISHABLE_KEY)
+_t3k_read_env(T3K_API_DOMAIN "https://www.tone3000.com" T3K_API_DOMAIN)
+_t3k_read_env(T3K_UPDATE_NOTICE "false" T3K_UPDATE_NOTICE)
 string(REGEX REPLACE "/+$" "" T3K_API_DOMAIN "${T3K_API_DOMAIN}")
 if (T3K_UPDATE_NOTICE STREQUAL "true")
     set(T3K_UPDATE_NOTICE 1)

@@ -98,8 +98,8 @@ public:
   juce::var loadLocalTone(const juce::String& title, const juce::var& files,
                           const std::string& targetInsertId = {});
   // Path-based sibling of loadLocalTone for files already on disk: the
-  // native UI's drops and Load File / Load Folder pickers (loadLocalTone's
-  // byte-array form serves the webview build and the DSP tests). A
+  // UI's drops and Load File / Load Folder pickers (loadLocalTone's
+  // byte-array form is what the DSP tests drive). A
   // directory loads as one multi-model tone by the same rules as a folder
   // drop in the UI: majority extension picks NAM vs IR, capped at 300
   // files / 50 MB each, models in natural name order, title from the
@@ -113,7 +113,7 @@ public:
       so the bytes have to come through juce::URL rather than the raw path.
       Takes 1..N URLs because multi-select stands in for the folder route on
       iOS (a security-scoped directory cannot be enumerated through
-      juce::URL); see pickLocalToneFile. Same return contract as
+      juce::URL); see LocalFiles::pick. Same return contract as
       loadLocalTone. Compiled on every platform so the DSP suite can test it;
       only the iOS editor calls it. */
   juce::var loadLocalToneUrls(const juce::Array<juce::URL>& sources,
@@ -439,16 +439,6 @@ public:
   // PropertiesFile options for the native UI's per-machine preferences
   // (hint bar, PC numbers, cached session…); see plugin/ui/services/UiPrefs.h.
   static juce::PropertiesFile::Options uiPreferencesOptions();
-
-#if !T3K_NATIVE_UI
-  // Webview build only. Web Inspector preference (macOS): right-click ->
-  // Inspect Element on the plugin UI, off by default in release builds and
-  // flipped from Settings -> Diagnostics. Machine-wide (it's a debugging
-  // aid, not tone state), so it lives in the shared settings file. Applied
-  // to the live WKWebView by the editor (EditorWebViewSetup::setWebInspectorEnabled).
-  static bool readPersistedWebInspectorEnabled();
-  static void persistWebInspectorEnabled(bool enabled);
-#endif
 
 private:
   // One chain of blocks. Two of these make up `lanes` (declared below).

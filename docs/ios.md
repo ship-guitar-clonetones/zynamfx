@@ -1,27 +1,23 @@
 # iOS (iPad) build
 
-Standalone-only iPad port of the plugin: the same C++ and the same React UI,
-with every difference gated. `#if JUCE_IOS` covers the C++. The UI gates on
-three levels (see Touch adaptation below): `IS_IOS` / `html.t3k-ios` for the
-app shell, `IS_COARSE_POINTER` / `html.t3k-touch` for touch-first ergonomics
-on any device, and each event's own `pointerType` for behaviors. Desktop
-behaviour is unchanged. AUv3 is out of scope; iPhone is untested.
+Standalone-only iPad port of the plugin: the same C++ and the same JUCE UI,
+with every difference gated. `#if JUCE_IOS` covers the platform code; the UI
+reads two compile-time flags from `plugin/ui/core/Design.h` (see Touch
+adaptation below): `design::kIos` for the app shell and
+`design::kCoarsePointer` for touch-first ergonomics on any device, plus
+`MouseInputSource::isTouch()` per event for behaviours. Desktop behaviour is
+unchanged. AUv3 is out of scope; the app is iPad only (`TARGETED_DEVICE_FAMILY
+2`).
 
 Deployment target iOS 16. Landscape only.
 
 ## Build
 
-Configure first, then build the UI, then configure again. `ui/package.json`
-resolves `@juce-framework/webview` from `libs/juce`, which the first configure
-is what creates, so building the UI first on a clean checkout fails with
-`Cannot find module '@juce-framework/webview'`. That first configure embeds a
-placeholder UI; the second picks up the real bundle. Same order as the root
-README and the `iOS Simulator` CI job.
+The UI compiles with the plugin, so an iOS build is one configure and one
+build. Put your publishable key in the repo-root `.env` first (see the root
+README); CMake reads it at configure time.
 
 ```sh
-cmake --preset ios-simulator   # or ios-device: bootstrap, fetches JUCE into libs/
-cd ui && npm ci && npm run build && cd ..
-
 # Simulator
 cmake --preset ios-simulator
 cmake --build build-ios --config Release --target TONE3000_Standalone -- -sdk iphonesimulator
@@ -36,19 +32,10 @@ The **Build Plugin** workflow (`.github/workflows/build.yml`) has an
 `iOS Simulator` job that runs the same Simulator build on a macOS runner and
 uploads the unsigned `.app` as an artifact.
 
-Build **Release** on the Simulator. A Debug iOS build points the WebView at
-`http://localhost:5173/`, so it shows a dead page and logs "navigation failed".
-
 `-DT3K_IOS_BUNDLE_ID=<id>` signs under your own identity. Changing it on a
 device that already holds the app gives a fresh, empty Documents folder, so
 keep it stable once models are loaded. Add
 `-DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=<id>` if Xcode cannot pick your team.
-
-**Reconfigure after every UI change.** `plugin/CMakeLists.txt` collects the
-webview with `file(GLOB_RECURSE)`, which runs at configure time, and Vite's
-asset filenames are content-hashed. Without a reconfigure the app keeps
-serving the previously embedded bundle and looks like your change did nothing.
-The requested asset name in the app's log tells you which bundle is running.
 
 ## Install and log
 
@@ -65,8 +52,8 @@ xcrun simctl launch <udid> <bundle-id>
 xcrun devicectl device install app --device <udid> \
   build-ios-device/plugin/TONE3000_artefacts/Release/Standalone/TONE3000.app
 
-# The app's own log: console.* from the WebView is forwarded into it, which
-# is the most useful debugging channel on both Simulator and device.
+# The app's own log (juce::Logger; the UI's HTTP, OAuth and load flows all
+# write to it), the most useful debugging channel on Simulator and device.
 tail -f "$(xcrun simctl get_app_container <udid> <bundle-id> data)/Library/TONE3000/TONE3000.log"
 ```
 
@@ -82,10 +69,11 @@ what App Store Connect checks on top of that, and none of it shows up in a
 Simulator build.
 
 - `plugin/PrivacyInfo.xcprivacy` declares the required-reason APIs the binary
-  reaches through JUCE: user defaults (the WebView component), file timestamps
-  and free disk space (both `juce_SharedCode_posix.h`), and system boot time
-  (`systemUptime` timestamping touch events in
-  `juce_UIViewComponentPeer_ios.mm`, plus `mach_absolute_time`). An upload whose
+  reaches through JUCE: file timestamps and free disk space (both
+  `juce_SharedCode_posix.h`), system boot time (`systemUptime` timestamping
+  touch events in `juce_UIViewComponentPeer_ios.mm`, plus
+  `mach_absolute_time`), and user defaults (declared defensively; the JUCE
+  call that used it compiles out with `JUCE_WEB_BROWSER=0`). An upload whose
   binary calls one of those without declaring it is rejected with ITMS-91053,
   so the list is worth re-deriving whenever the JUCE version moves.
 - The app icons are flattened to opaque at configure time by
@@ -128,93 +116,49 @@ Simulator build.
 ## Touch adaptation
 
 The adaptation is deliberately minimal: the desktop UI at the desktop aspect,
-letterboxed and vertically centered, with only the touch-ups a finger needs.
-Three gates, from narrowest reach to widest:
+letterboxed and vertically centred in the one fixed full-screen window
+(`NativeEditor::fitRoot`; there is no resize, no persisted scale), with only
+the touch-ups a finger needs. Three gates, from narrowest reach to widest:
 
-- `IS_IOS` / `html.t3k-ios`: the app shell only. The document-scroll fix and
-  the vertical centering (both in `index.css`), and the long-press
-  recognizers that stand in for `contextmenu`, which WKWebView never fires
-  for a touch hold (`useTileMenu` in GalleryBlock, `useTouchHold`). Every
-  other engine fires the native event and takes the desktop `onContextMenu`
-  path.
-- `IS_COARSE_POINTER` / `html.t3k-touch` (`pointer: coarse`, see useUiScale):
-  static ergonomics for any touch-first device, iPad or Android or Windows
-  tablet. The 44 pt hit floor, the touch-field growth, the touch help copy,
-  and render-time nudges that follow them.
-- `pointerType === 'touch'` per event: behaviors (the knob double tap and
-  label tap, the help-bar release). A hybrid device gets touch behavior from
-  its touchscreen and desktop behavior from its mouse.
+- `design::kIos`: the app shell only. The fixed window, the Bluetooth
+  sample-rate tip (`Banners.cpp`), and the multi-select file picker that
+  stands in for Load Folder (`LocalFiles::pick`).
+- `design::kCoarsePointer` (iOS and Android; the testbed sets it per scenario
+  through `T3K_UI_COARSE_POINTER` so touch layouts can be captured on a
+  desktop): static ergonomics for a touch-first device. Tile chrome that is
+  always visible instead of hover-revealed (`ToneTile`, `GalleryLane`), and
+  the touch wording of the hint-bar copy (`Help.cpp`).
+- `MouseInputSource::isTouch()` per event: behaviours (a tile's long-press
+  menu, the knob's double tap and touch-and-hold). A hybrid device gets touch
+  behaviour from its touchscreen and desktop behaviour from its mouse.
 
 | gesture | result |
 | ------- | ------ |
 | tap a tile | open the block |
 | drag a tile | reorder (the same distance rule as desktop) |
-| hold a tile 500 ms | tile menu, while the finger is still down |
-| hold the Spread / Align Offset knob | the advanced deck (desktop: right-click the group) |
-| press a control | its help in the info bar; release clears it |
+| hold a tile 500 ms | tile menu, while the finger is still down (`GalleryTile::kLongPressMs`) |
+| hold the Spread / Align Offset knob | the advanced deck (desktop: right-click the group; `Knob::onLongPress`) |
+| press a control | its help in the hint bar; release clears it |
 | drag a knob up or down | adjust |
 | double tap a knob, EQ fader or EQ dot | reset to default |
 | tap a knob's label | type the value |
 
-The tile face claims the gesture for dragging (`touch-action: none`, as on
-desktop), so lanes scroll from the space around the tiles, not across them.
-The info bar teaches each control's touch gestures: the help copy branches on
-`IS_COARSE_POINTER` in helpText.ts.
-
-Every touch target meets 44 pt through one rule in `index.css` under
-`html.t3k-touch`: an invisible `::after` at `max(100%, 44px)`, centred and out
-of flow, so no layout changes.
+Tiles, knobs and EQ handles claim their own drags
+(`setViewportIgnoreDragFlag`), so lanes and lists scroll from the space
+around them, not across them; once a drag has become a scroll, the press it
+started with never clicks (`Clickable`, see `plugin/docs/native-ui.md` §5.8).
 
 Local import is desktop's two rows, **Load File** and **Load Folder**, in the
 tile menus. On iOS the folder row opens the platform's multi-select file
 picker instead (see Known gaps).
 
-## Touch verification
-
-An earlier, larger revision of this branch was driven end to end on the iPad
-Simulator and on an iPad Pro (presets, tuner, undo/redo, mono/stereo, EQ,
-Spread/Align decks, block swap/remove, keyboard avoidance). After the
-slim-down the Simulator build was smoke-checked; the gesture set above needs
-one hardware pass: long-press menu, drag reorder, knob double tap and label
-tap, the centered layout, and no document scroll.
-
 ## Platform notes worth knowing
 
 - **Picker results must be read through security-scoped URLs.** A file chosen
-  outside the app container is unreadable through its raw path. A test with
-  the file *inside* the container passes and proves nothing.
-- **WebKit replays a mouse event pair after every touch**, aimed at the
-  element just tapped and landing after `pointerup`. Anything that clears
-  state on release has to ignore that replay (see helpText.ts).
-- **A control that takes pointer capture retargets its release**, so a release
-  that must be seen regardless is watched on `window` in the capture phase.
-- **Pressing and holding an `<img>` raises WKWebView's own image callout**
-  (Copy / Save to Photos) and cancels the pointer stream under it, which
-  silently killed the tiles' long-press menu on any tile with artwork.
-  `-webkit-touch-callout: none` on img/svg (index.css) suppresses it.
-- **`env(safe-area-inset-*)` is 0 on all sides** here: the WKWebView is
-  already inset (1366x999 in a 1024 pt screen), so the faceplate clears the
-  home indicator without the page doing anything.
-- **`100vh` is not the viewport, and the document scrolled because of it.**
-  An unwanted vertical scroll that hurt navigation was reported. It was
-  real and it was global. This WKWebView lays out in a 1366x999 box, but
-  `100vh`, `100dvh`, `innerHeight` and `visualViewport.height` all report 1024,
-  the screen height: measured in the running app,
-  `documentElement.clientHeight` was 999 against a `scrollHeight` of 1024. So
-  `#root { height: 100vh }` built a root 25 px taller than the box holding it,
-  html and body kept `overflow: visible`, and the whole document became
-  scrollable by exactly that 25 px, on every screen: a vertical swipe anywhere
-  shifted the entire UI, header and faceplate included. `overscroll-behavior:
-  none` did not stop it and could not, because it only suppresses rubber-band
-  on a scroll with nowhere to go and this scroll had somewhere to go. The fix
-  is `height: 100%` (which chains from the initial containing block, i.e. the
-  999 the engine actually laid out) plus `overflow: hidden` on html and body,
-  so a document scroll is impossible rather than merely unnecessary. Inner
-  containers keep their own scrollers and are not affected. Verified on the
-  Simulator with a vertical swipe on the chain, BLOCK, SELECT TONE with
-  results, Settings and the Tuner: `scrollHeight` now equals `clientHeight`
-  at 999, zero document scroll events fired on any screen, and the Select
-  Tone and Settings lists still scroll on their own.
+  outside the app container is unreadable through its raw path, which is why
+  `LocalFiles::pick` hands `getURLResults()` to `loadLocalToneUrls` on iOS
+  instead of paths. A test with the file *inside* the container passes and
+  proves nothing.
 - **The app data container's UUID rotates on every reinstall and every app
   update.** Any absolute path the plugin persisted then names a directory
   that no longer exists, and the only path it persists is a local model's
@@ -263,7 +207,7 @@ tap, the centered layout, and no document scroll.
   iPadOS 26: a second app dragged from the Dock windows itself over this one
   regardless. The app is not resized by it (the other app floats), so the
   layout is unaffected. The key is set anyway because App Store validation
-  still requires it for a landscape-only iPad app (ITMS-90474) — it changes
+  still requires it for a landscape-only iPad app (ITMS-90474); it changes
   runtime behaviour only on older iPadOS, where it disables Split View.
 - The `NAM` static library must be force-loaded on iOS as well as macOS.
   `$<PLATFORM_ID:...>` reports `iOS`, not `Darwin`, when cross-compiling, so
@@ -280,32 +224,22 @@ tap, the centered layout, and no document scroll.
   `Library/TONE3000/Presets/Factory` inside the app container still overrides a
   bundled entry in `list()`. The glob runs at configure time, so a
   new preset file needs a reconfigure.
+- **Sign-in uses the system browser and a loopback redirect**, the same as
+  desktop (`plugin/docs/native-ui.md` §5.14). The app declares background
+  audio, so the process and its listener socket stay alive while Safari is
+  in front, and the redirect to `http://localhost:<port>/` lands back in the
+  app.
 
 ## Known gaps
 
 - There is no true folder import on iOS: a security-scoped *directory* cannot
   be enumerated, so **Load Folder** opens the platform's multi-select file
-  picker instead. Several files still land as one multi-model block, and
-  native titles a single pick from the file's name, so both desktop outcomes
-  are reachable; only the row's wording is approximate on iOS.
-- The double-tap knob reset and the label tap into the type-in editor are
-  proved in a browser against the same bundle, not on a device: two taps
-  cannot be driven inside 300 ms through the Simulator automation bridge.
-- Dragging a `.nam` from Files onto a tile is untested. The receiving code is
-  the same HTML5 drop path the desktop uses, and the app does window alongside
-  Files, but the drag could not be driven from the automation.
+  picker instead. Several files still land as one multi-model block, and a
+  single pick is titled from the file's name, so both desktop outcomes are
+  reachable; only the row's wording is approximate on iOS.
+- Dragging a `.nam` from Files onto a tile is untested; the app does window
+  alongside Files, but the drag could not be driven from the automation.
 - No haptics: the iPad has no Taptic Engine, so
   `UIImpactFeedbackGenerator` does nothing there and the tile lift and drop
   are silent.
 - AUv3 is not built. Only the Standalone app exists on iOS.
-
-## Desktop CI evidence
-
-The touch adaptation reached no desktop build: it carried no C++ and no
-CMake, because the `window.__T3K_PLATFORM__` flag the UI reads already lived
-in main (PR 111), so its diff was TypeScript and CSS gated as described under
-Touch adaptation. `IS_IOS` / `html.t3k-ios` is false and absent in every
-desktop build; `IS_COARSE_POINTER` / `html.t3k-touch` engages only where the
-primary pointer is coarse, which on a desktop means a touch-first machine
-like a Windows tablet, and that is the intent. The shared `ui` bundle builds,
-lints, type-checks and tests clean.

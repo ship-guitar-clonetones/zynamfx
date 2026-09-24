@@ -1,4 +1,4 @@
-// MIDI mapping engine snapshot (port of ui/src/types/midiMap.ts).
+// MIDI mapping engine snapshot (port of midiMap.ts).
 #pragma once
 
 #include <juce_core/juce_core.h>

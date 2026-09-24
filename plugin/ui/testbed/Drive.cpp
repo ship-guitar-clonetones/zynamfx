@@ -89,7 +89,7 @@ void hoverPoint(PluginRoot& root, juce::Point<int> rootPos) {
 }
 
 void click(PluginRoot& root, juce::Component& target, bool right) {
-  // Playwright scrolls the target into view and moves the pointer onto it
+  // Like a user: scroll the target into view and move the pointer onto it
   // before pressing.
   scrollIntoView(target);
   hoverAt(root, target, target.getLocalBounds().getCentre());

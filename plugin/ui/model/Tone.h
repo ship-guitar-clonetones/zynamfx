@@ -1,4 +1,4 @@
-// Full TONE3000 catalog payloads (port of ui/src/types/tone.ts): the tone
+// Full TONE3000 catalog payloads (port of tone.ts): the tone
 // the API returns for GET /tones/{id} and the browser streams, and its
 // model rows. ToneSummary (ChainState.h) is native's slim projection of the
 // same thing; these carry what the detail card's info panel, the model

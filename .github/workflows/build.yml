@@ -1,11 +1,9 @@
 # TONE3000 Plugin - Multi-platform build
 # Builds VST3, Standalone, AU (macOS), and AAX (macOS/Windows, PACE-signed
-# when secrets are configured) on macOS, Windows, and Linux with the native
-# JUCE UI (plugin/ui), plus the UI testbed whose self-tests run next to the
-# DSP suite. macOS is universal via per-arch builds + lipo, since dual -arch
-# clang invocations are not sccache-cacheable. A separate Linux job builds
-# the legacy webview UI (-DT3K_NATIVE_UI=OFF) so the QA reference keeps
-# compiling until it is removed.
+# when secrets are configured) on macOS, Windows, and Linux, plus the UI
+# testbed whose self-tests run next to the DSP suite. macOS is universal via
+# per-arch builds + lipo, since dual -arch clang invocations are not
+# sccache-cacheable.
 
 name: Build Plugin
 
@@ -30,14 +28,14 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     environment: builds
     env:
-      # Publishable key (OAuth client_id). A secret, not a variable, so it
-      # is never exposed through repo variables. Read at CMake configure by
-      # plugin/ui/NativeUi.cmake (T3kConfig.h), and by Vite for the webview.
-      VITE_T3K_PUBLISHABLE_KEY: ${{ secrets.VITE_T3K_PUBLISHABLE_KEY }}
-      # Startup update check (ui/src/t3k/config.ts). Sourced from the repo
-      # variable, not hardcoded, so a clone without that variable falls
-      # back to the code default of off and never pings tone3000.com.
-      VITE_T3K_UPDATE_NOTICE: ${{ vars.VITE_T3K_UPDATE_NOTICE }}
+      # Publishable key (OAuth client_id), from the "builds" environment
+      # secrets. Read at CMake configure by plugin/ui/NativeUi.cmake into
+      # T3kConfig.h.
+      T3K_PUBLISHABLE_KEY: ${{ secrets.T3K_PUBLISHABLE_KEY }}
+      # Startup update check. Sourced from the environment, not hardcoded,
+      # so a clone without that secret falls back to the code default of
+      # off and never pings tone3000.com.
+      T3K_UPDATE_NOTICE: ${{ secrets.T3K_UPDATE_NOTICE }}
       # Compiler cache (see "Setup sccache" step below); persists compiled
       # object results across runs via the GitHub Actions cache backend.
       SCCACHE_GHA_ENABLED: "true"
@@ -541,8 +539,8 @@ jobs:
     runs-on: macos-14
     environment: builds
     env:
-      VITE_T3K_PUBLISHABLE_KEY: ${{ secrets.VITE_T3K_PUBLISHABLE_KEY }}
-      VITE_T3K_UPDATE_NOTICE: ${{ vars.VITE_T3K_UPDATE_NOTICE }}
+      T3K_PUBLISHABLE_KEY: ${{ secrets.T3K_PUBLISHABLE_KEY }}
+      T3K_UPDATE_NOTICE: ${{ secrets.T3K_UPDATE_NOTICE }}
 
     steps:
       - name: Checkout
@@ -585,96 +583,3 @@ jobs:
           name: TONE3000-v${{ env.T3K_VERSION }}-ios-simulator
           path: build-ios/TONE3000-v*-ios-simulator.zip
           if-no-files-found: error
-
-  # Legacy webview UI (ui/ + WebBrowserComponent), kept building as the
-  # side-by-side QA reference for the native port (plugin/docs/native-ui.md
-  # §7) until it is removed. Standalone only, Linux only: the cheapest
-  # platform that exercises the whole webview path (bridge, embedded assets,
-  # WebKitGTK). The React suite's lint and unit tests run here too.
-  webview-qa:
-    name: Webview UI (QA reference)
-    runs-on: ubuntu-24.04
-    environment: builds
-    env:
-      VITE_T3K_PUBLISHABLE_KEY: ${{ secrets.VITE_T3K_PUBLISHABLE_KEY }}
-      VITE_T3K_UPDATE_NOTICE: ${{ vars.VITE_T3K_UPDATE_NOTICE }}
-      SCCACHE_GHA_ENABLED: "true"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
-
-      - name: Cache CPM dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            libs/juce
-            libs/googletest
-            libs/clap-juce-extensions
-          key: cpm-deps-linux-${{ hashFiles('CMakeLists.txt', 'plugin/CMakeLists.txt') }}
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            pkg-config \
-            libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
-            libasound2-dev \
-            libjack-jackd2-dev \
-            libcurl4-openssl-dev \
-            libfreetype6-dev \
-            libx11-dev \
-            libxcomposite-dev \
-            libxcursor-dev \
-            libxinerama-dev \
-            libxrandr-dev \
-            libxrender-dev
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: ui/package-lock.json
-
-      # Configure first so CPM fetches JUCE (the UI build needs it), then
-      # reconfigure so the content-hashed UI assets are picked up
-      # (plugin/CMakeLists.txt globs them at configure).
-      - name: Configure CMake (bootstrap)
-        run: |
-          cmake -B build -S . \
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DCMAKE_TOOLCHAIN_FILE=cmake/linux-toolchain.cmake \
-            -DT3K_NATIVE_UI=OFF \
-            -DBUILD_AAX=OFF -DBUILD_LV2=OFF -DBUILD_CLAP=OFF \
-            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
-
-      - name: Build, lint and test UI
-        run: |
-          cd ui
-          npm ci
-          npm run build
-          npm run lint
-          npm run test
-
-      - name: Reconfigure CMake
-        run: |
-          cmake -B build -S . \
-            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
-            -DCMAKE_TOOLCHAIN_FILE=cmake/linux-toolchain.cmake \
-            -DT3K_NATIVE_UI=OFF \
-            -DBUILD_AAX=OFF -DBUILD_LV2=OFF -DBUILD_CLAP=OFF \
-            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
-
-      - name: Build Standalone (webview UI)
-        run: cmake --build build --config ${{ env.BUILD_TYPE }} --target TONE3000_Standalone --parallel 2

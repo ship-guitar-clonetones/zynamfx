@@ -1,4 +1,4 @@
-// Typed chain state (port of ui/src/types/chain.ts). Parsed once per revision
+// Typed chain state (port of chain.ts). Parsed once per revision
 // from the backend's `getChainState` var; views read plain structs.
 #pragma once
 

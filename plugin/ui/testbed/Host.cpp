@@ -6,9 +6,9 @@ namespace t3k::ui::testbed {
 
 namespace {
 
-// What the React suite seeded into localStorage / sessionStorage before load:
-// the scenario's own entries, the auth tokens + cached user when `auth`, and
-// the hints toggle.
+// Seed UiPrefs the way a real install would already hold them: the
+// scenario's own entries, the auth tokens + cached user when `auth`, and the
+// hints toggle.
 void seedPrefs(UiPrefs& prefs, const Scenario& scenario, const juce::var& fixtures) {
   auto seed = [](const juce::var& obj, auto&& put) {
     if (auto* props = obj.getDynamicObject())
@@ -66,9 +66,8 @@ ScaledHost::ScaledHost(Backend& backend, const Scenario& scenario, const juce::v
       session(scenario.data, fixtures),
       services(backend, session, *this, prefs, /*updateNotice=*/true) {
   seedPrefs(prefs, scenario, fixtures);
-  // The React suite served the fixture image host from its assets folder
-  // (real gear photos, copied to fixtures/img) and aborted every fetch
-  // under `imagesOffline`.
+  // Artwork comes from fixtures/img (real gear photos) instead of the
+  // network, and every fetch fails under `imagesOffline`.
   services.images.offline = static_cast<bool>(scenario.data.getProperty("imagesOffline", false));
   services.images.localOverride =
       [host = fixtures["imgHost"].toString()](const juce::String& url) -> std::optional<juce::Image> {

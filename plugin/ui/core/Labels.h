@@ -1,4 +1,4 @@
-// Display strings for TONE3000 catalog data (ports of ui/src/t3k/labels.ts,
+// Display strings for TONE3000 catalog data (ports of labels.ts,
 // formatCount.ts and timeAgoShort.ts): gear and format names, compact
 // social counts, and the creator line's relative time.
 #pragma once
