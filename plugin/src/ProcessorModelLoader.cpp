@@ -144,10 +144,9 @@ bool wavMissingRiffPadByte(const void* data, size_t size) {
   return declared + 8 == static_cast<juce::uint64>(size) + 1;
 }
 
-// Caps for local file loads, mirroring the web UI's drop limits
-// (useToneLoadFlow.ts): the same rules must hold whether the bytes arrive
-// as base64 over the bridge (drops) or straight from disk (the tile menus'
-// Load File / Load Folder pickers).
+// Caps for local file loads, the same whether the bytes arrive as a
+// base64 array (the DSP tests) or straight from disk (the UI's drops and
+// pickers, plugin/ui/services/LocalFiles).
 constexpr juce::int64 kMaxLocalFileBytes = 50 * 1024 * 1024;
 constexpr int kMaxFolderModels = 300;
 
@@ -226,9 +225,9 @@ juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream
   return juce::var(model.get());
 }
 
-// A dropped file as shipped by the webview: { name, data } with base64
-// bytes (the DOM never exposes file paths, so drops ride the bridge as
-// base64; see useToneLoadFlow.ts).
+// A file shipped as { name, data } with base64 bytes. The DSP tests feed
+// files this way (it predates the on-disk path below, from when the UI
+// could only hand over bytes); the UI itself always has a path.
 juce::var stashLocalFile(const juce::String& filename, const juce::String& base64Data,
                          juce::String& error) {
   juce::MemoryOutputStream decoded;
@@ -256,7 +255,7 @@ juce::var stashLocalFileFromDisk(const juce::File& file, juce::String& error) {
 // A file the OS document picker handed us as a security-scoped URL.
 //
 // iOS is the reason this exists, and iOS is the only caller (see
-// pickLocalToneFile); it is compiled everywhere so the DSP suite, which does
+// LocalFiles::pick); it is compiled everywhere so the DSP suite, which does
 // not build for iOS, can exercise the same code the iPad runs. Everything the
 // picker returns from the Files app lives outside the app sandbox (an iCloud /
 // file-provider container), and
@@ -444,7 +443,7 @@ juce::var TONE3000Processor::loadLocalToneUrls(const juce::Array<juce::URL>& sou
   // can hand back a folder URL, but a security-scoped directory cannot be
   // enumerated through juce::URL (there is no listing API behind the
   // bookmark), so "Load Folder" asks for the files themselves instead. See
-  // pickLocalToneFile. Not gated on JUCE_IOS so the DSP suite can run it;
+  // LocalFiles::pick. Not gated on JUCE_IOS so the DSP suite can run it;
   // the editor only reaches it on iOS.
   if (sources.isEmpty())
     return localToneError("Load Files", "Nothing to load");

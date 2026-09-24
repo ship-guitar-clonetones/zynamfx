@@ -1,8 +1,15 @@
 name: Deploy to TestFlight
 
 # Publishing a GitHub Release builds, signs and uploads the iOS app to App Store
-# Connect. Signing and upload both use an App Store Connect API key, so nothing
-# needs a keychain, a .p12 or a stored provisioning profile on the runner.
+# Connect. The archive is development-signed with one Apple Development
+# certificate kept as a secret (.p12) and imported into a temporary keychain,
+# as build.yml does with the Developer ID certs; Xcode's automatic signing
+# then only fetches the managed profile. Without a certificate on the runner
+# Xcode mints a new one per run through the API key, and the team's
+# certificate cap ends that after a handful of releases. The App Store
+# signature is applied at export with the cloud-managed Apple Distribution
+# certificate, through the same API key that does the upload, so no
+# distribution certificate or profile is stored anywhere.
 #
 # workflow_dispatch runs the same pipeline against any ref. A build number
 # already on TestFlight is refused at upload, so the build number is the run
@@ -40,9 +47,11 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          IOS_DEV_CERTIFICATE: ${{ secrets.IOS_DEV_CERTIFICATE }}
         run: |
           if [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] \
-            && [ -n "$ASC_API_KEY_BASE64" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            && [ -n "$ASC_API_KEY_BASE64" ] && [ -n "$APPLE_TEAM_ID" ] \
+            && [ -n "$IOS_DEV_CERTIFICATE" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -60,8 +69,10 @@ jobs:
     environment: builds
     env:
       BUILD_TYPE: Release
-      VITE_T3K_PUBLISHABLE_KEY: ${{ secrets.VITE_T3K_PUBLISHABLE_KEY }}
-      VITE_T3K_UPDATE_NOTICE: ${{ vars.VITE_T3K_UPDATE_NOTICE }}
+      # Build-time configuration, from the "builds" environment secrets (see
+      # build.yml).
+      T3K_PUBLISHABLE_KEY: ${{ secrets.T3K_PUBLISHABLE_KEY }}
+      T3K_UPDATE_NOTICE: ${{ secrets.T3K_UPDATE_NOTICE }}
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
 
@@ -104,13 +115,6 @@ jobs:
             libs/clap-juce-extensions
           key: cpm-deps-ios-device-${{ hashFiles('CMakeLists.txt', 'plugin/CMakeLists.txt') }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: ui/package-lock.json
-
       # The key lives in ~/.appstoreconnect/private_keys because altool has no
       # key-path flag: it looks up AuthKey_<id>.p8 in a fixed list of
       # directories, of which this is one. xcodebuild takes the explicit path,
@@ -125,28 +129,33 @@ jobs:
           echo "$ASC_API_KEY_BASE64" | base64 --decode > "$KEY_PATH"
           echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
-      # Same order as the other jobs: configure so CPM fetches JUCE, which the
-      # UI build needs, then reconfigure so the content-hashed UI assets are
-      # picked up. The archive keeps the preset's automatic development
-      # signing: forcing "Apple Distribution" here conflicts with automatic
-      # signing and Xcode refuses to archive. The App Store signature is
-      # applied at export, where the app-store-connect method and the API key
-      # re-sign the archive. The build number is the run number: App Store
-      # Connect refuses one it has already seen for a marketing version.
-      - name: Configure CMake (bootstrap)
+      # The development certificate the archive signs with. APPLE_APP_PASSWORD
+      # is the .p12 password, as for the macOS certs in build.yml.
+      - name: Install the development certificate
+        env:
+          IOS_DEV_CERTIFICATE: ${{ secrets.IOS_DEV_CERTIFICATE }}
+          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PWD }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          cmake --preset ios-device \
-            -DT3K_IOS_BUILD_NUMBER=${{ github.run_number }} \
-            -DCMAKE_XCODE_ATTRIBUTE_DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_STYLE=Automatic
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          echo "$IOS_DEV_CERTIFICATE" | base64 --decode -o "$RUNNER_TEMP/dev.p12"
+          security import "$RUNNER_TEMP/dev.p12" -P "$APPLE_APP_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          rm -f "$RUNNER_TEMP/dev.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | sed 's/[[:space:]"]//g')
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
-      - name: Build UI
-        run: |
-          cd ui
-          npm ci
-          npm run build
-
-      - name: Reconfigure CMake
+      # The archive keeps the preset's automatic development signing: forcing
+      # "Apple Distribution" here conflicts with automatic signing and Xcode
+      # refuses to archive. The App Store signature is applied at export,
+      # where the app-store-connect method and the API key re-sign the
+      # archive. The build number is the run number: App Store Connect
+      # refuses one it has already seen for a marketing version.
+      - name: Configure CMake
         run: |
           cmake --preset ios-device \
             -DT3K_IOS_BUILD_NUMBER=${{ github.run_number }} \
@@ -203,6 +212,8 @@ jobs:
           xcrun altool --upload-app -f "$IPA" -t ios \
             --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 
-      - name: Remove the API key
+      - name: Remove the API key and the keychain
         if: always()
-        run: rm -rf "$HOME/.appstoreconnect/private_keys"
+        run: |
+          rm -rf "$HOME/.appstoreconnect/private_keys"
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true

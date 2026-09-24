@@ -1027,8 +1027,8 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
         row.modelLoading = block->modelLoading;
         row.irLong = block->type == ChainBlockType::IR && block->irIsLong;
         // NAM calibration metadata off the loaded engine, absent when the
-        // model carries none. Non-finite values never ship; the JSON bridge
-        // can't carry them (and the DSP rejects them too).
+        // model carries none. Non-finite values never ship: the DSP rejects
+        // them and JSON (presets) can't carry them.
         if (block->type == ChainBlockType::NAM && block->namEngine != nullptr) {
           if (block->namEngine->hasInputLevel() &&
               std::isfinite(block->namEngine->getInputLevel())) {
@@ -1206,7 +1206,7 @@ juce::var TONE3000Processor::getMeterLevels() const {
   // Stereo-image output correlation (-1..1, 1 when the engine is idle) for
   // the mono-compatibility meter: whichever image engine the mode runs
   // (Spread in mono, the Align deck in stereo). Riding this poll costs no
-  // extra bridge traffic.
+  // extra call.
   root->setProperty("correlation", stereoEnabled.load() ? stereoOffset.correlation()
                                                         : spread.correlation());
 

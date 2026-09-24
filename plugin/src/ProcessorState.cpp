@@ -16,7 +16,6 @@ namespace {
 
 constexpr auto kMultiCoreKey = "multiCore";
 constexpr auto kNamSlimSizeDefaultKey = "namSlimSizeDefault";
-constexpr auto kWebInspectorKey = "webInspector";
 
 // Magic prefix for the binary ValueTree state format (see getStateInformation).
 constexpr char kStateMagic[] = {'T', '3', 'K', 'B'};
@@ -37,7 +36,7 @@ juce::PropertiesFile::Options userSettingsOptions() {
 #if JUCE_LINUX || JUCE_BSD
   // PropertiesFile puts a bare folderName directly under ~ on Linux, so pass
   // the XDG config location as an absolute path instead (same root as
-  // PresetManager, the logs and the WebKit storage).
+  // PresetManager and the logs).
   options.folderName =
       juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
           .getChildFile("TONE3000")
@@ -65,6 +64,15 @@ juce::File TONE3000Processor::getSettingsFile() {
   return userSettingsOptions().getDefaultFile();
 }
 
+juce::PropertiesFile::Options TONE3000Processor::uiPreferencesOptions() {
+  // Same folder as the shared settings, own file: the native UI's per-machine
+  // preferences get written by the editor on every toggle, and two
+  // PropertiesFile instances must never share a file.
+  auto options = userSettingsOptions();
+  options.applicationName = "ui-preferences";
+  return options;
+}
+
 bool TONE3000Processor::readPersistedMultiCoreEnabled() {
   return juce::PropertiesFile(userSettingsOptions()).getBoolValue(kMultiCoreKey, true);
 }
@@ -74,28 +82,6 @@ double TONE3000Processor::readPersistedNamSlimSizeDefault() {
   return juce::jlimit(
       0.0, 1.0,
       juce::PropertiesFile(userSettingsOptions()).getDoubleValue(kNamSlimSizeDefaultKey, 0.0));
-}
-
-bool TONE3000Processor::readPersistedWebInspectorEnabled() {
-  // Debug builds already get the inspector from stock JUCE; default on so a
-  // fresh debug install still has Inspect Element / Reload. Release stays off
-  // until Settings -> Diagnostics flips it.
-  return juce::PropertiesFile(userSettingsOptions())
-      .getBoolValue(kWebInspectorKey,
-#if JUCE_DEBUG
-                    true
-#else
-                    false
-#endif
-      );
-}
-
-void TONE3000Processor::persistWebInspectorEnabled(bool enabled) {
-  juce::PropertiesFile settings(userSettingsOptions());
-  settings.setValue(kWebInspectorKey, enabled);
-  saveSettingsOrLog(settings);
-  juce::Logger::writeToLog(juce::String("[Processor] Web Inspector ") +
-                           (enabled ? "enabled" : "disabled"));
 }
 
 void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {

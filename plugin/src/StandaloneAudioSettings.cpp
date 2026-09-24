@@ -5,7 +5,7 @@
 #include "Processor.h"
 
 // The standalone filter window header expects the full GUI/audio module set
-// to be visible first (same include order as Editor.h).
+// to be visible first.
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_gui_extra/juce_gui_extra.h>

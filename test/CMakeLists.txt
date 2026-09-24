@@ -82,8 +82,8 @@ target_compile_definitions(DspTests PRIVATE
     # Prevent windows.h min/max macros from breaking std::min/std::max in
     # AudioDSPTools and plugin code (same as plugin/CMakeLists.txt).
     $<$<PLATFORM_ID:Windows>:NOMINMAX>
-    # The processor compiles in its headless configuration (no Editor /
-    # webview / standalone-window code); the DSP under test is identical.
+    # The processor compiles in its headless configuration (no editor /
+    # standalone-window code); the DSP under test is identical.
     HEADLESS=1
     # midi_map_tests pumps the dispatch loop (runDispatchLoopUntil) to
     # deliver the MidiMapper's AsyncUpdater work; the plugin itself never
