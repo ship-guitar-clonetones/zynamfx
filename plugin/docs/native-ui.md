@@ -583,8 +583,15 @@ job that kept the webview compiling. `JUCE_WEB_BROWSER` is a constant 0.
 The testbed owns its fixtures and diffs captures against earlier captures.
 What stayed on purpose:
 
-- `UiPrefs` keys and the token store key keep the names the web UI stored
-  them under, so a user upgrading keeps their sign-in and preferences.
+- `UiPrefs` keys and the token store key keep the names the web UI used.
+  Lineage only: the web UI stored those values in the webview's
+  `localStorage` (a per-engine, on macOS per-host, browser store), and
+  nothing reads it, so the first native run after a web-UI build starts
+  with an empty prefs file: one sign-in, default toggles. Plugin state,
+  `preferences.settings`, presets and the model cache are untouched by the
+  port and carry over as they are. Importing the old tokens would have
+  meant a SQLite reader (WebKit) plus a LevelDB reader (WebView2) for one
+  event; a single re-login was the better trade.
 - `loadLocalTone`'s base64 form, which the DSP tests drive.
 - The `port of …` header notes and the map in §6, as the record of where
   each component's numbers came from.

@@ -1,6 +1,7 @@
 // TONE3000 OAuth token store + authenticated API client (port of
-// tone3000-client.ts T3KClient). Tokens persist in UiPrefs under
-// the same key the webview used in localStorage, so a signed-in user stays
+// tone3000-client.ts T3KClient). Tokens persist in UiPrefs (the web UI
+// kept them in the webview's localStorage, so a sign-in from those builds
+// does not carry over), and a signed-in user stays
 // signed in across editor sessions; the access token refreshes
 // transparently (proactively within 60 s of expiry, and once more after a
 // stray 401). The prefs file is shared with every other host running the
