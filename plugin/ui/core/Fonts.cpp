@@ -4,46 +4,59 @@
 
 namespace t3k::ui {
 
-juce::Font Fonts::sans(float px, bool bold, bool italic) {
-  const int style = (bold ? juce::Font::bold : 0) | (italic ? juce::Font::italic : 0);
-  return juce::Font(juce::FontOptions(sansFamily(), px, style).withPointHeight(px));
+namespace {
+
+// Typefaces are heavyweight and immutable: build each once per process.
+juce::Typeface::Ptr embedded(const char* data, int size) {
+  return juce::Typeface::createSystemTypefaceFor(data, static_cast<size_t>(size));
 }
 
-// Arial where it is installed (macOS, Windows, iOS). On Linux JUCE matches
-// family names against the font files it finds, not fontconfig's aliases, so
-// a machine without Arial gets no typeface at all: a Font with a null
-// typeface has height 0 and NaN ascent/descent, and text laid out from those
-// (TextFlow, cssBaseline) lands at NaN positions, which the software renderer
-// turns into out-of-bounds writes (x86 converts NaN to INT_MIN; it segfaulted
-// the Linux x64 self-tests painting the tone browser). Fall back to the
-// metric-compatible clones, then whatever JUCE calls the system sans.
-const juce::String& Fonts::sansFamily() {
-  static const juce::String family = [] {
-    for (const char* name : {"Arial", "Liberation Sans", "Arimo"})
-      if (juce::Font(juce::FontOptions(name, 14.0f, juce::Font::plain)).getTypefacePtr() != nullptr)
-        return juce::String(name);
-    return juce::Font::getDefaultSansSerifFontName();
-  }();
-  return family;
+// Arial is the web UI's body face and is installed on macOS, Windows and
+// iOS. JUCE on Linux matches family names against the font files it scans,
+// not fontconfig's aliases, so asking for Arial there gets a null typeface
+// (height 0, NaN ascent: text laid out at NaN positions, which the software
+// renderer turns into out-of-bounds writes). Where Arial is missing the
+// embedded Arimo stands in: same metrics, so line boxes and wrapping match.
+bool haveArial() {
+  static const bool have =
+      juce::Font(juce::FontOptions("Arial", 14.0f, juce::Font::plain)).getTypefacePtr() != nullptr;
+  return have;
+}
+
+juce::Typeface::Ptr arimo(bool bold, bool italic) {
+  static const juce::Typeface::Ptr faces[] = {
+      embedded(UiBinaryData::ArimoRegular_ttf, UiBinaryData::ArimoRegular_ttfSize),
+      embedded(UiBinaryData::ArimoBold_ttf, UiBinaryData::ArimoBold_ttfSize),
+      embedded(UiBinaryData::ArimoItalic_ttf, UiBinaryData::ArimoItalic_ttfSize),
+      embedded(UiBinaryData::ArimoBoldItalic_ttf, UiBinaryData::ArimoBoldItalic_ttfSize),
+  };
+  return faces[(bold ? 1 : 0) + (italic ? 2 : 0)];
+}
+
+juce::Typeface::Ptr robotoMono(bool bold) {
+  static const juce::Typeface::Ptr regular =
+      embedded(UiBinaryData::RobotoMonoRegular_ttf, UiBinaryData::RobotoMonoRegular_ttfSize);
+  static const juce::Typeface::Ptr boldFace =
+      embedded(UiBinaryData::RobotoMonoBold_ttf, UiBinaryData::RobotoMonoBold_ttfSize);
+  return bold ? boldFace : regular;
+}
+
+}  // namespace
+
+juce::Font Fonts::sans(float px, bool bold, bool italic) {
+  const int style = (bold ? juce::Font::bold : 0) | (italic ? juce::Font::italic : 0);
+  const auto options = haveArial() ? juce::FontOptions("Arial", px, style) : juce::FontOptions(arimo(bold, italic));
+  return juce::Font(options.withPointHeight(px));
 }
 
 juce::Font Fonts::mono(float px, bool bold) {
-  return juce::Font(juce::FontOptions(monoTypeface(bold)).withPointHeight(px));
+  return juce::Font(juce::FontOptions(robotoMono(bold)).withPointHeight(px));
 }
 
 juce::Font Fonts::tracked(const juce::Font& font, float em) {
   // withExtraKerningFactor is relative to the JUCE height; CSS em is relative
   // to the point size.
   return font.withExtraKerningFactor(em * font.getHeightToPointsFactor());
-}
-
-juce::Typeface::Ptr Fonts::monoTypeface(bool bold) {
-  // Typefaces are heavyweight and immutable: build each once per process.
-  static const juce::Typeface::Ptr regular = juce::Typeface::createSystemTypefaceFor(
-      UiBinaryData::RobotoMonoRegular_ttf, UiBinaryData::RobotoMonoRegular_ttfSize);
-  static const juce::Typeface::Ptr boldFace = juce::Typeface::createSystemTypefaceFor(
-      UiBinaryData::RobotoMonoBold_ttf, UiBinaryData::RobotoMonoBold_ttfSize);
-  return bold ? boldFace : regular;
 }
 
 }  // namespace t3k::ui

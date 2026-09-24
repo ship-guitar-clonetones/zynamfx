@@ -74,17 +74,17 @@ struct HtmlTests : juce::UnitTest {
   }
 };
 
-// The body typeface resolves on this machine and its metrics are numbers. A
-// Font with no typeface (Arial asked for on a Linux without it) has height 0
-// and NaN ascent/descent; text laid out from those lands at NaN positions and
-// the software renderer writes out of bounds (the Linux x64 segfault).
+// The body typeface resolves on this machine (Arial, or the embedded Arimo
+// where Arial is missing) and its metrics are numbers. A Font with no
+// typeface has height 0 and NaN ascent/descent; text laid out from those
+// lands at NaN positions and the software renderer writes out of bounds.
 struct FontTests : juce::UnitTest {
   FontTests() : juce::UnitTest("Fonts", "ui") {}
   void runTest() override {
     beginTest("sans resolves to a typeface with finite metrics");
     for (const bool bold : {false, true}) {
       const auto font = Fonts::sans(14, bold);
-      expect(font.getTypefacePtr() != nullptr, "no typeface for " + Fonts::sansFamily());
+      expect(font.getTypefacePtr() != nullptr, "no sans typeface");
       expect(font.getHeight() > 0);
       expect(std::isfinite(font.getAscent()) && font.getAscent() > 0);
       expect(std::isfinite(font.getDescent()) && font.getDescent() > 0);

@@ -12,11 +12,9 @@
 namespace t3k::ui {
 
 struct Fonts {
-  // Arial, sans-serif (weights 600/700 → Bold; Arial has no medium).
+  // Arial where the OS has it, else the embedded Arimo (weights 600/700 →
+  // Bold; Arial has no medium).
   static juce::Font sans(float px, bool bold = false, bool italic = false);
-  // The family sans() resolves to: Arial, or the nearest installed stand-in
-  // where it is missing (Linux). Resolved once per process.
-  static const juce::String& sansFamily();
   // Roboto Mono 400/700, embedded.
   static juce::Font mono(float px, bool bold = false);
 
@@ -50,9 +48,6 @@ struct Fonts {
     const float descent = std::round(font.getDescent());
     return std::floor((lineHeightPx - (ascent + descent)) * 0.5f) + ascent;
   }
-
-private:
-  static juce::Typeface::Ptr monoTypeface(bool bold);
 };
 
 }  // namespace t3k::ui

@@ -92,7 +92,7 @@ plugin/ui/
   NativeEditor.*      AudioProcessorEditor: owns UiPrefs, HttpClient, Tone3000Session,
                       Services, PluginRoot; scales the 1024-wide design space
   NativeUi.cmake      t3k_add_native_ui(<target>), T3kConfig.h, embedded assets
-  assets/             Roboto Mono, brand SVGs (UiBinaryData)
+  assets/             Roboto Mono, Arimo (Arial stand-in), brand SVGs (UiBinaryData)
   core/               no JUCE components: Theme, Fonts, Icons (+ generated
                       LucideIcons.h, CustomIcons, GearGlyphs), Design, Paint,
                       TextFlow / RichText (wrapped and styled text), Tween /

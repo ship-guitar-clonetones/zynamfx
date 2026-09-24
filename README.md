@@ -369,6 +369,9 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   (108th AES Convention, 2000) and C. Knapp & G. Carter, "The Generalized
   Correlation Method for Estimation of Time Delay" (IEEE TASSP, 1976): the
   sweep probe and GCC-PHAT estimator behind auto-align.
+- [Roboto Mono](https://fonts.google.com/specimen/Roboto+Mono) and
+  [Arimo](https://fonts.google.com/specimen/Arimo) (Apache-2.0), embedded in
+  the native UI; Arimo stands in for Arial where it isn't installed.
 - [lucide](https://lucide.dev) icons (ported to paths in
   `plugin/ui/core/Icons`); [dnd-kit](https://dndkit.com) and
   [react-knob-headless](https://github.com/satelllte/react-knob-headless) in
