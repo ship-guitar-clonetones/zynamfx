@@ -440,6 +440,11 @@ TEST(LocalLoadTest, EnsureWritableDirCreatesHealsAndPreservesEvidence) {
     EXPECT_TRUE(locked.isDirectory());
     EXPECT_TRUE(locked.hasWriteAccess());
     EXPECT_TRUE(locked.getChildFile("old.t3kpreset").existsAsFile());
+    // Only the owner got the write bit back: the folder holds the user's
+    // sign-in tokens, so 0555 must heal to 0755, never 0777.
+    struct stat healed {};
+    ASSERT_EQ(::stat(locked.getFullPathName().toRawUTF8(), &healed), 0);
+    EXPECT_EQ(healed.st_mode & 0777, 0755u);
     // Nothing moved aside: the fix happened in place.
     for (const auto& sibling : tmp.findChildFiles(juce::File::findDirectories, false))
       EXPECT_TRUE(sibling == locked || !sibling.getFileName().startsWith("locked"));

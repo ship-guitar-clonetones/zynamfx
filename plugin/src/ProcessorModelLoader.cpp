@@ -7,6 +7,9 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#if !JUCE_WINDOWS
+#include <sys/stat.h>
+#endif
 
 // #####################################
 // MODEL LOADING HELPERS
@@ -582,8 +585,20 @@ bool TONE3000Processor::ensureWritableDir(const juce::File& dir) {
   // A folder the user still owns with stripped write bits (restored backup)
   // is fixable in place with a chmod, which keeps its contents where they
   // are. chmod is owner-only, so this quietly does nothing to a root-owned
-  // folder, which falls through to the rename below.
-  if (dir.isDirectory() && dir.setReadOnly(false) && dir.hasWriteAccess()) {
+  // folder, which falls through to the rename below. The owner's write bit
+  // only: juce::File::setReadOnly(false) would also grant group and world
+  // (0555 -> 0777), and the folder holds the user's sign-in tokens.
+  const auto restoreOwnerWrite = [&dir] {
+#if JUCE_WINDOWS
+    return dir.setReadOnly(false);
+#else
+    struct stat st {};
+    const juce::String path = dir.getFullPathName();
+    return ::stat(path.toRawUTF8(), &st) == 0 &&
+           ::chmod(path.toRawUTF8(), (st.st_mode & 07777) | S_IWUSR) == 0;
+#endif
+  };
+  if (dir.isDirectory() && restoreOwnerWrite() && dir.hasWriteAccess()) {
     juce::Logger::writeToLog("[AppData] Restored write permission on " + dir.getFullPathName());
     return true;
   }
