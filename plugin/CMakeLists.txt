@@ -192,8 +192,12 @@ endif()
 #   story on iOS is the Files app. These two put the app's Documents folder in
 #   Files (UIFileSharingEnabled + LSSupportsOpeningDocumentsInPlace) so a user
 #   can drop captures in, and let juce::FileChooser open them in place.
+# - TARGETED_DEVICE_FAMILY: "2" is iPad only. JUCE defaults to "1,2"
+#   (iPhone + iPad), and App Store Connect reads the family from the binary,
+#   so with the default it demands iPhone screenshots before review and would
+#   let the app install on iPhones the layout was never sized for.
 # - IPAD_SCREEN_ORIENTATIONS: the faceplate is landscape by design. iPhone is
-#   out of scope for this PR, so no iPhone orientation list.
+#   out of scope, so no iPhone orientation list.
 # - REQUIRES_FULL_SCREEN: App Store validation refuses a landscape-only iPad
 #   app unless it opts out of multitasking with UIRequiresFullScreen
 #   (ITMS-90474). On iPadOS 26 the key no longer blocks windowing at runtime,
@@ -217,6 +221,7 @@ if (T3K_IOS)
         BACKGROUND_AUDIO_ENABLED TRUE
         FILE_SHARING_ENABLED TRUE
         DOCUMENT_BROWSER_ENABLED TRUE
+        TARGETED_DEVICE_FAMILY "2"
         IPAD_SCREEN_ORIENTATIONS UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         REQUIRES_FULL_SCREEN TRUE
     )

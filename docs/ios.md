@@ -97,6 +97,11 @@ Simulator build.
 - `ITSAppUsesNonExemptEncryption` is false in the Info.plist. The app's only
   encryption is standard HTTPS, and declaring it here answers the
   export-compliance question once instead of on every upload.
+- `TARGETED_DEVICE_FAMILY` is `2` (iPad only). JUCE's default is `1,2`, and
+  App Store Connect reads the family from the binary, so a build made with
+  the default is treated as a universal app: review is blocked until iPhone
+  screenshots are uploaded, and the app would install on iPhones the
+  faceplate was never sized for.
 - `UIRequiresFullScreen` is true. A landscape-only iPad app must either list
   all four orientations or declare itself full-screen; without the key the
   upload is refused with ITMS-90474. It costs nothing at runtime on
