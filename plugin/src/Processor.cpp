@@ -587,13 +587,14 @@ void TONE3000Processor::prepareChain(std::vector<std::unique_ptr<ChainBlock>>& b
       }
     } else if (block->type == ChainBlockType::IR && block->convolverMono != nullptr) {
       // Convolvers always run at the base rate behind the block's island
-      // (see ChainBlock::irBaseRateIsland), so their spec only tracks the
-      // base block size, never the oversampling factor.
-      juce::dsp::ProcessSpec spec{kChainBaseSampleRate,
-                                  static_cast<juce::uint32>(chainBaseBlockSize()), 2};
-      block->convolverMono->prepare(spec);
+      // (see ChainBlock::irBaseRateIsland) and are fed at most
+      // kIrConvolverBlockSize frames per call, so the spec they were
+      // prepared with at load never changes: reset() clears their state and
+      // keeps the engine. prepare() would rebuild it from scratch (resample
+      // the IR, redo every FFT segment) under chainMutex for the same result.
+      block->convolverMono->reset();
       if (block->convolverStereo != nullptr)
-        block->convolverStereo->prepare(spec);
+        block->convolverStereo->reset();
 
       // Reset normalization smoother to current gain to prevent jumps on re-prepare
       if (block->loaded) {
@@ -1395,7 +1396,7 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
             [&convolver, numChannels](float* const* baseChannels, int baseFrames) {
               juce::dsp::AudioBlock<float> irBlock(baseChannels, static_cast<size_t>(numChannels),
                                                    static_cast<size_t>(baseFrames));
-              convolver.process(juce::dsp::ProcessContextReplacing<float>(irBlock));
+              processConvolverInChunks(convolver, irBlock);
             });
 
         // Unit-energy normalization, always on: an IR file's absolute level

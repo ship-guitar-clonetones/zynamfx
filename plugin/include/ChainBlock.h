@@ -53,6 +53,28 @@ constexpr double kWetFadeSeconds = 0.025;
 // level with the trunk lane (see alignBranchLaneLengths).
 constexpr int kMinLaneSlots = 5;
 
+// IR convolver block size. juce::dsp::Convolution's zero-latency engines size
+// their FFT partition from ProcessSpec::maximumBlockSize and run a full
+// forward + inverse FFT of that size on *every* process() call, however few
+// samples it carries. Preparing from the host's promised maximum ties IR CPU
+// to a number unrelated to the real callback size: Ardour advertises 8192 to
+// every LV2 plugin whatever buffer it actually runs, and one cab IR at
+// 64-sample callbacks then costs ~90% of a core instead of ~2%. So
+// convolvers are always prepared at this fixed size and never fed more per
+// call (processConvolverInChunks); per-sample cost stays flat across host
+// block sizes, and the spec no longer drifts with the host config.
+constexpr int kIrConvolverBlockSize = 256;
+
+inline void processConvolverInChunks(juce::dsp::Convolution& convolver,
+                                     const juce::dsp::AudioBlock<float>& block) {
+  const size_t numSamples = block.getNumSamples();
+  for (size_t start = 0; start < numSamples; start += kIrConvolverBlockSize) {
+    auto chunk =
+        block.getSubBlock(start, std::min<size_t>(kIrConvolverBlockSize, numSamples - start));
+    convolver.process(juce::dsp::ProcessContextReplacing<float>(chunk));
+  }
+}
+
 // Chain block data structure
 struct ChainBlock {
   std::string id;  // Chain block UUID

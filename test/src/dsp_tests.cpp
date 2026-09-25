@@ -20,6 +20,7 @@
 // Run locally:  ./script/test-dsp.sh          (configures/builds/runs)
 // or manually:  cmake --build build --target DspTests
 //               ctest --test-dir build -R Dsp --output-on-failure
+#include "ChainBlock.h"
 #include "ChainOversampler.h"
 #include "NamEngine.h"
 #include "Processor.h"
@@ -748,6 +749,74 @@ TEST(IrConvolutionTest, IslandedConvolutionInOversampledChainMatchesBaseRate) {
           db(goertzelPower(outB.data() + start, static_cast<size_t>(window), f));
       EXPECT_NEAR(gainB, gainA, 0.15)
           << irName << " at " << f << " Hz: islanded IR deviates from base-rate IR";
+    }
+  }
+}
+
+TEST(IrConvolutionTest, ChunkedFixedBlockConvolverMatchesHostSizedConvolver) {
+  // The RT path prepares every convolver at kIrConvolverBlockSize and feeds
+  // it through processConvolverInChunks, whatever the host block size (hosts
+  // like Ardour promise 8192 while running 64, and a convolver prepared for
+  // the promise burns ~40x the CPU). Partitioning must not change the sound:
+  // at every host block size, including ones above the fixed size and not a
+  // multiple of it, the output matches a convolver prepared for exactly that
+  // host block.
+  const int total = 96000;
+  const auto noise = makeNoise(total, 777, 0.25f);
+
+  // Settle JUCE's install crossfade on silence first, like the loader's
+  // elapseConvolverInstallFade, so both paths start fully wet from silent
+  // state and the comparison can cover every sample.
+  auto settle = [](juce::dsp::Convolution& convolver, int chunk) {
+    juce::AudioBuffer<float> silence(2, chunk);
+    for (int done = 0; done < static_cast<int>(kFs * 0.15); done += chunk) {
+      silence.clear();
+      juce::dsp::AudioBlock<float> block(silence);
+      convolver.process(juce::dsp::ProcessContextReplacing<float>(block));
+    }
+  };
+
+  auto run = [&](juce::dsp::Convolution& convolver, int hostBlock, bool chunked) {
+    juce::AudioBuffer<float> buffer(2, total);
+    buffer.copyFrom(0, 0, noise.data(), total);
+    buffer.copyFrom(1, 0, noise.data(), total);
+    for (int off = 0; off < total; off += hostBlock) {
+      const auto frames = static_cast<size_t>(std::min(hostBlock, total - off));
+      juce::dsp::AudioBlock<float> block(buffer.getArrayOfWritePointers(), 2,
+                                         static_cast<size_t>(off), frames);
+      if (chunked)
+        processConvolverInChunks(convolver, block);
+      else
+        convolver.process(juce::dsp::ProcessContextReplacing<float>(block));
+    }
+    return buffer;
+  };
+
+  for (const char* irName : {"cab-ir-test.wav", "reverb-ir-mono-test.wav"}) {
+    for (int hostBlock : {64, 256, 1000, 8192}) {
+      auto reference =
+          makeConvolver(testFile(irName), juce::dsp::Convolution::Stereo::no, hostBlock);
+      auto fixed = makeConvolver(testFile(irName), juce::dsp::Convolution::Stereo::no,
+                                 kIrConvolverBlockSize);
+      settle(*reference, hostBlock);
+      settle(*fixed, kIrConvolverBlockSize);
+
+      const auto expected = run(*reference, hostBlock, false);
+      const auto actual = run(*fixed, hostBlock, true);
+
+      float peak = 0.0f, maxDiff = 0.0f;
+      for (int ch = 0; ch < 2; ++ch)
+        for (int i = 0; i < total; ++i) {
+          peak = std::max(peak, std::abs(expected.getSample(ch, i)));
+          maxDiff =
+              std::max(maxDiff, std::abs(expected.getSample(ch, i) - actual.getSample(ch, i)));
+        }
+      ASSERT_GT(peak, 1e-3f) << irName << ": reference output is silent";
+      // Different FFT partitioning only reorders float rounding (-100 dB
+      // relative is far below anything audible, and far above a real bug).
+      EXPECT_LT(maxDiff, peak * 1e-5f)
+          << irName << " at host block " << hostBlock
+          << ": chunked fixed-size convolution deviates from host-sized convolution";
     }
   }
 }
