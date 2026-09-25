@@ -151,6 +151,10 @@ private:
   // Persistence in the standalone holder's settings file.
   juce::PropertySet* props() const;
   juce::String currentSetupKey() const;
+  /** currentSetupKey, plus the feedback risk on iOS (the device name there
+      never changes). What the monitoring policy and a manual Hear Yourself
+      toggle both key on. */
+  juce::String monitoringKey() const;
   juce::var getRememberedSetups() const;
 
   bool asioTypeHasDevices();

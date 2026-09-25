@@ -29,6 +29,12 @@ namespace IosAudioRoute {
     LE). Cheap enough to call on every state pull. */
 bool isBluetoothRoute();
 
+/** True when the current route takes input from the built-in microphone and
+    plays out of the built-in speaker: the one iOS setup where monitoring
+    squeals. The desktop check matches device names, but JUCE's iOS device is
+    always "iOS Audio", so the route's port types are the only signal. */
+bool isBuiltInMicToSpeaker();
+
 /** One setCategory:mode:options: call: the category and options JUCE asked
     for minus AllowBluetoothHFP, with Measurement mode (the raw input path, no
     AGC and no voice processing). Mode and options go together because a bare
@@ -45,6 +51,9 @@ void configureSession();
 #else
 
 inline bool isBluetoothRoute() {
+  return false;
+}
+inline bool isBuiltInMicToSpeaker() {
   return false;
 }
 inline void configureSession() {}
