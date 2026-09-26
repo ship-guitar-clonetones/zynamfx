@@ -142,7 +142,7 @@ inline const KnobScale& tonalityHz() {
 inline const KnobScale& windowMs() {
   static const KnobScale s = [] {
     KnobScale c;
-    constexpr int kMs[] = {11, 16, 21, 31};
+    static constexpr int kMs[] = {11, 16, 21, 31};  // static: the lambdas index it without a capture
     const auto index = [](double n) { return juce::jlimit(0, 3, juce::roundToInt(n * 3)); };
     c.toDisplay = [index](double n) { return kMs[index(n)]; };
     // Snaps typed values to the nearest detent.
