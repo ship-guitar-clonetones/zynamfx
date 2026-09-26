@@ -45,9 +45,9 @@ constexpr SliderDefault kSliders[] = {
     // normalised maps (KnobScale.h).
     {"gateRelease", 0.5f},       {"gateHold", 0.1f},      {"gateRange", 1.0f},
     // Transpose at 0 st (centre) with its deck at the defaults: 0 cents,
-    // tonality Off (top), the 60 ms window (middle detent).
+    // tonality Off (top), the 30 ms buffer (second of four detents).
     {"transposeSemitones", 0.5f}, {"transposeFine", 0.5f}, {"transposeTonality", 1.0f},
-    {"transposeWindow", 0.5f},
+    {"transposeWindow", 1.0f / 3.0f},
 };
 struct ToggleDefault {
   const char* id;

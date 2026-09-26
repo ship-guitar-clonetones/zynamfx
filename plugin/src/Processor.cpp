@@ -319,7 +319,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   // trims the shift in cents (a song tuned 75 cents up is -12 + fine). The
   // tonality limit rides a log map over the range where it does something
   // on a guitar; its top end (20 kHz) is "off", the default: a pure shift.
-  // The window is a 3-way choice and not automatable because, like the
+  // The window (the engine's delay buffer, read out as the latency it
+  // reports) is a 4-way choice and not automatable because, like the
   // oversampling factor, changing it changes the reported latency.
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"transposeFine", 41}, "transposeFine", -Transpose::kCentsRange,
@@ -334,10 +335,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
           }),
       Transpose::kTonalityOffHz));
   juce::StringArray windows;
-  for (const int ms : Transpose::kWindowMs) windows.add(juce::String(ms) + " ms");
+  for (size_t w = 0; w < Transpose::kWindowMs.size(); ++w)
+    windows.add(juce::String(juce::roundToInt(Transpose::latencyMs(static_cast<Transpose::Window>(w)))) + " ms");
   layout.add(std::make_unique<juce::AudioParameterChoice>(
       juce::ParameterID{"transposeWindow", 43}, "transposeWindow", windows,
-      static_cast<int>(Transpose::Window::balanced),
+      static_cast<int>(Transpose::kDefaultWindow),
       juce::AudioParameterChoiceAttributes().withAutomatable(false)));
 
   return layout;
@@ -1731,18 +1733,16 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   gateWasEnabled = cacheGateEnabled;
 
   // Transpose (Transpose.h): pitch-shifts the instrument before the chain,
-  // the placement Neural DSP's X-series uses. After the gate so it decides
-  // on the real transients, not the vocoder's smeared ones; before the
-  // auto-align probe below, whose sweep must never be shifted. Only while
-  // powered: off is a bit-exact, zero-latency passthrough, and the latency
-  // report rides the power parameter (updateLatency), not this path.
-  if (cacheTransposeEnabled) {
-    if (!transposeWasEnabled)
-      transpose.reset();
+  // so the amp sees a down-tuned guitar. After the gate so it decides on
+  // the real transients; before the auto-align probe below, whose sweep
+  // must never be shifted. Runs while powered and through the power-off
+  // blend; once that lands it is a bit-exact, zero-latency passthrough. The
+  // latency report rides the power parameter (updateLatency), not this path.
+  transpose.setEnabled(cacheTransposeEnabled);
+  if (transpose.isRunning()) {
     transpose.setParams(cacheTranspose);
     transpose.process(buffer);
   }
-  transposeWasEnabled = cacheTransposeEnabled;
 
   // #########################
   // Auto-align probe injection (see AutoOffset.h): while a measurement is

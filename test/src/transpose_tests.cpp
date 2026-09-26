@@ -3,19 +3,26 @@
 // The mechanical guarantees of the input-stage pitch shifter (Transpose.h)
 // and of the processor wiring around it:
 //
-//   TransposeTest   latency is exactly the window (the figure the processor
-//                   reports from the parameters must match the engine), the
-//                   shift lands on the expected frequency including the fine
-//                   trim, a mono buffer against the stereo engine is safe,
-//                   rate / block-size / window changes and ±12 extremes stay
-//                   finite, and a window change is a clean swap.
+//   TransposeTest   the latency figure the processor reports from the
+//                   parameters matches the engine at every window and rate;
+//                   at a 1.0 ratio the output is a pure delay at the floor
+//                   and unity gain; the shift lands on the expected frequency
+//                   including the fine trim; the tonality limit passes the
+//                   highs unshifted; a pick attack re-syncs the tap to the
+//                   floor; stereo channels share one tap; a mono buffer
+//                   against the stereo engine is safe; rate / block-size /
+//                   window changes and ±12 extremes stay finite; a window
+//                   change keeps the shift; power, window and tonality
+//                   changes blend (no step, no hole) and a powered-off
+//                   engine stops running once its fade-out lands.
 //   ProcessorTest   powered off the plugin is bit-exact and zero-latency;
 //                   powering on reports boundary + window latency from the
 //                   message thread; the parameters round-trip through state
 //                   and presets; a state or preset saved before Transpose
 //                   existed lands it on the defaults (off).
 //
-// Whether a given window "warbles" on chords is a by-ear item.
+// Splice quality (sidebands, warble, onset timing on real DIs) is the
+// bench's job, see plugin/docs/transpose.md.
 #include "Processor.h"
 #include "Transpose.h"
 #include "test_helpers.h"
@@ -31,22 +38,24 @@ namespace {
 
 constexpr int kBlock = 512;
 
-// Streams `in` (mono, a multiple of kBlock long) through a shifter held at
-// `p`, optionally switching to `p2` at sample `switchAt`.
+// Streams mono `in` through a shifter in kBlock blocks (the tail as a short
+// one), optionally switching to `p2` at sample `switchAt`.
 std::vector<float> runTranspose(const std::vector<float>& in, const Transpose::Params& p,
                                 double fs = kFs, const Transpose::Params* p2 = nullptr,
                                 int switchAt = -1) {
   Transpose t;
   t.prepare(fs, kBlock);
+  t.setEnabled(true);
   t.setParams(p);
-  juce::AudioBuffer<float> buf(1, kBlock);
   std::vector<float> out;
   out.reserve(in.size());
   for (size_t off = 0; off < in.size(); off += kBlock) {
     if (p2 != nullptr && static_cast<int>(off) == switchAt) t.setParams(*p2);
-    buf.copyFrom(0, 0, in.data() + off, kBlock);
+    const int n = static_cast<int>(std::min<size_t>(kBlock, in.size() - off));
+    juce::AudioBuffer<float> buf(1, n);
+    buf.copyFrom(0, 0, in.data() + off, n);
     t.process(buf);
-    out.insert(out.end(), buf.getReadPointer(0), buf.getReadPointer(0) + kBlock);
+    out.insert(out.end(), buf.getReadPointer(0), buf.getReadPointer(0) + n);
   }
   return out;
 }
@@ -60,7 +69,7 @@ void expectFinite(const juce::AudioBuffer<float>& buf) {
 }
 
 // Energy at `expected` must dominate energy left at `original` in the
-// settled tail (past the longest window and the engine's settle).
+// settled tail.
 void expectShiftedTo(const std::vector<float>& out, double original, double expected) {
   constexpr int kSettle = 48000, kWindow = 65536;
   ASSERT_GE(out.size(), static_cast<size_t>(kSettle + kWindow));
@@ -73,40 +82,46 @@ void expectShiftedTo(const std::vector<float>& out, double original, double expe
 
 }  // namespace
 
-TEST(TransposeTest, LatencyIsExactlyTheWindowAtAnyRate) {
+TEST(TransposeTest, LatencyFigureMatchesTheEngineAtAnyRate) {
   // The processor reports latency from the parameters via the static
-  // figure, before the audio thread has switched engines; the engine the
+  // figure, before the audio thread has switched windows; the engine the
   // audio thread runs must agree with it, at every window and host rate.
   for (const double fs : {44100.0, 48000.0, 96000.0}) {
     Transpose t;
     t.prepare(fs, kBlock);
+    t.setEnabled(true);
     for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
       const auto window = Transpose::windowFromIndex(w);
       Transpose::Params p;
       p.window = window;
       t.setParams(p);
       EXPECT_EQ(t.latencySamples(), Transpose::latencySamples(window, fs)) << fs << " Hz, window " << w;
-      EXPECT_EQ(t.latencySamples(), static_cast<int>(fs * Transpose::windowMs(window) / 1000));
+      // The tap's mean delay: halfway between the floor and the buffer.
+      const int floor = static_cast<int>(fs * Transpose::kMinDelayMs / 1000);
+      const int buffer = static_cast<int>(fs * Transpose::windowMs(window) / 1000);
+      EXPECT_EQ(t.latencySamples(), (floor + buffer) / 2);
     }
   }
-  EXPECT_EQ(Transpose::latencySamples(Transpose::Window::balanced, kFs), 2880);  // 60 ms
+  EXPECT_EQ(Transpose::latencySamples(Transpose::Window::ms30, kFs), 768);  // (2 + 30) / 2 ms
+  EXPECT_DOUBLE_EQ(Transpose::latencyMs(Transpose::Window::ms30), 16.0);
 }
 
-TEST(TransposeTest, UnityRatioIsTimeAlignedAtTheReportedLatency) {
-  // Powered on at 0 st the engine still runs (so sweeping through 0 never
-  // jumps the timing); its output must then line up with the input at the
-  // reported latency (a broadband signal: a phase vocoder keeps a pure
-  // tone's frequency, not its absolute phase) and sit at unity gain.
+TEST(TransposeTest, UnityRatioIsAPureDelayAtTheFloor) {
+  // Powered on at 0 st the tap does not drift, so the output is the input
+  // delayed by the floor (where attacks are re-synced to) at unity gain.
+  // Sweeping the knob through 0 therefore never jumps the timing.
   Transpose::Params p;
-  const int latency = Transpose::latencySamples(p.window, kFs);
-  const auto noise = makeNoise(4 * 48000, 3, 0.4f);
+  const int floor = Transpose::minDelaySamples(kFs);
+  const auto noise = makeNoise(2 * 48000, 3, 0.4f);
   const auto out = runTranspose(noise, p);
-  EXPECT_EQ(bestCorrelationLag(out, noise, 96000, 16384, latency + 256), latency);
-  const auto tone = makeSine(4 * 48000, 440.0, 0.5f);
+  EXPECT_EQ(bestCorrelationLag(out, noise, 48000, 8192, floor + 256), floor);
+  for (int i = 48000; i < 48000 + 8192; ++i)
+    ASSERT_NEAR(out[static_cast<size_t>(i)], noise[static_cast<size_t>(i - floor)], 1e-5f) << i;
+  const auto tone = makeSine(3 * 48000, 440.0, 0.5f);
   const auto toneOut = runTranspose(tone, p);
   const double gain = db(goertzelPower(toneOut.data() + 96000, 16384, 440.0)) -
                       db(goertzelPower(tone.data() + 96000, 16384, 440.0));
-  EXPECT_NEAR(gain, 0.0, 0.5);
+  EXPECT_NEAR(gain, 0.0, 0.05);
 }
 
 TEST(TransposeTest, OctaveUpAndDownLandOnTheFrequency) {
@@ -127,27 +142,103 @@ TEST(TransposeTest, FineTrimJoinsTheRatio) {
   expectShiftedTo(runTranspose(in, p), 440.0, 440.0 * std::pow(2.0, -1.5 / 12.0));
 }
 
-TEST(TransposeTest, TonalityLimitHoldsHighPartialsBack) {
-  // Above the limit the shift becomes an offset instead of a ratio: an
-  // octave up moves a 6 kHz partial to 12 kHz with the limit off, but only
-  // by the limit's own offset (2 kHz * (2 - 1)) with a 2 kHz limit.
+TEST(TransposeTest, ShiftedToneKeepsUnityGainAtEveryWindow) {
+  // Splices land on whole periods of a steady tone, so the crossfades add
+  // nothing and take nothing away, at any buffer size.
+  const auto in = makeSine(3 * 48000, 220.0, 0.5f);
+  for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
+    Transpose::Params p;
+    p.semitones = -2;
+    p.window = Transpose::windowFromIndex(w);
+    const auto out = runTranspose(in, p);
+    const double expected = 220.0 * std::pow(2.0, -2.0 / 12.0);
+    const double gain = db(goertzelPower(out.data() + 48000, 65536, expected)) -
+                        db(goertzelPower(in.data() + 48000, 65536, 220.0));
+    EXPECT_NEAR(gain, 0.0, 1.0) << "window " << w;
+  }
+}
+
+TEST(TransposeTest, TonalityLimitPassesTheHighsUnshifted) {
+  // Above the limit the input bypasses the shifter: an octave up moves a
+  // 6 kHz partial to 12 kHz with the limit off, and leaves it at 6 kHz with
+  // a 2 kHz limit.
   const auto in = makeSine(3 * 48000, 6000.0, 0.5f);
   Transpose::Params p;
   p.semitones = 12;
   expectShiftedTo(runTranspose(in, p), 6000.0, 12000.0);
   p.tonalityHz = 2000.0f;
-  // Signalsmith splits the limit between input and output (limit/sqrt(2)).
-  const double limit = 2000.0 / std::sqrt(2.0);
-  expectShiftedTo(runTranspose(in, p), 6000.0, 6000.0 + limit);
+  expectShiftedTo(runTranspose(in, p), 12000.0, 6000.0);
+  // ... while a partial below the limit still shifts.
+  const auto low = makeSine(3 * 48000, 440.0, 0.5f);
+  expectShiftedTo(runTranspose(low, p), 440.0, 880.0);
+}
+
+TEST(TransposeTest, PickAttackReSyncsTheTapToTheFloor) {
+  // On a sustained note the tap drifts across the buffer; a pick attack
+  // must not wait for it. The burst has to appear in the output within the
+  // floor plus the re-sync span, wherever the tap was.
+  const int floor = Transpose::minDelaySamples(kFs);
+  const int span = static_cast<int>(kFs * 0.004);
+  const int fade = static_cast<int>(kFs * 0.002);
+  // 1 ms RMS of `x` ending at `end`.
+  const auto rms = [](const std::vector<float>& x, int end) {
+    double acc = 0.0;
+    for (int i = end - 48; i < end; ++i) acc += static_cast<double>(x[static_cast<size_t>(i)]) * x[static_cast<size_t>(i)];
+    return std::sqrt(acc / 48.0);
+  };
+  for (const int holdMs : {700, 1150, 1600, 2050}) {
+    const int hold = holdMs * 48;
+    // A quiet low note (little energy above the detector's 600 Hz), then a
+    // loud broadband burst: a 14 dB step.
+    auto in = makeSine(hold + 24000, 110.0, 0.1f);
+    const auto burst = makeNoise(24000, 11, 0.9f);
+    for (int i = 0; i < 24000; ++i) in[static_cast<size_t>(hold + i)] = burst[static_cast<size_t>(i)];
+    Transpose::Params p;
+    p.semitones = -2;
+    const auto out = runTranspose(in, p);
+    // Arrival: the first 1 ms window past the step's midpoint level (the
+    // tone's RMS is 0.07, the burst's 0.52).
+    int arrival = -1;
+    for (int end = hold + 48; end < hold + 24000 && arrival < 0; ++end)
+      if (rms(out, end) > 0.3) arrival = end;
+    ASSERT_GT(arrival, 0) << holdMs;
+    const int lag = arrival - hold;
+    EXPECT_GE(lag, floor) << holdMs;
+    // Floor + re-sync span + the fade + the 1 ms window + 1 ms of detector.
+    EXPECT_LE(lag, floor + span + fade + 96) << holdMs;
+  }
+}
+
+TEST(TransposeTest, StereoChannelsShareOneTap) {
+  // The lag search and the detector run on the channel mean and both
+  // channels read the same tap, so a right channel that is half the left
+  // stays exactly half through every splice: the image never smears.
+  Transpose t;
+  t.prepare(kFs, kBlock);
+  t.setEnabled(true);
+  Transpose::Params p;
+  p.semitones = -3;
+  t.setParams(p);
+  juce::AudioBuffer<float> buf(2, kBlock);
+  constexpr int kLength = 192 * kBlock;
+  const auto noise = makeNoise(kLength, 5, 0.4f);
+  for (int off = 0; off < kLength; off += kBlock) {
+    buf.copyFrom(0, 0, noise.data() + off, kBlock);
+    buf.copyFrom(1, 0, noise.data() + off, kBlock);
+    buf.applyGain(1, 0, kBlock, 0.5f);
+    t.process(buf);
+    for (int i = 0; i < kBlock; ++i)
+      ASSERT_NEAR(buf.getReadPointer(1)[i], 0.5f * buf.getReadPointer(0)[i], 1e-6f) << off + i;
+  }
 }
 
 TEST(TransposeTest, MonoBufferAgainstTheStereoEngineIsSafe) {
-  // The engine is always stereo-configured; a genuinely mono host buffer
-  // (see ProcessorTest.StereoChainsFoldToMonoWithoutAStereoOutput) feeds
-  // both lanes from its one channel and reads one back (the contributor's
-  // original wrapper read past the buffer here).
+  // A genuinely mono host buffer (see
+  // ProcessorTest.StereoChainsFoldToMonoWithoutAStereoOutput) feeds the
+  // engine from its one channel; nothing may read or write past it.
   Transpose t;
   t.prepare(kFs, kBlock);
+  t.setEnabled(true);
   Transpose::Params p;
   p.semitones = 7;
   t.setParams(p);
@@ -173,18 +264,22 @@ TEST(TransposeTest, SurvivesRateBlockAndWindowChanges) {
     expectFinite(buf);
   };
   t.prepare(44100.0, 256);
+  t.setEnabled(true);
   t.setParams(p);
   run(256, 1);
   // A device change is a fresh prepare(), like a real prepareToPlay.
   t.prepare(96000.0, 1024);
   run(1024, 2);
-  // A block bigger than the scratch (an offline bounce) runs in slices.
+  // A block bigger than the prepared size (an offline bounce).
   run(4096, 3);
-  // Every window, switched live.
+  // Every window, switched live, at both shift directions.
   for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
     p.window = Transpose::windowFromIndex(w);
-    t.setParams(p);
-    run(1024, 10 + static_cast<unsigned>(w));
+    for (const int semis : {12, -12}) {
+      p.semitones = semis;
+      t.setParams(p);
+      for (int i = 0; i < 8; ++i) run(1024, 10 + static_cast<unsigned>(w) + static_cast<unsigned>(i));
+    }
   }
 }
 
@@ -201,16 +296,116 @@ TEST(TransposeTest, ExtremeShiftsStayBounded) {
 }
 
 TEST(TransposeTest, WindowChangeKeepsTheShift) {
-  // Switching engines mid-stream: the new engine must carry the current
-  // frequency map (a stale 1.0 map would drop the shift), and the old
-  // engine's state must not bleed through.
+  // Switching buffers mid-stream: the ratio must carry over and the tap
+  // must find its way into the new range.
   const auto in = makeSine(4 * 48000, 440.0, 0.5f);
   Transpose::Params a, b;
   a.semitones = b.semitones = 12;
-  a.window = Transpose::Window::fast;
-  b.window = Transpose::Window::smooth;
-  const auto out = runTranspose(in, a, kFs, &b, 48000);
+  a.window = Transpose::Window::ms20;
+  b.window = Transpose::Window::ms60;
+  const auto out = runTranspose(in, a, kFs, &b, 94 * kBlock);  // on a block edge, or never applied
   expectShiftedTo(out, 440.0, 880.0);
+}
+
+namespace {
+
+// Largest sample-to-sample step in [from, to).
+float maxStep(const std::vector<float>& x, int from, int to) {
+  float m = 0.0f;
+  for (int i = from + 1; i < to; ++i)
+    m = std::max(m, std::abs(x[static_cast<size_t>(i)] - x[static_cast<size_t>(i - 1)]));
+  return m;
+}
+
+}  // namespace
+
+TEST(TransposeTest, WindowChangeIsSeamless) {
+  // Shrinking the buffer from 60 to 20 ms while the tap sits deep in it:
+  // the rings keep their audio, so there is no hole, and the tap splices
+  // back into range through a crossfade, so there is no step. A 220 Hz
+  // tone's own largest step is ~0.014 per sample at 0.5 amplitude.
+  const auto in = makeSine(3 * 48000, 220.0, 0.5f);
+  Transpose::Params a, b;
+  a.semitones = b.semitones = -2;
+  a.window = Transpose::Window::ms60;
+  b.window = Transpose::Window::ms20;
+  const int switchAt = 96 * kBlock;
+  const auto out = runTranspose(in, a, kFs, &b, switchAt);
+  EXPECT_LT(maxStep(out, switchAt - 4800, switchAt + 4800), 0.03f);
+  for (int end = switchAt + 240; end <= switchAt + 4800; end += 240) {
+    double acc = 0.0;
+    for (int i = end - 240; i < end; ++i) acc += static_cast<double>(out[static_cast<size_t>(i)]) * out[static_cast<size_t>(i)];
+    EXPECT_GT(std::sqrt(acc / 240), 0.25) << "hole at " << end;  // the tone's RMS is 0.35
+  }
+}
+
+TEST(TransposeTest, PowerBlendsInsteadOfStepping) {
+  // Power on and off mid-tone: the dry and the shifted signal crossfade
+  // over 25 ms; neither edge may step, and after the fade-out lands the
+  // engine reports itself stopped so the processor can bypass it. An
+  // off/on tap inside the fade-out (one block apart) must turn the blend
+  // around, not restart the engine at a nonzero mix.
+  Transpose t;
+  t.prepare(kFs, kBlock);
+  Transpose::Params p;
+  p.semitones = -5;
+  constexpr int kLength = 288 * kBlock;  // ~3 s
+  const auto in = makeSine(kLength, 220.0, 0.5f);
+  juce::AudioBuffer<float> buf(1, kBlock);
+  std::vector<float> out;
+  int stoppedAt = -1;
+  for (int off = 0; off < kLength; off += kBlock) {
+    if (off == 48 * kBlock) t.setEnabled(true);
+    if (off == 120 * kBlock) t.setEnabled(false);
+    if (off == 121 * kBlock) t.setEnabled(true);
+    if (off == 192 * kBlock) t.setEnabled(false);
+    buf.copyFrom(0, 0, in.data() + off, kBlock);
+    if (t.isRunning()) {
+      t.setParams(p);
+      t.process(buf);
+    } else if (off > 192 * kBlock && stoppedAt < 0) {
+      stoppedAt = off;
+    }
+    out.insert(out.end(), buf.getReadPointer(0), buf.getReadPointer(0) + kBlock);
+  }
+  EXPECT_LT(maxStep(out, 0, kLength), 0.03f);
+  ASSERT_GT(stoppedAt, 0);
+  EXPECT_LT(stoppedAt - 192 * kBlock, 48000 * 0.05) << "the fade-out should land within ~25 ms";
+  // Off before the power-on and after the fade-out: the input untouched.
+  for (int i = 0; i < 48 * kBlock; ++i) ASSERT_EQ(out[static_cast<size_t>(i)], in[static_cast<size_t>(i)]);
+  for (int i = stoppedAt; i < kLength; ++i) ASSERT_EQ(out[static_cast<size_t>(i)], in[static_cast<size_t>(i)]);
+  // And it did shift in between.
+  const double shifted = 220.0 * std::pow(2.0, -5.0 / 12.0);
+  EXPECT_GT(db(goertzelPower(out.data() + 60 * kBlock, 32768, shifted)),
+            db(goertzelPower(out.data() + 60 * kBlock, 32768, 220.0)) + 20.0);
+}
+
+TEST(TransposeTest, TonalityBlendsInsteadOfStepping) {
+  const auto in = makeSine(3 * 48000, 220.0, 0.5f);
+  Transpose::Params a, b;
+  a.semitones = b.semitones = -2;
+  b.tonalityHz = 3000.0f;
+  const int switchAt = 96 * kBlock;
+  const auto out = runTranspose(in, a, kFs, &b, switchAt);
+  EXPECT_LT(maxStep(out, switchAt - 4800, switchAt + 4800), 0.03f);
+}
+
+TEST(TransposeTest, UpshiftOnTheSmallestBufferStaysOnPitch) {
+  // +12 on 20 ms is the tightest case: the tap covers the buffer in ~12 ms
+  // and the guard, fade and search lead eat most of it. Splices must still
+  // find whole-period jumps.
+  const auto in = makeSine(3 * 48000, 440.0, 0.5f);
+  Transpose::Params p;
+  p.semitones = 12;
+  p.window = Transpose::Window::ms20;
+  const auto out = runTranspose(in, p);
+  // Peak of a 1.36 s spectrum within 3 cents of 880.
+  double best = 0.0, bestF = 0.0;
+  for (double f = 870.0; f <= 890.0; f += 0.25) {
+    const double pw = goertzelPower(out.data() + 48000, 65536, f);
+    if (pw > best) best = pw, bestF = f;
+  }
+  EXPECT_NEAR(1200.0 * std::log2(bestF / 880.0), 0.0, 3.0) << bestF << " Hz";
 }
 
 // Processor-level contracts.
@@ -290,17 +485,17 @@ TEST(ProcessorTest, TransposePowerReportsWindowLatencyFromTheMessageThread) {
 
   proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
   pumpMessages();
-  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::Window::balanced, kFs));
+  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::kDefaultWindow, kFs));
 
-  setDenormalised(proc, "transposeWindow", static_cast<float>(Transpose::Window::smooth));
+  setDenormalised(proc, "transposeWindow", static_cast<float>(Transpose::Window::ms60));
   pumpMessages();
-  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::Window::smooth, kFs));
+  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::Window::ms60, kFs));
 
   // The knob itself never moves the latency: the engine runs at 0 st too.
   setDenormalised(proc, "transposeSemitones", 0.0f);
   setDenormalised(proc, "transposeSemitones", -12.0f);
   pumpMessages();
-  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::Window::smooth, kFs));
+  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::Window::ms60, kFs));
 
   proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(0.0f);
   pumpMessages();

@@ -211,16 +211,20 @@ flowchart LR
   lookahead, a slower attack only softens pick transients.
 - **Transpose**: a polyphonic pitch shifter on the clean DI, ahead of the
   amp, so a `-2` plays a standard-tuned guitar as drop D through the whole
-  rig. Off by default; the faceplate knob sets whole semitones (±12) and the
-  power switch is the only thing that changes latency. Right-clicking the
-  group opens a deck with Fine (±50 cents), Tonality (1-20 kHz, the
-  frequency above which partials shift by a fixed offset rather than a
-  ratio, which keeps pick noise and string squeak natural; Off at the top)
-  and Latency (30 / 60 / 100 ms; the analysis window, reported to the host
-  as-is). Longer windows track low notes better and smear transients more;
-  60 ms is the default. Built on
-  [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch)
-  (see [Credits](#credits)).
+  rig. Off by default; the faceplate knob sets whole semitones (±12) and
+  powering on is what adds latency. Right-clicking the group opens a deck
+  with Fine (±50 cents), Tonality (1-20 kHz, the frequency above which the
+  input bypasses the shifter, which keeps pick noise and string squeak
+  natural; Off at the top) and Latency (the engine's 20 / 30 / 40 / 60 ms
+  delay buffer, read out as the 11 / 16 / 21 / 31 ms it reports to the
+  host). Power, Latency and Tonality changes blend over 25 ms like the
+  stereo image's, never click. The engine is a time-domain
+  correlation-spliced delay line with onset re-sync, so pick attacks pass
+  in a few ms whatever the buffer; the buffer sets the lowest note it holds
+  a full period of (20 ms is guitar-only, 30 ms, the default, covers bass)
+  and how often it splices. The research behind it (benchmarks against a
+  phase vocoder, candidates, listening results) is recorded in
+  [`plugin/docs/transpose.md`](plugin/docs/transpose.md).
 - **Mono mode**: only the Left chain runs and the pan stage is skipped. With
   Spread on, the chain output becomes an ADT-style stereo double; see
   [`plugin/docs/stereo-image.md`](plugin/docs/stereo-image.md) for the design
@@ -309,9 +313,11 @@ IR assets in `test/files`:
   the compatibility of the first parameters added after launch (a state
   saved before they existed lands on their defaults; presets carry them).
 - `transpose_tests.cpp`: the pitch shifter's contracts (off is bit-exact and
-  latency-free, the reported latency equals the window and tracks the power
-  switch alone, a shift lands on pitch, absent parameters in older state
-  fall back to off).
+  latency-free, the reported latency matches the engine and tracks the
+  power switch alone, 0 st is a pure delay, a shift lands on pitch at unity
+  gain, the tonality limit passes highs unshifted, a pick attack re-syncs
+  the tap, stereo shares one tap, absent parameters in older state fall
+  back to off).
 - `spread_tests.cpp`, `swap_fade_tests.cpp`, `branch_tests.cpp`, and friends
   cover the doubler, engine-swap fades, and chain routing.
 
@@ -357,9 +363,7 @@ JUCE has its own licensing, including optional commercial terms; see
 carries its own license terms in its directory. **AudioDSPTools**'
 `ResamplingContainer` originates from the iPlug2 project (license in that
 source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
-(both MIT), fetched at configure time. The Transpose effect uses
-**Signalsmith Stretch** and **Signalsmith Linear** (both MIT, fetched at
-configure time into `libs/`).
+(both MIT), fetched at configure time.
 
 ## Credits
 
@@ -377,14 +381,15 @@ configure time into `libs/`).
   oversampled NAM processing; the chain oversampler's half-band
   allpass coefficients are adapted from its AudioDSPTools fork (MIT). See
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
-- [Signalsmith Audio](https://signalsmith-audio.co.uk) (Geraint Luff):
-  [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch)
-  is the phase-vocoder pitch shifter behind Transpose, on top of
-  [Signalsmith Linear](https://github.com/Signalsmith-Audio/linear)'s FFT.
-  The window / latency and tonality-limit design follows his
+- Transpose started from a contribution by Vivek Radhakrishna
+  ([#133](https://github.com/tone-3000/tone3000-plugin/pull/133)) built on
+  [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch);
+  the shipped engine is the correlation-spliced delay line documented in
+  [`plugin/docs/transpose.md`](plugin/docs/transpose.md) (Eventide H949
+  de-glitch lineage; Juillerat et al.'s low-latency shifting papers and the
+  Signalsmith write-up
   [Four Ways To Write A Pitch-Shifter](https://signalsmith-audio.co.uk/writing/2023/stretch-design/)
-  write-up. The transpose feature started from a contribution by Vivek
-  Radhakrishna ([#133](https://github.com/tone-3000/tone3000-plugin/pull/133)).
+  were the references).
 - [JUCE](https://juce.com): plugin framework, DSP building blocks, and the
   UI toolkit.
 - [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions):

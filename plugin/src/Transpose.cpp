@@ -1,37 +1,308 @@
 #include "Transpose.h"
 
-#include <cmath>
+#include <juce_dsp/juce_dsp.h>
 
-// Signalsmith Stretch (MIT) - Geraint Luff / Signalsmith Audio Ltd.
-// https://github.com/Signalsmith-Audio/signalsmith-stretch
-// Kept out of Transpose.h on purpose: it is a large header-only template
-// and the rest of the plugin only needs the wrapper's API.
-#include <signalsmith-stretch/signalsmith-stretch.h>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <vector>
+
+// Tuning, all in ms so every rate behaves the same. The values are the ones
+// the bench in plugin/docs/transpose.md settled on; none is exposed.
+namespace {
+constexpr double kFadeMs = 6.0;          // crossfade of a drift splice
+constexpr double kOnsetFadeMs = 2.0;     // crossfade of an onset re-sync
+constexpr double kMaxCorrMs = 25.0;      // correlation window (capped at the buffer)
+constexpr double kOnsetSpanMs = 4.0;     // an onset re-sync lands within this of the floor
+constexpr double kRefractoryMs = 40.0;   // one re-sync per attack
+constexpr double kDetectorHpfHz = 600.0; // attacks are HF-rich, low fundamentals never ripple it
+constexpr double kDetectorSmoothMs = 2.0;
+constexpr int kHistoryCells = 50;        // 1 ms energy cells kept for the detector
+constexpr int kHistorySkipCells = 5;     // the attack itself is not its own reference
+constexpr double kOnsetOverMin = 7.94;   // 9 dB over the recent floor ...
+constexpr double kOnsetOverMax = 1.26;   // ... and 1 dB over the recent ceiling (a new peak)
+// Lag search granularity: 4 samples at 48 kHz, refined to the sample around
+// the coarse best. Free in quality on the bench, 3x cheaper than exhaustive.
+constexpr double kCoarseStepRate = 12000.0;
+// A drift splice is predictable (the tap approaches the buffer end at a
+// known rate), so its lag search is spread over the samples of this lead
+// instead of running as one burst: at a 16-sample host buffer the burst
+// alone (400-800 us at 48 kHz) blew the callback budget and clicked.
+constexpr double kSearchLeadMs = 4.0;
+// Power and tonality blends, the same length as the image decks'
+// (kDeckFadeSeconds): every transition passes through a mix, never a jump.
+constexpr double kBlendSeconds = 0.025;
+}  // namespace
 
 struct Transpose::Impl {
-  using Engine = signalsmith::stretch::SignalsmithStretch<float>;
-  // The STFT hop as a fraction of the window: 4x overlap is Signalsmith's own
-  // preset ratio; it costs CPU, not latency or resolution.
-  static constexpr int kOverlap = 4;
+  // Power-of-two ring indexed by absolute sample number; sample i lives at
+  // buf[i & mask]. Reads are 4-point Hermite so a fractional tap is smooth.
+  struct Ring {
+    std::vector<float> buf;
+    uint32_t mask = 0;
+    void init(int minSize) {
+      int size = 1;
+      while (size < minSize) size <<= 1;
+      buf.assign(static_cast<size_t>(size), 0.0f);
+      mask = static_cast<uint32_t>(size - 1);
+    }
+    void clear() { std::fill(buf.begin(), buf.end(), 0.0f); }
+    void write(int64_t i, float x) { buf[static_cast<uint32_t>(i) & mask] = x; }
+    float at(int64_t i) const { return buf[static_cast<uint32_t>(i) & mask]; }
+    float read(double pos) const {
+      const auto i = static_cast<int64_t>(std::floor(pos));
+      const float t = static_cast<float>(pos - static_cast<double>(i));
+      const float xm1 = at(i - 1), x0 = at(i), x1 = at(i + 1), x2 = at(i + 2);
+      const float c = 0.5f * (x1 - xm1);
+      const float v = x0 - x1;
+      const float w = c + v;
+      const float a = w + v + 0.5f * (x2 - x0);
+      const float b = w + a;
+      return ((a * t - b) * t + c) * t + x0;
+    }
+  };
 
-  // One engine per window, built in prepare(); a Window change is a swap.
-  // Seeded (not std::random_device) so a given input renders identically
-  // every run; the engine's randomness only ever enters for time stretches
-  // beyond what a fixed 1:1 ratio can reach.
-  std::array<Engine, kWindowMs.size()> engines{Engine(1), Engine(2), Engine(3)};
-  Engine* engine = &engines[static_cast<size_t>(Window::balanced)];
-  juce::AudioBuffer<float> scratch;  // stretch can't run in place
+  // The control ring is mirrored (every sample written twice, `size`
+  // apart) so any window ending at sample i is contiguous memory: the
+  // correlation is then a plain dot product the compiler vectorises.
+  struct MirroredRing {
+    std::vector<float> buf;
+    uint32_t mask = 0;
+    int size = 0;
+    void init(int minSize) {
+      size = 1;
+      while (size < minSize) size <<= 1;
+      buf.assign(static_cast<size_t>(size) * 2, 0.0f);
+      mask = static_cast<uint32_t>(size - 1);
+    }
+    void clear() { std::fill(buf.begin(), buf.end(), 0.0f); }
+    void write(int64_t i, float x) {
+      const auto k = static_cast<uint32_t>(i) & mask;
+      buf[k] = x;
+      buf[k + static_cast<uint32_t>(size)] = x;
+    }
+    // The n samples before sample i (excluding it), oldest first.
+    const float* windowEndingAt(int64_t i, int n) const {
+      const auto k = static_cast<uint32_t>(i) & mask;
+      return buf.data() + (static_cast<int>(k) + size - n);
+    }
+  };
 
   double sampleRate = 0.0;
   Params params;
+  double ratio = 1.0;
 
-  void pushFrequencyMap() {
-    const float semitones = static_cast<float>(params.semitones) + params.cents / 100.0f;
-    // Signalsmith takes the tonality limit as a fraction of the sample rate.
-    const float tonality = params.tonalityHz > 0.0f && sampleRate > 0.0
-                               ? static_cast<float>(params.tonalityHz / sampleRate)
-                               : 0.0f;
-    engine->setTransposeSemitones(semitones, tonality);
+  // Power: the shifted signal blends against the dry; the engine keeps
+  // running until a fade-out lands so the processor can stop calling it.
+  // After a reset the tap reads a cleared ring for one floor delay, so the
+  // blend-in waits for `primeLeft` samples (rather than fading up onto the
+  // edge where the audio arrives).
+  bool enabled = false, running = false;
+  juce::LinearSmoothedValue<float> wetMix;
+  int primeLeft = 0;
+
+  // Rings: one per channel for the audio, one for the control signal (the
+  // channel mean) the detector and the lag search run on, and one per
+  // channel delaying the dry for the tonality bypass band.
+  std::array<Ring, kMaxChannels> rings;
+  MirroredRing control;
+  std::array<Ring, kMaxChannels> dryRings;
+  int64_t written = 0;  // samples written so far; the newest is written - 1
+
+  // Geometry at the current rate / window, in samples.
+  int dMin = 0, dMax = 0, fadeLen = 0, onsetFadeLen = 0, corrLen = 0;
+  int onsetSpan = 0, refractory = 0, cellLen = 1, coarseStep = 1, searchLead = 1;
+
+  // Read taps (absolute positions) and the crossfade between them.
+  double rA = 0.0, rB = 0.0;
+  bool fading = false;
+  double fade = 0.0, fadeInc = 0.0;
+
+  // Lag search, incremental. The reference is the tap's recent waveform,
+  // copied when the search starts; candidates are buffer positions scored
+  // as damage per splice (1 - ncc) over the seconds the jump buys, so a
+  // long jump with a good match beats a short perfect one (max-ncc alone
+  // picks one-period hops and splices constantly on low dyads). The result
+  // is a tap jump J (new position = tap + J); a jump found a few ms early
+  // stays valid because both segments move together on a sustained note.
+  struct Search {
+    bool active = false, ready = false;
+    int lo = 0, hi = 0, next = 0, perSample = 1;
+    double bestScore = -1e9;
+    int bestDelay = 0;
+    int64_t now0 = 0, a0 = 0;
+    int64_t resultJump = 0;
+  } search;
+  std::vector<float> ref;
+  double refXX = 0.0;
+
+  // Onset detector: first-order HPF, 2 ms energy smoother, 1 ms min/max
+  // history cells.
+  double hpA = 0.0, hpZ1 = 0.0, hpZ2 = 0.0;
+  double smoothA = 0.0, eHf = 0.0;
+  std::array<float, kHistoryCells> minHist{}, maxHist{};
+  double minAcc = 1e9, maxAcc = 0.0;
+  int64_t lastOnset = 0;
+
+  // Tonality: LR4 crossover after the shifter, the low band from the
+  // shifted signal and the high band from the dry (delayed by the floor so
+  // it lands with the re-synced attacks), blended against the plain shift.
+  // The filters run whether or not the limit is engaged (four biquads a
+  // channel), so engaging it never starts them cold.
+  juce::dsp::LinkwitzRileyFilter<float> wetLowpass, dryHighpass;
+  juce::LinearSmoothedValue<float> tonalityMix;
+
+  void applyWindow() {
+    dMin = minDelaySamples(sampleRate);
+    dMax = windowSamples(params.window, sampleRate);
+    corrLen = std::min(dMax, static_cast<int>(sampleRate * kMaxCorrMs * 0.001));
+  }
+
+  // Delay floor the tap may approach at the current ratio: an upshift tap
+  // gains on the write head during a fade, so the floor moves out to keep
+  // the interpolator behind the newest sample.
+  int lowGuard() const {
+    return std::max(dMin, static_cast<int>(std::max(0.0, ratio - 1.0) * fadeLen) + 4);
+  }
+
+  // 0 means off: the crossover keeps its last cutoff and blends out.
+  void setTonality(float hz) {
+    const bool on = hz > 0.0f;
+    if (on) {
+      const float cutoff = juce::jlimit(kTonalityMinHz, kTonalityOffHz, hz);
+      wetLowpass.setCutoffFrequency(cutoff);
+      dryHighpass.setCutoffFrequency(cutoff);
+    }
+    tonalityMix.setTargetValue(on ? 1.0f : 0.0f);
+  }
+
+  void reset() {
+    for (auto& r : rings) r.clear();
+    control.clear();
+    for (auto& r : dryRings) r.clear();
+    rA = rB = static_cast<double>(written - dMin);  // start at the floor
+    primeLeft = dMin + 8;
+    fading = false;
+    search = Search{};
+    hpZ1 = hpZ2 = 0.0;
+    eHf = 0.0;
+    minHist.fill(1e9f);
+    maxHist.fill(0.0f);
+    minAcc = 1e9;
+    maxAcc = 0.0;
+    lastOnset = -(1 << 30);
+  }
+
+  // Normalised cross-correlation of the reference with the corrLen control
+  // samples ending at `b`.
+  double nccAt(int64_t b) const {
+    const float* y = control.windowEndingAt(b, corrLen);
+    const float* x = ref.data();
+    // Eight independent accumulators: float sums can't be reassociated by
+    // the compiler, so this is what lets the loop run as SIMD lanes.
+    float xy[8] = {}, yy[8] = {};
+    int i = 0;
+    for (; i + 8 <= corrLen; i += 8)
+      for (int k = 0; k < 8; ++k) {
+        xy[k] += x[i + k] * y[i + k];
+        yy[k] += y[i + k] * y[i + k];
+      }
+    for (; i < corrLen; ++i) {
+      xy[0] += x[i] * y[i];
+      yy[0] += y[i] * y[i];
+    }
+    double sxy = 0.0, syy = 0.0;
+    for (int k = 0; k < 8; ++k) {
+      sxy += xy[k];
+      syy += yy[k];
+    }
+    return sxy / (std::sqrt(refXX * syy) + 1e-9);
+  }
+
+  // Start scoring candidate delays [lo, hi] against the tap's waveform now,
+  // spread over `lead` samples (0: all at once, for the onset re-sync).
+  void beginSearch(int lo, int hi, int lead) {
+    search.active = true;
+    search.ready = false;
+    search.now0 = written - 1;
+    search.a0 = static_cast<int64_t>(std::floor(rA));
+    search.lo = lo;
+    search.hi = std::max(lo, hi);
+    search.next = lo;
+    search.bestScore = -1e9;
+    search.bestDelay = lo;
+    const float* x = control.windowEndingAt(search.a0, corrLen);
+    std::copy(x, x + corrLen, ref.begin());
+    refXX = 0.0;
+    for (int i = 0; i < corrLen; ++i) refXX += static_cast<double>(x[i]) * x[i];
+    const int candidates = (search.hi - search.lo) / coarseStep + 1;
+    search.perSample = lead > 0 ? (candidates + lead - 1) / lead : candidates;
+  }
+
+  void consider(int d) {
+    const double curDelay = static_cast<double>(search.now0 - search.a0);
+    const double jump = std::max(1.0, std::abs(curDelay - static_cast<double>(d)));
+    const double s = -(1.0 - nccAt(search.now0 - d)) / jump;
+    if (s > search.bestScore) {
+      search.bestScore = s;
+      search.bestDelay = d;
+    }
+  }
+
+  // Scores up to `count` coarse candidates; on the last one refines to the
+  // sample around the best and publishes the jump.
+  void stepSearch(int count) {
+    while (count-- > 0 && search.next <= search.hi) {
+      consider(search.next);
+      search.next += coarseStep;
+    }
+    if (search.next > search.hi) {
+      if (coarseStep > 1) {
+        const int c = search.bestDelay;
+        for (int d = std::max(search.lo, c - coarseStep + 1); d <= std::min(search.hi, c + coarseStep - 1); ++d)
+          if (d != c) consider(d);
+      }
+      search.resultJump = (search.now0 - search.bestDelay) - search.a0;
+      search.active = false;
+      search.ready = true;
+    }
+  }
+
+  // Crossfade to the tap position rA + jump.
+  void startFade(int64_t jump, int fadeSamples) {
+    // Keep rA's fraction so the splice is a pure integer lag.
+    rB = rA + static_cast<double>(jump);
+    fading = true;
+    fade = 0.0;
+    fadeInc = 1.0 / fadeSamples;
+    search.ready = false;
+  }
+
+  // Runs the detector on one control sample; true on a pick attack.
+  bool detectOnset(double x) {
+    const int64_t now = written - 1;
+    const double hp = x - hpZ1 + hpA * hpZ2;  // y = x - x[-1] + a * y[-1]
+    hpZ1 = x;
+    hpZ2 = hp;
+    eHf = smoothA * eHf + (1.0 - smoothA) * hp * hp;
+    const int64_t cellNow = now / cellLen;
+    if (now % cellLen == 0 && now > 0) {
+      // Commit the finished cell.
+      const auto prev = static_cast<size_t>((cellNow - 1) % kHistoryCells);
+      minHist[prev] = static_cast<float>(minAcc);
+      maxHist[prev] = static_cast<float>(maxAcc);
+      minAcc = 1e9;
+      maxAcc = 0.0;
+    }
+    minAcc = std::min(minAcc, eHf);
+    maxAcc = std::max(maxAcc, eHf);
+    double recentMin = 1e9, recentMax = 0.0;
+    for (int back = kHistorySkipCells; back < kHistoryCells; ++back) {
+      const auto c = static_cast<size_t>((cellNow - back + 4 * kHistoryCells) % kHistoryCells);
+      recentMin = std::min(recentMin, static_cast<double>(minHist[c]));
+      recentMax = std::max(recentMax, static_cast<double>(maxHist[c]));
+    }
+    return eHf > 1e-7 && eHf > recentMin * kOnsetOverMin && eHf > recentMax * kOnsetOverMax;
   }
 };
 
@@ -41,37 +312,83 @@ Transpose::~Transpose() = default;
 void Transpose::prepare(double sampleRate, int maxBlockSamples) {
   auto& s = *impl_;
   s.sampleRate = sampleRate;
-  for (size_t w = 0; w < kWindowMs.size(); ++w) {
-    const int blockSamples = latencySamples(static_cast<Window>(w), sampleRate);
-    s.engines[w].configure(kMaxChannels, blockSamples, blockSamples / Impl::kOverlap);
-    // The class promises "latency == window": the STFT is symmetric, so its
-    // analysis and synthesis halves sum back to the block.
-    jassert(s.engines[w].inputLatency() + s.engines[w].outputLatency() == blockSamples);
-  }
-  s.engine = &s.engines[static_cast<size_t>(s.params.window)];
-  s.scratch.setSize(kMaxChannels, juce::jmax(1, maxBlockSamples));
-  s.pushFrequencyMap();
-  reset();
+  s.fadeLen = std::max(8, static_cast<int>(sampleRate * kFadeMs * 0.001));
+  s.onsetFadeLen = std::max(8, static_cast<int>(sampleRate * kOnsetFadeMs * 0.001));
+  s.onsetSpan = static_cast<int>(sampleRate * kOnsetSpanMs * 0.001);
+  s.refractory = static_cast<int>(sampleRate * kRefractoryMs * 0.001);
+  s.searchLead = std::max(1, static_cast<int>(sampleRate * kSearchLeadMs * 0.001));
+  s.cellLen = std::max(1, static_cast<int>(sampleRate * 0.001));
+  s.coarseStep = std::max(1, juce::roundToInt(sampleRate / kCoarseStepRate));
+  s.hpA = std::exp(-2.0 * juce::MathConstants<double>::pi * kDetectorHpfHz / sampleRate);
+  s.smoothA = std::exp(-1.0 / (sampleRate * kDetectorSmoothMs * 0.001));
+  // Rings hold the largest window plus the correlation reach behind the
+  // farthest candidate and the overshoot of a late search and a fade.
+  const int maxCorr = static_cast<int>(sampleRate * kMaxCorrMs * 0.001);
+  const int reach = windowSamples(Window::ms60, sampleRate) + maxCorr + 2 * s.fadeLen + 2 * s.searchLead + 64;
+  for (auto& r : s.rings) r.init(reach);
+  s.control.init(reach);
+  s.ref.assign(static_cast<size_t>(maxCorr), 0.0f);
+  for (auto& r : s.dryRings) r.init(minDelaySamples(sampleRate) + 8);
+  const juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(std::max(1, maxBlockSamples)),
+                                    static_cast<juce::uint32>(kMaxChannels)};
+  s.wetLowpass.prepare(spec);
+  s.wetLowpass.setType(juce::dsp::LinkwitzRileyFilterType::lowpass);
+  s.dryHighpass.prepare(spec);
+  s.dryHighpass.setType(juce::dsp::LinkwitzRileyFilterType::highpass);
+  s.tonalityMix.reset(sampleRate, kBlendSeconds);  // lands on its target
+  s.setTonality(s.params.tonalityHz);
+  // The rings are empty again, so even a running engine blends back in
+  // once the tap has audio under it (see primeLeft).
+  s.wetMix.reset(sampleRate, kBlendSeconds);
+  s.wetMix.setCurrentAndTargetValue(0.0f);
+  s.running = s.enabled;
+  s.applyWindow();
+  s.reset();
 }
 
-void Transpose::reset() { impl_->engine->reset(); }
+void Transpose::setEnabled(bool on) {
+  auto& s = *impl_;
+  if (on == s.enabled) return;
+  s.enabled = on;
+  if (!on) {
+    s.wetMix.setTargetValue(0.0f);
+  } else if (s.running) {
+    // Caught inside the fade-out: the rings are live, just turn around.
+    s.wetMix.setTargetValue(1.0f);
+  } else {
+    // Fresh start: the rings hold whatever played before the last
+    // fade-out, and the tap belongs at the floor. The blend-in follows
+    // once the ring is primed.
+    s.reset();
+    s.running = true;
+  }
+}
+
+bool Transpose::isRunning() const { return impl_->running; }
 
 void Transpose::setParams(const Params& p) {
   auto& s = *impl_;
   if (p.window != s.params.window) {
+    // The rings are sized for the largest window and stay valid; a tap now
+    // outside the new range gets an ordinary splice back in (the drift
+    // logic sees its delay past the end). Only a pending search, planned
+    // for the old range, is dropped.
     s.params.window = p.window;
-    s.engine = &s.engines[static_cast<size_t>(p.window)];
-    s.engine->reset();
-    s.pushFrequencyMap();  // the new engine has a stale map
+    s.applyWindow();
+    s.search = Impl::Search{};
   }
   // Exact compares on purpose: these are parameter values, and a change of
   // any size must reach the engine.
-  if (p.semitones != s.params.semitones || !juce::exactlyEqual(p.cents, s.params.cents) ||
-      !juce::exactlyEqual(p.tonalityHz, s.params.tonalityHz)) {
+  if (p.semitones != s.params.semitones || !juce::exactlyEqual(p.cents, s.params.cents)) {
     s.params.semitones = p.semitones;
     s.params.cents = p.cents;
+    const double semis = static_cast<double>(p.semitones) + static_cast<double>(p.cents) / 100.0;
+    s.ratio = std::pow(2.0, semis / 12.0);
+    s.search = Impl::Search{};  // planned for the old drift
+  }
+  if (!juce::exactlyEqual(p.tonalityHz, s.params.tonalityHz)) {
     s.params.tonalityHz = p.tonalityHz;
-    s.pushFrequencyMap();
+    s.setTonality(p.tonalityHz);
   }
 }
 
@@ -79,22 +396,103 @@ void Transpose::process(juce::AudioBuffer<float>& buffer) {
   auto& s = *impl_;
   const int numChannels = juce::jmin(buffer.getNumChannels(), kMaxChannels);
   const int numSamples = buffer.getNumSamples();
-  if (s.sampleRate <= 0.0 || numChannels <= 0 || numSamples <= 0) return;
+  if (s.sampleRate <= 0.0 || numChannels <= 0 || numSamples <= 0 || !s.running) return;
 
-  // The engine is always stereo-configured; a mono buffer feeds both lanes
-  // and only its own lane is read back, so no pointer ever leaves the buffer.
-  // Blocks larger than the scratch run in slices, so this never allocates.
-  const int slice = s.scratch.getNumSamples();
-  for (int offset = 0; offset < numSamples; offset += slice) {
-    const int n = juce::jmin(slice, numSamples - offset);
-    const float* in[kMaxChannels];
-    for (int ch = 0; ch < kMaxChannels; ++ch)
-      in[ch] = buffer.getReadPointer(juce::jmin(ch, numChannels - 1), offset);
-    s.engine->process(in, n, s.scratch.getArrayOfWritePointers(), n);
-    for (int ch = 0; ch < numChannels; ++ch) buffer.copyFrom(ch, offset, s.scratch, ch, 0, n);
+  float* out[kMaxChannels];
+  for (int ch = 0; ch < kMaxChannels; ++ch) out[ch] = buffer.getWritePointer(juce::jmin(ch, numChannels - 1));
+  const float channelScale = 1.0f / static_cast<float>(numChannels);
+  const double ratio = s.ratio;
+  // How far the tap's delay moves over a search lead / a fade. The lead is
+  // padded by a few samples so a planned search always completes before
+  // the tap reaches the trigger.
+  const double drift = std::abs(1.0 - ratio);
+  const double leadDrift = drift * (s.searchLead + 4);
+  const int leadDriftI = static_cast<int>(std::ceil(leadDrift));
+  const int fadeDrift = static_cast<int>(std::ceil(drift * s.fadeLen));
+
+  for (int i = 0; i < numSamples; ++i) {
+    const int64_t now = s.written++;
+    float dry[kMaxChannels];
+    float control = 0.0f;
+    for (int ch = 0; ch < kMaxChannels; ++ch) {
+      dry[ch] = out[ch][i];
+      s.rings[static_cast<size_t>(ch)].write(now, dry[ch]);
+      if (ch < numChannels) control += dry[ch];
+    }
+    control *= channelScale;
+    s.control.write(now, control);
+
+    const double delay = static_cast<double>(now) - s.rA;
+    const int guard = s.lowGuard();
+    const bool onset = s.detectOnset(control);
+    // Where a splice may land (delay at splice time). Downshift: anywhere
+    // from the floor up to where the fade and the next search's lead still
+    // fit before dMax. Upshift: the mirror image above the guard. The
+    // onset re-sync targets the front of that range.
+    const int landLo = ratio > 1.0 ? std::min(guard + fadeDrift + leadDriftI + 2, s.dMax) : s.dMin;
+    const int landHi = ratio < 1.0 ? std::max(s.dMin, s.dMax - fadeDrift - leadDriftI - 2) : s.dMax;
+    if (!s.fading) {
+      if (onset && now - s.lastOnset > s.refractory && delay > landLo + s.onsetSpan) {
+        // Onset re-sync: a pick attack brings the tap to the front of the
+        // buffer, so attacks arrive with the floor delay wherever the tap
+        // was. A small search, run at once.
+        s.lastOnset = now;
+        s.beginSearch(landLo, std::min(landLo + s.onsetSpan, s.dMax), 0);
+        s.stepSearch(s.search.perSample);
+        s.startFade(s.search.resultJump, s.onsetFadeLen);
+        // The attack becomes the reference: a re-trigger needs a fresh dip.
+        s.minHist.fill(static_cast<float>(s.eHf));
+        s.maxHist.fill(static_cast<float>(s.eHf));
+        s.minAcc = s.maxAcc = s.eHf;
+      } else if (ratio < 1.0) {
+        // Drift splice, downshift: the tap falls back toward dMax. The
+        // search is planned a lead early; a candidate that will have delay
+        // dL when the splice comes has delay dL - leadDrift now, so the
+        // candidate range is the landing range shifted toward the head.
+        // If the plan is late (the ratio or window just changed) the tap
+        // simply overshoots dMax by the lead; the rings have the room.
+        if (!s.search.active && !s.search.ready && delay >= s.dMax - leadDrift) {
+          const int lo = std::max(4, landLo - leadDriftI);
+          s.beginSearch(lo, std::max(lo, landHi - leadDriftI), s.searchLead);
+        }
+        if (s.search.ready && delay >= s.dMax) s.startFade(s.search.resultJump, s.fadeLen);
+      } else if (ratio > 1.0) {
+        // Upshift: the tap gains on the write head toward the guard; the
+        // candidates sit deeper than where they will land.
+        if (!s.search.active && !s.search.ready && delay <= guard + leadDrift)
+          s.beginSearch(landLo + leadDriftI, landHi + leadDriftI, s.searchLead);
+        if (s.search.ready && delay <= guard) s.startFade(s.search.resultJump, s.fadeLen);
+      }
+    }
+    if (s.search.active) s.stepSearch(s.search.perSample);
+
+    // Read.
+    float gainB = 0.0f;
+    if (s.fading) {
+      gainB = static_cast<float>(0.5 - 0.5 * std::cos(juce::MathConstants<double>::pi * s.fade));
+      s.fade += s.fadeInc;
+    }
+    if (s.primeLeft > 0 && --s.primeLeft == 0 && s.enabled) s.wetMix.setTargetValue(1.0f);
+    const float wetMix = s.wetMix.getNextValue();
+    const float tonalityMix = s.tonalityMix.getNextValue();
+    for (int ch = 0; ch < numChannels; ++ch) {
+      auto& ring = s.rings[static_cast<size_t>(ch)];
+      float wet = ring.read(s.rA);
+      if (s.fading) wet = wet * (1.0f - gainB) + gainB * ring.read(s.rB);
+      auto& dryRing = s.dryRings[static_cast<size_t>(ch)];
+      dryRing.write(now, s.dryHighpass.processSample(ch, dry[ch]));
+      const float split = s.wetLowpass.processSample(ch, wet) + dryRing.at(now - s.dMin);
+      wet += tonalityMix * (split - wet);
+      out[ch][i] = dry[ch] + wetMix * (wet - dry[ch]);
+    }
+    if (s.fading && s.fade >= 1.0) {
+      s.rA = s.rB;
+      s.fading = false;
+    }
+    s.rA += ratio;
+    s.rB += ratio;
   }
+  if (!s.enabled && !s.wetMix.isSmoothing()) s.running = false;
 }
 
-int Transpose::latencySamples() const {
-  return impl_->engine->inputLatency() + impl_->engine->outputLatency();
-}
+int Transpose::latencySamples() const { return (impl_->dMin + impl_->dMax) / 2; }

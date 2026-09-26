@@ -7,11 +7,11 @@ namespace t3k::ui {
 
 namespace {
 
-// Normalised defaults: 0 cents (centre), tonality Off (top), the 60 ms
-// window (the middle detent).
+// Normalised defaults: 0 cents (centre), tonality Off (top), the 30 ms
+// buffer (the second of four detents, a 16 ms readout).
 constexpr float kFineDefault = 0.5f;
 constexpr float kTonalityDefault = 1.0f;
-constexpr float kWindowDefault = 0.5f;
+constexpr float kWindowDefault = 1.0f / 3.0f;
 
 // The gate deck's geometry (see GateDeckPanel.cpp).
 constexpr int kPadTop = 14, kPadSide = 16, kPadBottom = 8;
@@ -41,7 +41,7 @@ TransposeDeckPanel::TransposeDeckPanel(Services& services)
                 deckKnob("Tonality", scales::tonalityHz(), kTonalityDefault, help::Key::transposeTonality)),
       window_(services.backend, "transposeWindow",
               deckKnob("Latency", scales::windowMs(), kWindowDefault, help::Key::transposeWindow,
-                       Knob::Variant::full, 3)) {
+                       Knob::Variant::full, 4)) {
   for (auto* k : {&fine_, &tonality_, &window_}) addAndMakeVisible(*k);
   primaryOnly = true;          // right-click toggles the panel; don't dismiss on it
   dismissOnAnchorPress = true; // the anchor is the Transpose knob, a control

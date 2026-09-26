@@ -985,13 +985,12 @@ private:
   NoiseGate inputGate;
   bool gateWasEnabled = true;
 
-  // Input-stage pitch shifter (post gate, host rate; see Transpose.h). Only
-  // runs while powered, so a powered-off plugin stays bit-exact and
-  // zero-latency; the power edge resets the engine like the gate's does.
-  // The latency it adds is reported from the message thread (see
-  // updateLatency), never from processBlock.
+  // Input-stage pitch shifter (post gate, host rate; see Transpose.h). Runs
+  // while powered and through its power-off blend, then not at all, so a
+  // powered-off plugin stays bit-exact and zero-latency. The latency it
+  // adds is reported from the message thread (see updateLatency), never
+  // from processBlock.
   Transpose transpose;
-  bool transposeWasEnabled = false;
 
   // Raw APVTS parameter atomics, resolved once in the constructor. The audio
   // thread reads these every block; getRawParameterValue is a string-keyed

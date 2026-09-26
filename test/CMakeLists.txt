@@ -104,8 +104,6 @@ target_link_libraries(DspTests
         juce::juce_dsp
         juce::juce_audio_formats
         juce::juce_audio_processors
-        # Transpose.cpp's engine (target defined in plugin/CMakeLists.txt).
-        signalsmith-stretch
         # NAM must be linked whole-archive so its self-registering config
         # parsers (WaveNet/ConvNet/LSTM static initializers) survive the
         # linker (same recipe as plugin/CMakeLists.txt).

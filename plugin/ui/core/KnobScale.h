@@ -110,8 +110,9 @@ inline const KnobScale& semitones() {
 
 // Transpose deck. Fine is a bipolar cent trim; the tonality limit rides a
 // log map whose top end reads "Off" (a pure shift; the processor treats the
-// end value the same way); the window is the three detents in Transpose.h,
-// read out as the latency each adds.
+// end value the same way); the window is the four buffer detents in
+// Transpose.h (20 / 30 / 40 / 60 ms), read out as the latency each reports
+// (the tap's mean delay: 11 / 16 / 21 / 31 ms).
 inline const KnobScale& cents() {
   static const KnobScale s = [] {
     KnobScale c = linear(-50, 50, "ct", 0);
@@ -141,11 +142,11 @@ inline const KnobScale& tonalityHz() {
 inline const KnobScale& windowMs() {
   static const KnobScale s = [] {
     KnobScale c;
-    constexpr int kMs[] = {30, 60, 100};
-    const auto index = [](double n) { return juce::jlimit(0, 2, juce::roundToInt(n * 2)); };
+    constexpr int kMs[] = {11, 16, 21, 31};
+    const auto index = [](double n) { return juce::jlimit(0, 3, juce::roundToInt(n * 3)); };
     c.toDisplay = [index](double n) { return kMs[index(n)]; };
     // Snaps typed values to the nearest detent.
-    c.fromDisplay = [](double d) { return d < 45 ? 0.0 : d < 80 ? 0.5 : 1.0; };
+    c.fromDisplay = [](double d) { return d < 13.5 ? 0.0 : d < 18.5 ? 1.0 / 3 : d < 26 ? 2.0 / 3 : 1.0; };
     c.format = [index](double n) { return juce::String(kMs[index(n)]) + " ms"; };
     c.editText = [index](double n) { return juce::String(kMs[index(n)]); };
     return c;

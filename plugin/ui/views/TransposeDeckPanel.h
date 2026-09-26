@@ -2,11 +2,12 @@
 // the knob): the three settings behind the semitone knob, mirroring
 // Transpose::Params:
 //  - Fine: trims the shift by ±50 cents, for songs tuned between semitones.
-//  - Tonality: the frequency above which the shift is an offset instead of
-//    a ratio (1-20 kHz, log), so pick attack and fret noise keep their
-//    brightness while the notes move. Off (the top) is a pure shift.
-//  - Latency: the pitch analysis window, three detents (30/60/100 ms). It is
-//    all the latency the effect adds; longer keeps chords steadier.
+//  - Tonality: the frequency above which the input bypasses the shifter
+//    (1-20 kHz, log), so pick attack and fret noise keep their brightness
+//    while the notes move. Off (the top) is a pure shift.
+//  - Latency: the engine's delay buffer, four detents (20/30/40/60 ms), read
+//    out as the latency each reports (11/16/21/31 ms). Attacks always pass
+//    in a few ms; a longer buffer holds lower notes and splices less often.
 // Plain knobs, no power switches, same footprint as the gate deck so the two
 // read as one family.
 #pragma once

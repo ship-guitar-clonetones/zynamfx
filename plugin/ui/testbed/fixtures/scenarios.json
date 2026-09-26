@@ -24947,7 +24947,7 @@
    "id": "chrome-transpose-deck",
    "section": "chrome",
    "title": "Transpose advanced deck",
-   "description": "Right-clicking the Transpose group (knob or power) opens the transpose deck above the plate, anchored to the knob: Fine, Tonality and Latency knobs, no power switches. The group is powered so the knob reads lit; every deck knob sits at its default (0 ct, Off, 60 ms), so a stock rig reads unchanged.",
+   "description": "Right-clicking the Transpose group (knob or power) opens the transpose deck above the plate, anchored to the knob: Fine, Tonality and Latency knobs, no power switches. The group is powered so the knob reads lit; every deck knob sits at its default (0 ct, Off, 16 ms), so a stock rig reads unchanged.",
    "chain": {
     "revision": 1,
     "canUndo": true,

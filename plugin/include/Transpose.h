@@ -7,51 +7,65 @@
  * Polyphonic pitch shifter for the input stage: the Transpose group on the
  * faceplate. Shifts the raw instrument signal by whole semitones (plus a
  * fine trim) before it reaches the NAM/IR chain, so a guitar in standard
- * tuning drives the amp as if it were tuned down (or up), the same job as
- * the input transpose on Neural DSP's X-series plugins or a Digitech Drop.
+ * tuning drives the amp as if it were tuned down (or up), the job of a
+ * Digitech Drop or the input transpose in amp-sim suites.
  *
- * The engine is Signalsmith Stretch (Geraint Luff / Signalsmith Audio, MIT;
- * https://github.com/Signalsmith-Audio/signalsmith-stretch), the polyphonic
- * phase-vocoder from the ADC22 talk "Four Ways To Write A Pitch-Shifter".
- * It runs at a fixed 1:1 time ratio here; only the frequency map moves.
- * Everything below is a thin real-time wrapper: this class owns no DSP of
- * its own beyond routing.
+ * Engine: a correlation-spliced delay line, the Eventide H949 "de-glitch"
+ * idea (plugin/docs/transpose.md records the research that chose it over
+ * the phase vocoder it replaced). One read tap runs through a ring buffer
+ * at the pitch ratio, so its delay behind the write head drifts between a
+ * floor (kMinDelayMs) and the buffer size (the Window). When it reaches the
+ * end it has to jump back; the jump lands where the buffer's recent
+ * waveform best matches the tap's (normalised cross-correlation, scored as
+ * damage per splice over splices per second so a long jump with a good
+ * match beats a short perfect one), and the two taps crossfade over a few
+ * ms. On periodic material that is a whole number of periods, so the joint
+ * is inaudible; chords get the best compromise lag. Time-domain, so bass
+ * is no harder than guitar: a 41 Hz E1 shifts as cleanly as an E4, which is
+ * where the vocoder fell down.
  *
- * Latency. A phase vocoder has to see a whole analysis window before it can
- * place a partial, and the added latency is exactly that window
- * (inputLatency + outputLatency == blockSamples). The window also sets the
- * frequency resolution: the closer two simultaneous fundamentals sit, the
- * longer the window needed to keep them apart, otherwise the shifted chord
- * warbles. So Window is the one real trade-off and the deck exposes it as
- * three detents (kWindowMs), the middle one the default; riffs and power
- * chords are fine on the short one, strummed clean chords want the long
- * one. The processor does not call this class while the group is powered
- * off, so a powered-off Transpose is a bit-exact, zero-latency passthrough
- * (the "fresh default chain is transparent" invariant in processor_tests),
- * and the reported latency only ever changes on the power switch or a
- * Window change, never as the knob sweeps through 0 (the engine keeps
- * running at a 1.0 ratio there, so timing never jumps mid-riff).
+ * Onset re-sync: a pick attack (a jump in the high-passed input's energy
+ * over its recent floor and ceiling) splices the tap straight to the
+ * freshest end of the buffer, so attacks arrive a few ms late regardless of
+ * where the tap had drifted; only the previous note's tail absorbs the
+ * joint. The felt latency is therefore set by the attacks, not by the
+ * buffer, and the buffer size is a quality trade: the lowest note it can
+ * hold a full period of. 20 ms is a guitar setting (an E1 period is 24 ms);
+ * 30 ms is the default and works for bass; 40 / 60 splice less often.
  *
- * Tonality limit (Signalsmith's term): above the limit frequency the shift
- * becomes a constant offset instead of a ratio, so the pick attack and
- * fret noise up high keep their character while the notes below move. 0
- * (the default) is a pure shift, which is what a down-tuned guitar sounds
- * like; the deck's Tonality knob is there for players who find a large
- * downshift too dull through their amp.
+ * Latency reported to the host: the tap's mean delay, (floor + buffer) / 2,
+ * a constant per Window and rate; the semitone knob never moves it (the
+ * engine keeps running at a 1.0 ratio through 0, where the tap simply
+ * stops drifting).
  *
- * Formant preservation is deliberately not used: a physically lower-tuned
- * guitar moves its whole spectrum, and "correcting" formants makes the
- * shift sound like an effect.
+ * Lifecycle, like the image decks': every transition passes through a
+ * blend, never a jump. Power blends the shifted signal against the dry
+ * over kBlendSeconds and the engine keeps running until a fade-out lands
+ * (isRunning), after which the processor stops calling it, so a powered-off
+ * Transpose is a bit-exact, zero-latency passthrough (the "fresh default
+ * chain is transparent" invariant in processor_tests). A Window change
+ * keeps the rings (they are sized for the largest window) and lets a tap
+ * outside the new range splice back in like any drift splice.
  *
- * CPU is a fraction of a percent of one core at any window (the FFT is on
- * Accelerate on Apple targets, Signalsmith's own elsewhere); the three
- * engines are pre-built in prepare() so a Window change is a pointer swap
- * plus a reset, and process() never allocates.
+ * Tonality limit: a Linkwitz-Riley crossover after the shifter; the band
+ * below the limit comes from the shifted signal, the band above from the
+ * dry (delayed by the floor so it lands with the re-synced attacks), so
+ * pick noise and string squeak keep their character while the notes move.
+ * 0 (the default) is a pure shift, which is what a down-tuned guitar sounds
+ * like. Formant preservation is deliberately not offered: a physically
+ * lower-tuned guitar moves its whole spectrum, and "correcting" formants
+ * makes the shift sound like an effect.
  *
- * Threading: prepare()/reset() from prepareToPlay, setParams() and process()
- * from the audio thread. Stereo: both channels share one engine (Signalsmith
- * keeps the channels' phases coherent), a mono buffer is fed to both engine
- * lanes and read back from the first.
+ * CPU: 0.15-0.35% of one core. A drift splice's lag search (coarse-to-fine
+ * over the buffer) is spread over the 4 ms before the tap reaches the
+ * buffer end, so no single sample carries a burst: the worst block at a
+ * 16-sample host buffer is ~100 us at 48 kHz. Only the onset re-sync
+ * searches at once, over a 4 ms range. process() never allocates.
+ *
+ * Threading: prepare() from prepareToPlay; setEnabled(), setParams() and
+ * process() from the audio thread. Stereo: the channels share one control
+ * path (the onset detector and the lag search run on their mean) and one
+ * tap position, so the image never smears; each channel keeps its own ring.
  */
 class Transpose {
 public:
@@ -62,9 +76,13 @@ public:
   static constexpr float kTonalityMinHz = 1000.0f;
   static constexpr float kTonalityOffHz = 20000.0f;
 
-  // Analysis window: the whole of the added latency (see the class comment).
-  enum class Window { fast, balanced, smooth };
-  static constexpr std::array<int, 3> kWindowMs{30, 60, 100};
+  // The delay buffer the read tap drifts across (see the class comment);
+  // the deck's Latency knob, one detent each. The floor is the tap's
+  // closest approach to the write head, where attacks are re-synced to.
+  enum class Window { ms20, ms30, ms40, ms60 };
+  static constexpr std::array<int, 4> kWindowMs{20, 30, 40, 60};
+  static constexpr Window kDefaultWindow = Window::ms30;
+  static constexpr double kMinDelayMs = 2.0;
   static int windowMs(Window w) { return kWindowMs[static_cast<size_t>(w)]; }
   static Window windowFromIndex(int index) {
     return static_cast<Window>(juce::jlimit(0, static_cast<int>(kWindowMs.size()) - 1, index));
@@ -75,34 +93,42 @@ public:
   struct Params {
     int semitones = 0;
     float cents = 0.0f;
-    // Frequency above which the shift is an offset, not a ratio. 0: off.
+    // Frequency above which the dry bypasses the shifter. 0: off.
     float tonalityHz = 0.0f;
-    Window window = Window::balanced;
+    Window window = kDefaultWindow;
   };
 
   Transpose();
   ~Transpose();
 
-  /** Builds every window's engine for this rate; the scratch buffer is sized
-      to maxBlockSamples and larger blocks are processed in slices. */
+  /** Sizes the rings for the largest window at this rate. Block size is
+      not a constraint (the engine is per-sample). */
   void prepare(double sampleRate, int maxBlockSamples);
 
-  /** Clears the engine's analysis/overlap state. Call on the off->on
-      transition so the first powered block never hears stale audio. */
-  void reset();
+  /** Power. On restarts the engine at the floor and blends the shift in;
+      off blends it out, and isRunning() stays true until that lands. */
+  void setEnabled(bool on);
+  bool isRunning() const;
 
-  /** Audio thread, once per block. Each field early-outs when unchanged; a
-      window change swaps to that window's engine and resets it. */
+  /** Audio thread, once per block. Each field early-outs when unchanged. */
   void setParams(const Params& p);
 
-  /** Audio thread. Shifts up to kMaxChannels in place. */
+  /** Audio thread. Shifts up to kMaxChannels in place; a no-op unless
+      running. */
   void process(juce::AudioBuffer<float>& buffer);
 
   /** Added latency for the current window at the prepared rate. */
   int latencySamples() const;
   /** The same figure for any window/rate (the message thread reports it to
-      the host before the audio thread has switched). */
+      the host before the audio thread has switched): the tap's mean delay. */
   static int latencySamples(Window w, double sampleRate) {
+    return (minDelaySamples(sampleRate) + windowSamples(w, sampleRate)) / 2;
+  }
+  /** The reported latency in ms, for readouts (11 / 16 / 21 / 31). */
+  static double latencyMs(Window w) { return (kMinDelayMs + windowMs(w)) * 0.5; }
+
+  static int minDelaySamples(double sampleRate) { return static_cast<int>(sampleRate * kMinDelayMs * 0.001); }
+  static int windowSamples(Window w, double sampleRate) {
     return static_cast<int>(sampleRate * windowMs(w) * 0.001);
   }
 

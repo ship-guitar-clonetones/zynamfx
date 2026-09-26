@@ -660,13 +660,14 @@ struct ReadoutTests : juce::UnitTest {
     expectEquals(scales::tonalityHz().format(0.0), juce::String("1.0 kHz"));
     expectWithinAbsoluteError(scales::tonalityHz().toDisplay(scales::tonalityHz().fromDisplay(8000)), 8000.0,
                               1e-6);
-    // Window: three detents, read as the latency each adds; typed values
-    // snap to the nearest.
-    expectEquals(scales::windowMs().format(0.0), juce::String("30 ms"));
-    expectEquals(scales::windowMs().format(0.5), juce::String("60 ms"));
-    expectEquals(scales::windowMs().format(1.0), juce::String("100 ms"));
-    expectWithinAbsoluteError(scales::windowMs().fromDisplay(70), 0.5, 1e-6);
-    expectWithinAbsoluteError(scales::windowMs().fromDisplay(100), 1.0, 1e-6);
+    // Window: four buffer detents, read as the latency each reports; typed
+    // values snap to the nearest.
+    expectEquals(scales::windowMs().format(0.0), juce::String("11 ms"));
+    expectEquals(scales::windowMs().format(1.0 / 3), juce::String("16 ms"));
+    expectEquals(scales::windowMs().format(2.0 / 3), juce::String("21 ms"));
+    expectEquals(scales::windowMs().format(1.0), juce::String("31 ms"));
+    expectWithinAbsoluteError(scales::windowMs().fromDisplay(15), 1.0 / 3, 1e-6);
+    expectWithinAbsoluteError(scales::windowMs().fromDisplay(30), 1.0, 1e-6);
     expectEquals(scales::offsetMs().format(0.5), juce::String("0 ms"));
     expectEquals(scales::offsetMs().format(0.25), juce::String("12.0 ms L"));
     expectEquals(scales::crossoverHz().format(0.5), juce::String("130 Hz"));

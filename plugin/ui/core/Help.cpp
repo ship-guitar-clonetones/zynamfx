@@ -76,7 +76,7 @@ std::map<Key, String> buildTable() {
   t[Key::transposeTonality] =
       knobDesktop("Tonality", "highs above this stay put, 1-20 kHz. Keeps pick attack bright; Off: pure shift.");
   t[Key::transposeWindow] = knobDesktop(
-      "Latency", "pitch analysis window, 30/60/100 ms. Short: tight feel · long: steadier chords.");
+      "Latency", "shifter buffer, 11/16/21/31 ms reported. Short: guitar only · long: cleaner bass.");
   t[Key::toneBass] = knobDesktop("Bass", "tone stack lows, 0-10: ±20 dB shelf at 150 Hz.");
   t[Key::toneMiddle] = knobDesktop("Middle", "tone stack mids, 0-10: ±15 dB bell at 425 Hz.");
   t[Key::toneTreble] = knobDesktop("Treble", "tone stack highs, 0-10: ±10 dB shelf at 1.8 kHz.");
