@@ -29,6 +29,7 @@ public:
   void setExtraContentHeight(int total, int persistent) override;
 
   void paint(juce::Graphics& g) override;
+  void paintOverChildren(juce::Graphics& g) override;
   void resized() override;
   void visibilityChanged() override;
   void parentHierarchyChanged() override;
@@ -64,6 +65,27 @@ private:
     }()};
   };
 
+  // Release-level bring-up trace (GitHub issue #132: a host crashed on
+  // editor open with nothing in the log after the processor's restore line,
+  // so the crash could not be placed). One "[Editor]" line per stage, in
+  // construction order: entry (with OS / host / display scale), fonts
+  // resolved, peer attached (with renderer), first resized, first paint.
+  // A truncated sequence in a user's log bisects the crash for free.
+  // Declared first so the entry line lands before any other member runs.
+  struct Trace {
+    explicit Trace(const TONE3000Processor& processor);
+  } trace_;
+  // Forces the process-wide typefaces to resolve (Fonts.cpp caches them in
+  // statics) and logs it, before PluginRoot's text layout does the same
+  // silently. Declared right before the root.
+  struct FontsReady {
+    FontsReady();
+  };
+  void logPeerAttached();
+  juce::ComponentPeer* loggedPeer_ = nullptr;
+  bool loggedFirstResize_ = false;
+  bool loggedFirstPaint_ = false;
+
   TONE3000Processor& processor_;
   // One shared dark theme for JUCE-drawn surfaces (standalone dialogs).
   juce::SharedResourcePointer<DarkLookAndFeel> darkLookAndFeel_;
@@ -82,6 +104,7 @@ private:
   HttpClient http_;
   Tone3000Session session_;
   Services services_;
+  FontsReady fontsReady_;
   PluginRoot root_;
 };
 

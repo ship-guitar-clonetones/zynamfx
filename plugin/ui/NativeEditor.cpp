@@ -1,9 +1,79 @@
 #include "NativeEditor.h"
 
+#include "core/Fonts.h"
+
 namespace t3k::ui {
+
+namespace {
+
+// Bring-up trace lines share one prefix so a user's log can be grepped for
+// the editor's stages next to the "[Processor]" / "[Restore]" ones.
+void trace(const juce::String& message) { juce::Logger::writeToLog("[Editor] " + message); }
+
+juce::String formatScale(double scale) { return juce::String(scale, 2) + "x"; }
+
+// "Direct2D" / "Software Renderer" on Windows; the index is opaque without
+// the peer's own names, so fall back to it only when the list is empty.
+juce::String rendererName(const juce::ComponentPeer& peer) {
+  const auto engines = const_cast<juce::ComponentPeer&>(peer).getAvailableRenderingEngines();
+  const int index = peer.getCurrentRenderingEngine();
+  if (juce::isPositiveAndBelow(index, engines.size())) return engines[index];
+  return "engine " + juce::String(index) + " of " + juce::String(engines.size());
+}
+
+}  // namespace
+
+NativeEditor::Trace::Trace(const TONE3000Processor& processor) {
+  // Everything a Windows-10-vs-11 / host-specific report needs in one line:
+  // OS, JUCE, plugin format + host, and the display scale the peer will be
+  // created at (DPI is the usual suspect when only one machine crashes).
+  juce::String line = "Constructing: " + juce::SystemStats::getOperatingSystemName() +
+                      (juce::SystemStats::isOperatingSystem64Bit() ? " (64-bit)" : " (32-bit)") +
+                      " | JUCE " + juce::SystemStats::getJUCEVersion().fromFirstOccurrenceOf("v", false, false) +
+                      " | " + juce::AudioProcessor::getWrapperTypeDescription(processor.wrapperType) +
+                      " in " + juce::String(juce::PluginHostType().getHostDescription());
+  const auto& displays = juce::Desktop::getInstance().getDisplays();
+  if (const auto* display = displays.getPrimaryDisplay()) {
+    line << " | display " << juce::roundToInt(display->logicalBounds.getWidth()) << "x"
+         << juce::roundToInt(display->logicalBounds.getHeight()) << " @ " << formatScale(display->scale)
+         << " (dpi " << juce::roundToInt(display->dpi) << ")";
+  } else {
+    line << " | display: none";
+  }
+  line << " | displays " << displays.displays.size()
+       << " | globalScale " << formatScale(juce::Desktop::getInstance().getGlobalScaleFactor());
+  trace(line);
+}
+
+NativeEditor::FontsReady::FontsReady() {
+  // Resolving these touches the OS font system (DirectWrite on Windows) and
+  // decodes the embedded faces; if that is where a machine dies, the log
+  // stops between "Constructing" and this line.
+  const auto sans = Fonts::sans(14.0f);
+  const auto mono = Fonts::mono(14.0f);
+  trace("Fonts ready: sans=" + sans.getTypefaceName() +
+        (sans.getTypefacePtr() != nullptr ? "" : " (NULL TYPEFACE)") + " | mono=" +
+        mono.getTypefaceName() + (mono.getTypefacePtr() != nullptr ? "" : " (NULL TYPEFACE)"));
+}
+
+void NativeEditor::logPeerAttached() {
+  // Once per native window: hosts can re-parent the editor (and the
+  // standalone flips its title bar, see parentHierarchyChanged), each of
+  // which may hand us a new peer with a different renderer or scale.
+  auto* peer = getPeer();
+  if (peer == nullptr || peer == loggedPeer_) return;
+  const bool reattached = loggedPeer_ != nullptr;
+  loggedPeer_ = peer;
+  trace(juce::String(reattached ? "Peer re-attached" : "Peer attached") +
+        ": renderer=" + rendererName(*peer) +
+        " | platformScale " + formatScale(peer->getPlatformScaleFactor()) +
+        " | editor " + juce::String(getWidth()) + "x" + juce::String(getHeight()) +
+        " | peerBounds " + peer->getBounds().toString());
+}
 
 NativeEditor::NativeEditor(TONE3000Processor& owner)
     : AudioProcessorEditor(&owner),
+      trace_(owner),
       processor_(owner),
       backend_(owner, *this),
       prefs_(&prefsFile_->file, &prefsFile_->lock),
@@ -39,6 +109,9 @@ NativeEditor::NativeEditor(TONE3000Processor& owner)
   updateResizeConstraints();
   applyScaledSize(savedScale);
 #endif
+  // Separates a crash inside PluginRoot's construction (log stops at "Fonts
+  // ready") from one in the host's window attach (stops here).
+  trace("Constructed: " + juce::String(getWidth()) + "x" + juce::String(getHeight()));
 }
 
 NativeEditor::~NativeEditor() { stopTimer(); }
@@ -140,7 +213,25 @@ void NativeEditor::fitRoot() {
 
 void NativeEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colours::black); }
 
+void NativeEditor::paintOverChildren(juce::Graphics& g) {
+  // Not paint(): the opaque root covers us, so JUCE clips our own paint to
+  // nothing and never calls it. This runs after the whole tree has painted
+  // once, which is the marker we want.
+  if (loggedFirstPaint_) return;
+  loggedFirstPaint_ = true;
+  // The peer exists by now even if parentHierarchyChanged never saw it.
+  logPeerAttached();
+  trace("First paint: " + juce::String(getWidth()) + "x" + juce::String(getHeight()) + " | clip " +
+        g.getClipBounds().toString());
+}
+
 void NativeEditor::resized() {
+  if (!loggedFirstResize_) {
+    loggedFirstResize_ = true;
+    trace("First resized: " + juce::String(getWidth()) + "x" + juce::String(getHeight()) +
+          " (scale " + formatScale(currentScale()) + ", extraHeight " +
+          juce::String(extraContentHeight_) + ")");
+  }
   fitRoot();
   // Persist the user's (or host's) chosen scale; skip while correcting our
   // own size. No chosen scale exists on iOS (the window is the screen).
@@ -165,6 +256,7 @@ void NativeEditor::visibilityChanged() { services_.clock.wake(); }
 
 void NativeEditor::parentHierarchyChanged() {
   services_.clock.wake();
+  logPeerAttached();
 #if !JUCE_IOS
   if (auto* window = dynamic_cast<juce::DocumentWindow*>(getTopLevelComponent())) {
     // Flipping the native title bar on relayouts the window's content split
