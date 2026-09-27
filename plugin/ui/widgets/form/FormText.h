@@ -18,6 +18,8 @@ public:
 
   void setText(const juce::String& text);
   const juce::String& text() const { return text_; }
+  // Restyle after construction (a row demoted to a child of a section).
+  void setStyle(float px, bool bold, juce::Colour colour);
   // The label is a bare span in a block whose body font is `bodyPx` (the
   // web's 16px body): the line box also holds that strut, so it is taller
   // than the label's own line (18px instead of 17 for a 15px label).

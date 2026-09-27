@@ -89,6 +89,71 @@ inline const KnobScale& gateRangeDb() {
   return s;
 }
 
+// Transpose: bipolar whole semitones, centre = 0. Backs an AudioParameterInt
+// (Processor.cpp), so the readout always rounds; the sign is spelled out so
+// "+3 st" and "-3 st" can't be confused at a glance.
+inline const KnobScale& semitones() {
+  static const KnobScale s = [] {
+    KnobScale c;
+    const auto st = [](double n) { return std::round(-12 + n * 24); };
+    c.toDisplay = st;
+    c.fromDisplay = [](double d) { return (d + 12) / 24; };
+    c.format = [st](double n) {
+      const int v = static_cast<int>(st(n));
+      return (v > 0 ? "+" : "") + juce::String(v) + " st";
+    };
+    c.editText = [st](double n) { return juce::String(static_cast<int>(st(n))); };
+    return c;
+  }();
+  return s;
+}
+
+// Transpose deck. Fine is a bipolar cent trim; the tonality limit rides a
+// log map whose top end reads "Off" (a pure shift; the processor treats the
+// end value the same way); the window is the four buffer detents in
+// Transpose.h (20 / 30 / 40 / 60 ms), read out as the latency each reports
+// (the tap's mean delay: 11 / 16 / 21 / 31 ms).
+inline const KnobScale& cents() {
+  static const KnobScale s = [] {
+    KnobScale c = linear(-50, 50, "ct", 0);
+    c.format = [](double n) {
+      const int v = juce::roundToInt(-50 + n * 100);
+      return (v > 0 ? "+" : "") + juce::String(v) + " ct";
+    };
+    return c;
+  }();
+  return s;
+}
+inline const KnobScale& tonalityHz() {
+  static const KnobScale s = [] {
+    KnobScale c;
+    const auto hz = [](double n) { return 1000.0 * std::pow(20.0, n); };
+    c.toDisplay = hz;
+    c.fromDisplay = [](double d) { return std::log(d / 1000.0) / std::log(20.0); };
+    c.format = [hz](double n) {
+      if (n >= 1.0 - 1e-6) return juce::String("Off");
+      return labels::toFixed(hz(n) / 1000.0, 1) + " kHz";
+    };
+    c.editText = [hz](double n) { return juce::String(juce::roundToInt(hz(n))); };
+    return c;
+  }();
+  return s;
+}
+inline const KnobScale& windowMs() {
+  static const KnobScale s = [] {
+    KnobScale c;
+    static constexpr int kMs[] = {11, 16, 21, 31};  // static: the lambdas index it without a capture
+    const auto index = [](double n) { return juce::jlimit(0, 3, juce::roundToInt(n * 3)); };
+    c.toDisplay = [index](double n) { return kMs[index(n)]; };
+    // Snaps typed values to the nearest detent.
+    c.fromDisplay = [](double d) { return d < 13.5 ? 0.0 : d < 18.5 ? 1.0 / 3 : d < 26 ? 2.0 / 3 : 1.0; };
+    c.format = [index](double n) { return juce::String(kMs[index(n)]) + " ms"; };
+    c.editText = [index](double n) { return juce::String(kMs[index(n)]); };
+    return c;
+  }();
+  return s;
+}
+
 // Faceplate tone stack knobs: 0..10, 5 = flat.
 inline const KnobScale& tone() {
   static const KnobScale s = linear(0, 10, {}, 1);

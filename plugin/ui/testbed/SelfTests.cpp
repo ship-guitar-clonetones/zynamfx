@@ -644,6 +644,30 @@ struct ReadoutTests : juce::UnitTest {
     expectEquals(scales::gateHoldMs().format(0.0), juce::String("0 ms"));
     expectEquals(scales::gateRangeDb().format(1.0), juce::String("80 dB"));
     expectEquals(scales::gateRangeDb().format(0.0), juce::String("20 dB"));
+
+    beginTest("transpose readouts mirror the processor's ranges");
+    // Whole semitones, signed; the centre is 0 (the MockBackend seed).
+    expectEquals(scales::semitones().format(0.5), juce::String("0 st"));
+    expectEquals(scales::semitones().format(0.0), juce::String("-12 st"));
+    expectEquals(scales::semitones().format(1.0), juce::String("+12 st"));
+    expectEquals(scales::semitones().format(scales::semitones().fromDisplay(-2)), juce::String("-2 st"));
+    expectEquals(scales::semitones().editText(0.5), juce::String("0"));
+    expectEquals(scales::cents().format(0.5), juce::String("0 ct"));
+    expectEquals(scales::cents().format(1.0), juce::String("+50 ct"));
+    expectEquals(scales::cents().format(0.0), juce::String("-50 ct"));
+    // Tonality: log 1-20 kHz, the top end reads Off (the default seed).
+    expectEquals(scales::tonalityHz().format(1.0), juce::String("Off"));
+    expectEquals(scales::tonalityHz().format(0.0), juce::String("1.0 kHz"));
+    expectWithinAbsoluteError(scales::tonalityHz().toDisplay(scales::tonalityHz().fromDisplay(8000)), 8000.0,
+                              1e-6);
+    // Window: four buffer detents, read as the latency each reports; typed
+    // values snap to the nearest.
+    expectEquals(scales::windowMs().format(0.0), juce::String("11 ms"));
+    expectEquals(scales::windowMs().format(1.0 / 3), juce::String("16 ms"));
+    expectEquals(scales::windowMs().format(2.0 / 3), juce::String("21 ms"));
+    expectEquals(scales::windowMs().format(1.0), juce::String("31 ms"));
+    expectWithinAbsoluteError(scales::windowMs().fromDisplay(15), 1.0 / 3, 1e-6);
+    expectWithinAbsoluteError(scales::windowMs().fromDisplay(30), 1.0, 1e-6);
     expectEquals(scales::offsetMs().format(0.5), juce::String("0 ms"));
     expectEquals(scales::offsetMs().format(0.25), juce::String("12.0 ms L"));
     expectEquals(scales::crossoverHz().format(0.5), juce::String("130 Hz"));
@@ -1192,6 +1216,97 @@ struct KnobReadoutTests : juce::UnitTest {
   }
 };
 
+// The faceplate's effects cluster: gate shows and transpose hides by
+// default, the Effects view settings flip either, a powered effect shows
+// regardless, and the plate re-spreads around whatever is showing.
+struct FaceplateEffectsTests : juce::UnitTest {
+  FaceplateEffectsTests() : juce::UnitTest("Faceplate effects", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  static Knob* knob(PluginRoot& root, const juce::String& title) {
+    return dynamic_cast<Knob*>(drive::find(root, [&](juce::Component& c) {
+      return dynamic_cast<Knob*>(&c) != nullptr && c.getTitle() == title && c.isShowing();
+    }));
+  }
+
+  // The Bass knob's left edge in root coordinates: where the tone stack landed.
+  static int toneX(PluginRoot& root) {
+    auto* bass = knob(root, "Bass");
+    return bass == nullptr ? -1 : root.getLocalArea(bass, bass->getLocalBounds()).getX();
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("main-mono");
+    if (scenario == nullptr) {
+      expect(false, "main-mono scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("faceplate effects", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto& root = host.pluginRoot();
+    auto& prefs = root.services().prefs;
+    auto power = [&](const char* id, bool on) {
+      if (auto* p = root.services().backend.parameter(id)) p->setValueNotifyingHost(on ? 1.0f : 0.0f);
+      pump(30);
+    };
+
+    beginTest("gate shows and transpose hides by default");
+    expect(knob(root, "Gate") != nullptr);
+    expect(knob(root, "Transpose") == nullptr);
+    const int gateOnly = toneX(root);
+
+    beginTest("the Transpose view setting brings its group out and the plate re-spreads");
+    prefs.setBool(UiPrefs::kShowTransposeControl, true);
+    pump(30);
+    auto* transpose = knob(root, "Transpose");
+    auto* gate = knob(root, "Gate");
+    expect(transpose != nullptr && gate != nullptr);
+    const int both = toneX(root);
+    expect(both > gateOnly, "the tone stack moves over for the wider cluster");
+    if (transpose != nullptr && gate != nullptr) {
+      // Grouped: the pair sits closer together than the cluster does to the
+      // tone stack.
+      const auto g = root.getLocalArea(gate, gate->getLocalBounds());
+      const auto t = root.getLocalArea(transpose, transpose->getLocalBounds());
+      const int between = t.getX() - g.getRight();
+      expect(between > 0 && between < both - t.getRight(), "gate and transpose read as one cluster");
+    }
+
+    beginTest("off again hides it, unless the effect is powered");
+    prefs.setBool(UiPrefs::kShowTransposeControl, false);
+    pump(30);
+    expect(knob(root, "Transpose") == nullptr);
+    power("transposeEnabled", true);
+    expect(knob(root, "Transpose") != nullptr, "a powered effect shows regardless of the view setting");
+    expectEquals(toneX(root), both);
+    power("transposeEnabled", false);
+    expect(knob(root, "Transpose") == nullptr, "switching it off lets the setting hide it again");
+    expectEquals(toneX(root), gateOnly);
+
+    beginTest("with no effects showing, four peers spread");
+    prefs.setBool(UiPrefs::kShowGateControl, false);
+    pump(30);
+    expect(knob(root, "Gate") != nullptr, "the mock's gate is powered, so it stays");
+    power("gateEnabled", false);
+    expect(knob(root, "Gate") == nullptr);
+    expect(toneX(root) < gateOnly, "the tone stack moves back toward the input");
+    expect(knob(root, "Input") != nullptr && knob(root, "Output") != nullptr);
+
+    beginTest("the settings restore the defaults");
+    prefs.remove(UiPrefs::kShowGateControl);
+    pump(30);
+    expect(knob(root, "Gate") != nullptr);
+    expectEquals(toneX(root), gateOnly);
+    window.setVisible(false);
+  }
+};
+
 HtmlTests htmlTests;
 FontTests fontTests;
 RichFlowTests richFlowTests;
@@ -1200,6 +1315,7 @@ FocusPolicyTests focusPolicyTests;
 TouchScrollTests touchScrollTests;
 BlockSizeToggleTests blockSizeToggleTests;
 KnobReadoutTests knobReadoutTests;
+FaceplateEffectsTests faceplateEffectsTests;
 UpdateCheckTests updateCheckTests;
 ConnectionGateTests connectionGateTests;
 PitchTests pitchTests;

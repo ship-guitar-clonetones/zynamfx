@@ -49,13 +49,18 @@ private:
 
 // Section label with a pill toggle on the right, description underneath,
 // and an optional block of controls that shows while the row is expanded.
+// setNested() demotes the row to a child of the section above it: indented,
+// with a body-size label instead of the section label.
 class ToggleRow : public FormItem {
 public:
   static constexpr int kDescriptionGap = 4;
+  static constexpr int kNestedIndent = 20;
 
   ToggleRow(const juce::String& label, RichText description);
   ToggleRow(const juce::String& label, const juce::String& description)
       : ToggleRow(label, RichText{TextRun::plain(description)}) {}
+
+  void setNested();
 
   void setValue(bool on, bool animate = true) { toggle_.setValue(on, animate); }
   bool value() const { return toggle_.value(); }
@@ -74,6 +79,7 @@ private:
   PillToggle toggle_;
   Paragraph description_;
   FormStack content_{form::kControlGap};
+  int indent_ = 0;
 };
 
 // Radio row with label + description (NAM A2 Size options etc).

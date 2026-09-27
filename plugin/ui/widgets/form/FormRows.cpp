@@ -67,6 +67,12 @@ ToggleRow::ToggleRow(const juce::String& label, RichText description)
   addChildComponent(content_);
 }
 
+void ToggleRow::setNested() {
+  indent_ = kNestedIndent;
+  label_.setStyle(form::kBodyPx, false, theme::kWhite);
+  heightChanged();
+}
+
 void ToggleRow::setExpanded(bool expanded) {
   if (expanded == content_.isVisible()) return;
   content_.setVisible(expanded);
@@ -74,23 +80,27 @@ void ToggleRow::setExpanded(bool expanded) {
 }
 
 float ToggleRow::heightFor(float width) const {
-  float h = PillToggle::kHeight + kDescriptionGap + description_.heightFor(width);
-  if (content_.isVisible()) h += form::kControlGap + content_.heightFor(width);
+  const float inner = width - indent_;
+  float h = PillToggle::kHeight + kDescriptionGap + description_.heightFor(inner);
+  if (content_.isVisible()) h += form::kControlGap + content_.heightFor(inner);
   return h;
 }
 
 void ToggleRow::resized() {
-  const auto width = static_cast<float>(getWidth());
+  // The indent moves the text column in; the toggle keeps the section's
+  // right edge.
+  const auto x = static_cast<float>(indent_);
+  const auto width = static_cast<float>(getWidth() - indent_);
   const float rowH = PillToggle::kHeight;
-  placeChild(label_, {0, (rowH - label_.heightFor(0)) / 2, label_.preferredWidth() + 2, label_.heightFor(0)});
+  placeChild(label_, {x, (rowH - label_.heightFor(0)) / 2, label_.preferredWidth() + 2, label_.heightFor(0)});
   toggle_.setTopLeftPosition(getWidth() - PillToggle::kWidth, 0);
   float y = rowH + kDescriptionGap;
   const float descH = description_.heightFor(width);
-  placeChild(description_, {0, y, width, descH});
+  placeChild(description_, {x, y, width, descH});
   y += descH;
   if (content_.isVisible()) {
     y += form::kControlGap;
-    placeChild(content_, {0, y, width, content_.heightFor(width)});
+    placeChild(content_, {x, y, width, content_.heightFor(width)});
   }
 }
 

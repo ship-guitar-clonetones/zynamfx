@@ -176,7 +176,8 @@ flowchart LR
     IN([In]) --> IM["Input Mode *\n(stereo / L / R)"]
     IM --> IG["Input Level"]
     IG --> GATE["Noise Gate *"]
-    GATE --> RS(("⇅ 48k"))
+    GATE --> TR["Transpose *"]
+    TR --> RS(("⇅ 48k"))
     RS --> OS(("×N ↑ *"))
     subgraph CHAINS["Tone chains, 48 kHz × oversampling factor"]
         direction LR
@@ -208,6 +209,25 @@ flowchart LR
   long it stays open after the signal drops) and Range (20-80 dB, how deep
   it closes; 80 dB is a mute). Attack is fixed at 0.2 ms: with no
   lookahead, a slower attack only softens pick transients.
+- **Transpose**: a polyphonic pitch shifter on the clean DI, ahead of the
+  amp, so a `-2` plays a standard-tuned guitar as drop D through the whole
+  rig. Off by default; the faceplate knob sets whole semitones (±12) and
+  powering on is what adds latency. The knob is also hidden by default:
+  Plugin Settings → Effects picks which of Gate and Transpose the faceplate
+  shows (view settings only; an effect that is switched on always shows, so
+  a preset that uses it stays reachable). Right-clicking the group opens a deck
+  with Fine (±50 cents), Tonality (1-20 kHz, the frequency above which the
+  input bypasses the shifter, which keeps pick noise and string squeak
+  natural; Off at the top) and Latency (the engine's 20 / 30 / 40 / 60 ms
+  delay buffer, read out as the 11 / 16 / 21 / 31 ms it reports to the
+  host). Power, Latency and Tonality changes blend over 25 ms like the
+  stereo image's, never click. The engine is a time-domain
+  correlation-spliced delay line with onset re-sync, so pick attacks pass
+  in a few ms whatever the buffer; the buffer sets the lowest note it holds
+  a full period of (20 ms is guitar-only, 30 ms, the default, covers bass)
+  and how often it splices. The research behind it (benchmarks against a
+  phase vocoder, candidates, listening results) is recorded in
+  [`plugin/docs/transpose.md`](plugin/docs/transpose.md).
 - **Mono mode**: only the Left chain runs and the pan stage is skipped. With
   Spread on, the chain output becomes an ADT-style stereo double; see
   [`plugin/docs/stereo-image.md`](plugin/docs/stereo-image.md) for the design
@@ -295,6 +315,12 @@ IR assets in `test/files`:
 - `gate_tests.cpp`: the noise gate's release / hold / range contracts, and
   the compatibility of the first parameters added after launch (a state
   saved before they existed lands on their defaults; presets carry them).
+- `transpose_tests.cpp`: the pitch shifter's contracts (off is bit-exact and
+  latency-free, the reported latency matches the engine and tracks the
+  power switch alone, 0 st is a pure delay, a shift lands on pitch at unity
+  gain, the tonality limit passes highs unshifted, a pick attack re-syncs
+  the tap, stereo shares one tap, absent parameters in older state fall
+  back to off).
 - `spread_tests.cpp`, `swap_fade_tests.cpp`, `branch_tests.cpp`, and friends
   cover the doubler, engine-swap fades, and chain routing.
 
@@ -358,6 +384,15 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   oversampled NAM processing; the chain oversampler's half-band
   allpass coefficients are adapted from its AudioDSPTools fork (MIT). See
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
+- Transpose started from a contribution by Vivek Radhakrishna
+  ([#133](https://github.com/tone-3000/tone3000-plugin/pull/133)) built on
+  [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch);
+  the shipped engine is the correlation-spliced delay line documented in
+  [`plugin/docs/transpose.md`](plugin/docs/transpose.md) (Eventide H949
+  de-glitch lineage; Juillerat et al.'s low-latency shifting papers and the
+  Signalsmith write-up
+  [Four Ways To Write A Pitch-Shifter](https://signalsmith-audio.co.uk/writing/2023/stretch-design/)
+  were the references).
 - [JUCE](https://juce.com): plugin framework, DSP building blocks, and the
   UI toolkit.
 - [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions):

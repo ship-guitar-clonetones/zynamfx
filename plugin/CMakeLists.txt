@@ -346,7 +346,10 @@ target_sources(${PROJECT_NAME}
         src/NamEngine.cpp
         include/TunerDetector.h
         src/TunerDetector.cpp
+        include/Transpose.h
+        src/Transpose.cpp
 )
+
 # Include GUI for Desktop builds
 if (NOT HEADLESS)
     target_sources(${PROJECT_NAME}
