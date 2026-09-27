@@ -212,7 +212,10 @@ flowchart LR
 - **Transpose**: a polyphonic pitch shifter on the clean DI, ahead of the
   amp, so a `-2` plays a standard-tuned guitar as drop D through the whole
   rig. Off by default; the faceplate knob sets whole semitones (±12) and
-  powering on is what adds latency. Right-clicking the group opens a deck
+  powering on is what adds latency. The knob is also hidden by default:
+  Plugin Settings → Effects picks which of Gate and Transpose the faceplate
+  shows (view settings only; an effect that is switched on always shows, so
+  a preset that uses it stays reachable). Right-clicking the group opens a deck
   with Fine (±50 cents), Tonality (1-20 kHz, the frequency above which the
   input bypasses the shifter, which keeps pick noise and string squeak
   natural; Off at the top) and Latency (the engine's 20 / 30 / 40 / 60 ms

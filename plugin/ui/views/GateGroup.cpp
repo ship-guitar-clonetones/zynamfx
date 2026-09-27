@@ -46,6 +46,10 @@ GateGroup::GateGroup(Services& services)
 
 GateGroup::~GateGroup() { deck_.close(); }
 
+void GateGroup::visibilityChanged() {
+  if (!isVisible()) deck_.close();
+}
+
 void GateGroup::mouseDown(const juce::MouseEvent& e) {
   if (isSecondaryPress(e)) toggleDeck();
 }

@@ -69,7 +69,7 @@ std::map<Key, String> buildTable() {
   t[Key::gateHold] = knobDesktop("Hold", "time the gate stays open after the signal drops, 0-200 ms.");
   t[Key::gateRange] = knobDesktop("Range", "how deep the gate closes, 20-80 dB. 80: mute · 20: tame.");
   t[Key::transpose] =
-      knobDesktop("Transpose", "pitch-shift the input, ±12 semitones. -2: drop D. Right-click: advanced.");
+      knobDesktop("Transpose", "pitch-shift the input, ±12 semitones. Right-click: advanced.");
   t[Key::transposePower] = kTouch ? U("Transpose Power: pitch shift on/off. On adds latency.")
                                   : U("Transpose Power: pitch shift on/off. On adds latency. Right-click: advanced.");
   t[Key::transposeFine] = knobDesktop("Fine", "trim the shift, ±50 cents. Center: exact semitones.");

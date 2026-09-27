@@ -47,6 +47,10 @@ TransposeGroup::TransposeGroup(Services& services)
 
 TransposeGroup::~TransposeGroup() { deck_.close(); }
 
+void TransposeGroup::visibilityChanged() {
+  if (!isVisible()) deck_.close();
+}
+
 void TransposeGroup::mouseDown(const juce::MouseEvent& e) {
   if (isSecondaryPress(e)) toggleDeck();
 }

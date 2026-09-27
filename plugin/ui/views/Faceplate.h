@@ -6,9 +6,15 @@
 // stack carry power switches (APVTS bools, so they automate and persist like
 // everything else).
 //
-// Six peer groups share the plate width (CSS space-between); every group
-// has a fixed footprint with inactive companions hidden in place, so toggling
-// stereo / spread never shifts the plate.
+// Five peer groups share the plate width (CSS space-between): input, the
+// effects cluster (gate + transpose, spaced like the tone stack's knobs so
+// they read as one), tone stack, image slot, output. Every group has a fixed
+// footprint with inactive companions hidden in place, so toggling stereo /
+// spread never shifts the plate. The effects are the exception, by design:
+// Plugin Settings → Effects picks which of them the plate shows (gate by
+// default, transpose hidden), a powered effect always shows so a preset's
+// sound is never controlled from a hidden knob, and the plate re-spreads
+// when the cluster shrinks or goes away.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -28,7 +34,8 @@ namespace t3k::ui {
 
 class Faceplate : public juce::Component,
                   private ChainStore::Listener,
-                  private AutoMeasure::Listener {
+                  private AutoMeasure::Listener,
+                  private UiPrefs::Listener {
 public:
   static constexpr int kHeight = design::kPlateHeight;
 
@@ -43,15 +50,21 @@ private:
 
   void chainChanged(const ChainState&) override { syncFlags(); }
   void autoMeasureChanged() override;
+  void prefChanged(const juce::String& key) override;
   void syncFlags();
+  // Show / hide an effect group; a change re-spreads the plate.
+  void showEffect(juce::Component& group, bool show);
 
   Services& services_;
 
   ParamKnob input_;
   std::unique_ptr<InputModeButton> inputMode_;
 
+  // Effects cluster: each group shows while its view setting is on or its
+  // power is (the bindings watch the power switches for the latter).
   GateGroup gate_;
   TransposeGroup transpose_;
+  ParamBinding gateEnabled_, transposeEnabled_;
 
   DimGroup toneDim_;
   ParamKnob bass_, middle_, treble_;

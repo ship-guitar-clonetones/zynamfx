@@ -15,6 +15,13 @@ void FormLabel::setText(const juce::String& text) {
   repaint();
 }
 
+void FormLabel::setStyle(float px, bool bold, juce::Colour colour) {
+  px_ = px;
+  bold_ = bold;
+  colour_ = colour;
+  heightChanged();
+}
+
 float FormLabel::preferredWidth() const { return Fonts::width(Fonts::sans(px_, bold_), text_); }
 
 // A bare span in a block (rather than a flex item) shares its line box with

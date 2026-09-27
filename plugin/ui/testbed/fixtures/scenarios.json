@@ -19648,7 +19648,7 @@
    "id": "settings-plugin",
    "section": "settings",
    "title": "Plugin Settings (in a DAW)",
-   "description": "Hosted builds get a single page: Info Bar toggle, MIDI Mapping and Advanced entry points, the update row when a newer version exists, and the running version in the footer.",
+   "description": "Hosted builds get a single page: Info Bar toggle, the Effects view toggles (Gate on, Transpose off by default; a powered effect shows regardless), MIDI Mapping and Advanced entry points, the update row when a newer version exists, and the running version in the footer.",
    "chain": {
     "revision": 1,
     "canUndo": true,
