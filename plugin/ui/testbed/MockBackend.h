@@ -43,7 +43,15 @@ public:
   bool retryModelLoad(const std::string&) override { return true; }
   bool removeChainBlock(const std::string&) override { return true; }
   bool reorderChainBlocks(const std::vector<std::string>&) override { return true; }
-  bool moveBlockToChain(const std::string&, const juce::String&, int) override { return true; }
+  // Moves the block between lanes like the processor, and records the call
+  // so self-tests can check what a cross-lane drop asked for.
+  bool moveBlockToChain(const std::string& blockId, const juce::String& side, int index) override;
+  struct ChainMove {
+    std::string id;
+    juce::String side;
+    int index{0};
+  };
+  const std::vector<ChainMove>& chainMoves() const { return chainMoves_; }
   std::string duplicateChainBlock(const std::string&, const juce::String&, int) override { return {}; }
   bool copyChainBlock(const std::string&) override { return true; }
   std::string pasteChainBlock(const juce::String&, int) override { return {}; }
@@ -139,6 +147,7 @@ private:
   juce::var midiMap_;
   juce::var presets_;
   std::vector<Move> presetMoves_;
+  std::vector<ChainMove> chainMoves_;
   juce::var meters_;
   juce::var tuner_;
   juce::var autoMeasure_;

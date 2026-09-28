@@ -71,19 +71,11 @@ void GalleryLane::setItems(const std::vector<ChainItem>& items, int tileSize) {
       tiles_.erase(existing);
     }
     if (tile == nullptr) {
-      if (item.isInsert) {
-        auto add = std::make_unique<AddTile>(services_, item.blockId, tile_);
-        add->onAdd = [this](const std::string& id) { if (onAdd) onAdd(id); };
-        add->onPaste = [this](const std::string& id) {
-          if (onPaste) onPaste(indexOf(id));
-        };
-        tile = std::move(add);
-      } else {
-        auto tone = std::make_unique<ToneTile>(services_, item, tile_);
-        tone->onOpen = [this](const std::string& id) { if (onOpen) onOpen(id); };
-        tone->onSwap = [this](const std::string& id) { if (onSwap) onSwap(id); };
-        tile = std::move(tone);
-      }
+      if (item.isInsert)
+        tile = std::make_unique<AddTile>(services_, item.blockId, tile_);
+      else
+        tile = std::make_unique<ToneTile>(services_, item, tile_);
+      wire(*tile);
       addAndMakeVisible(*tile);
     }
     if (auto* add = dynamic_cast<AddTile*>(tile.get())) {
@@ -122,6 +114,33 @@ void GalleryLane::setPlaceholder(const std::string& blockId) {
   placeholder_ = blockId;
   for (auto& [id, tile] : tiles_) tile->setVisible(id != placeholder_);
   repaint();
+}
+
+std::unique_ptr<GalleryTile> GalleryLane::releaseTile(const std::string& blockId) {
+  const auto it = tiles_.find(blockId);
+  if (it == tiles_.end()) return nullptr;
+  auto tile = std::move(it->second);
+  tiles_.erase(it);
+  return tile;
+}
+
+void GalleryLane::adoptTile(std::unique_ptr<GalleryTile> tile) {
+  if (tile == nullptr) return;
+  addChildComponent(*tile);  // reparents; the next setItems places and shows it
+  wire(*tile);
+  tiles_[tile->blockId()] = std::move(tile);
+}
+
+void GalleryLane::wire(GalleryTile& tile) {
+  if (auto* add = dynamic_cast<AddTile*>(&tile)) {
+    add->onAdd = [this](const std::string& id) { if (onAdd) onAdd(id); };
+    add->onPaste = [this](const std::string& id) {
+      if (onPaste) onPaste(indexOf(id));
+    };
+  } else if (auto* tone = dynamic_cast<ToneTile*>(&tile)) {
+    tone->onOpen = [this](const std::string& id) { if (onOpen) onOpen(id); };
+    tone->onSwap = [this](const std::string& id) { if (onSwap) onSwap(id); };
+  }
 }
 
 // Every gap following a tone block carries a set-branch dot, except the
