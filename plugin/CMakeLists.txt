@@ -330,6 +330,8 @@ target_sources(${PROJECT_NAME}
         src/StereoOffset.cpp
         include/AutoOffset.h
         src/AutoOffset.cpp
+        include/PresetFile.h
+        src/PresetFile.cpp
         include/PresetManager.h
         src/PresetManager.cpp
         include/Processor.h

@@ -4,16 +4,14 @@
 // issue #76).
 #include "Processor.h"
 #include <algorithm>
-#include <cstring>
 #include <limits>
+
+namespace presetfile = t3k::presetfile;
 
 namespace {
 
 constexpr const char* kUserPrefix = "user:";
 constexpr const char* kFactoryPrefix = "factory:";
-
-// Magic prefix for the binary ValueTree preset format.
-constexpr char kPresetMagic[] = {'T', '3', 'K', 'B'};
 
 juce::File presetsRootDir() {
   juce::File base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
@@ -21,6 +19,10 @@ juce::File presetsRootDir() {
   base = base.getChildFile("Application Support");
 #endif
   return base.getChildFile("TONE3000").getChildFile("Presets");
+}
+
+juce::String stripPrefix(const juce::String& id, const char* prefix) {
+  return id.fromFirstOccurrenceOf(prefix, false, false);
 }
 
 }  // namespace
@@ -31,6 +33,20 @@ PresetManager::PresetManager(const juce::File& baseDir, const juce::File& system
     : userDir(baseDir),
       factoryDir(baseDir.getChildFile("Factory")),
       systemFactoryDir(systemFactory) {}
+
+PresetManager::PresetManager(const PresetManager& other)
+    : userDir(other.userDir), factoryDir(other.factoryDir), systemFactoryDir(other.systemFactoryDir) {}
+
+PresetManager& PresetManager::operator=(const PresetManager& other) {
+  if (this == &other)
+    return *this;
+  const juce::ScopedLock lock(cacheLock);
+  userDir = other.userDir;
+  factoryDir = other.factoryDir;
+  systemFactoryDir = other.systemFactoryDir;
+  cache.clear();  // paths from the old root would only be pruned anyway
+  return *this;
+}
 
 juce::File PresetManager::defaultSystemFactoryDir() {
   // Shared all-users location the installers write to. A missing dir just
@@ -63,97 +79,140 @@ juce::File PresetManager::defaultSystemFactoryDir() {
 #endif
 }
 
-juce::ValueTree PresetManager::readPresetFile(const juce::File& file) {
-  if (!file.existsAsFile())
-    return {};
+// Filenames
 
-  juce::FileInputStream in(file);
-  char magic[sizeof(kPresetMagic)]{};
-  if (!in.openedOk() || in.read(magic, sizeof(magic)) != static_cast<int>(sizeof(magic)) ||
-      std::memcmp(magic, kPresetMagic, sizeof(magic)) != 0)
-    return {};
+juce::File PresetManager::writeUserPreset(const juce::File& dir, const juce::File& current,
+                                          const juce::String& name, const juce::ValueTree& preset) {
+  const juce::File target = presetfile::uniqueFile(dir, presetfile::sanitizeStem(name), current);
+  const bool haveCurrent = current != juce::File() && current.existsAsFile();
 
-  juce::ValueTree tree = juce::ValueTree::readFromStream(in);
-  return tree.hasType(kPresetTag) ? tree : juce::ValueTree();
-}
-
-bool PresetManager::writePresetFile(const juce::File& file, const juce::ValueTree& preset) {
-  // Write-then-rename so a crash or full disk mid-write can't clobber an
-  // existing preset (the XML writer used to provide this via writeTo).
-  juce::TemporaryFile temp(file);
-  {
-    juce::FileOutputStream out(temp.getFile());
-    if (!out.openedOk())
-      return false;
-    out.write(kPresetMagic, sizeof(kPresetMagic));
-    preset.writeToStream(out);
-    if (out.getStatus().failed())
-      return false;
+  if (haveCurrent && current == target) {
+    // Same file: rewrite in place, then fix a case-only spelling change.
+    if (!presetfile::write(current, preset))
+      return {};
+    if (current.getFileName() != target.getFileName() && !current.moveFileTo(target))
+      return current;  // content is saved; the old spelling is cosmetic
+    return target;
   }
-  return temp.overwriteTargetFileWithTemporary();
-}
 
-juce::File PresetManager::fileForId(const juce::String& id) const {
-  if (id.startsWith(kUserPrefix))
-    return userDir.getChildFile(id.fromFirstOccurrenceOf(kUserPrefix, false, false) +
-                                kFileExtension);
-  if (id.startsWith(kFactoryPrefix)) {
-    const juce::String stem =
-        id.fromFirstOccurrenceOf(kFactoryPrefix, false, false) + kFileExtension;
-    // User Factory overrides the installer-shipped copy when both exist.
-    const juce::File local = factoryDir.getChildFile(stem);
-    if (local.existsAsFile())
-      return local;
-    if (systemFactoryDir != juce::File())
-      return systemFactoryDir.getChildFile(stem);
+  // New file, or the filename no longer matches the name (a rename, or a
+  // legacy <uuid> file getting its readable name): write the new file
+  // first, then drop the old one, so a failure never loses the preset.
+  if (!presetfile::write(target, preset))
     return {};
+  if (haveCurrent) {
+    if (!current.deleteFile())
+      juce::Logger::writeToLog("[Presets] Could not remove superseded file: " +
+                               current.getFullPathName());
+    else
+      juce::Logger::writeToLog("[Presets] Renamed file " + current.getFileName() + " -> " +
+                               target.getFileName());
   }
-  return {};
+  return target;
 }
 
-std::vector<PresetManager::Info> PresetManager::list() const {
-  auto scan = [](const juce::File& dir, const char* prefix, bool factory) {
-    std::vector<Info> out;
-    if (!dir.isDirectory())
-      return out;
-    for (const auto& file :
-         dir.findChildFiles(juce::File::findFiles, false, "*" + juce::String(kFileExtension))) {
-      const juce::ValueTree preset = readPresetFile(file);
-      if (!preset.isValid())
-        continue;
-      Info info;
-      info.id = prefix + file.getFileNameWithoutExtension();
-      info.name = preset.getProperty("name", file.getFileNameWithoutExtension()).toString();
-      info.factory = factory;
-      out.push_back(std::move(info));
-    }
-    std::sort(out.begin(), out.end(), [](const Info& a, const Info& b) {
-      return a.name.compareIgnoreCase(b.name) < 0;
-    });
+// Scanning
+
+std::vector<PresetManager::Entry> PresetManager::scanDir(const juce::File& dir, const char* prefix,
+                                                         bool factory, ScanState& state) const {
+  std::vector<Entry> out;
+  if (!dir.isDirectory())
     return out;
-  };
+
+  // Stem order, so which of two files claiming one id keeps it (below) does
+  // not depend on the OS's directory iteration order: "Original" beats
+  // "Original copy".
+  auto files = dir.findChildFiles(juce::File::findFiles, false, "*" + juce::String(kFileExtension));
+  std::sort(files.begin(), files.end(), [](const juce::File& a, const juce::File& b) {
+    return a.getFileNameWithoutExtension().compareIgnoreCase(b.getFileNameWithoutExtension()) < 0;
+  });
+
+  std::set<juce::String> idsInDir;
+  for (const auto& file : files) {
+    // Same (mtime, size) as last time: the id/name are what we read then.
+    // Every write goes through write-then-rename (presetfile::write), so any
+    // change to a preset moves at least its mtime. A never-seen path gets a
+    // default entry (mtime 0), which no real file matches.
+    const juce::int64 modificationMs = file.getLastModificationTime().toMilliseconds();
+    const juce::int64 size = file.getSize();
+    const juce::String stem = file.getFileNameWithoutExtension();
+    state.seen.insert(file.getFullPathName());
+    auto& cached = cache[file.getFullPathName()];
+    if (cached.modificationMs != modificationMs || cached.size != size) {
+      ++state.parsed;
+      // Header only for v2 files; a legacy v1 file is parsed in full (once).
+      const presetfile::Header header = presetfile::readHeader(file);
+      cached.modificationMs = modificationMs;
+      cached.size = size;
+      cached.valid = header.valid;
+      if (cached.valid) {
+        // Legacy files (and hand-renamed ones) carry no id: the stem is it.
+        cached.rawId = header.id.isEmpty() ? stem : header.id;
+        cached.name = header.name.isEmpty() ? stem : header.name;
+      } else {
+        cached.rawId.clear();
+        cached.name.clear();
+      }
+    }
+    if (!cached.valid)
+      continue;
+
+    // Two files claiming one id (a copied/imported file): the first keeps
+    // it, the second falls back to its stem so both still list and load.
+    juce::String id = prefix + cached.rawId;
+    if (!idsInDir.insert(id).second) {
+      id = prefix + stem;
+      if (!idsInDir.insert(id).second)
+        continue;  // stem taken too: nothing sane to call it
+      juce::Logger::writeToLog("[Presets] Duplicate preset id in " + file.getFileName() +
+                               "; listing it as " + id);
+    }
+    Entry entry;
+    entry.info.id = id;
+    entry.info.name = cached.name;
+    entry.info.factory = factory;
+    entry.file = file;
+    out.push_back(std::move(entry));
+  }
+  std::sort(out.begin(), out.end(), [](const Entry& a, const Entry& b) {
+    return a.info.name.compareIgnoreCase(b.info.name) < 0;
+  });
+  return out;
+}
+
+std::vector<PresetManager::Entry> PresetManager::entries() const {
+  const auto startMs = juce::Time::getMillisecondCounterHiRes();
+  ScanState state;
+  // One lock for the whole scan: concurrent callers (host program API off
+  // the message thread) would otherwise each pay to parse the same new file.
+  const juce::ScopedLock lock(cacheLock);
 
   // Factory section: system Factory with the user Factory overlaid on top (a
-  // local file with the same stem replaces the shipped one), re-sorted by
-  // name so the merged section reads like a single folder.
-  std::vector<Info> factory = scan(systemFactoryDir, kFactoryPrefix, true);
-  for (const auto& info : scan(factoryDir, kFactoryPrefix, true)) {
-    const auto it = std::find_if(factory.begin(), factory.end(),
-                                 [&info](const Info& existing) { return existing.id == info.id; });
+  // local file with the same id replaces the shipped one), re-sorted by name
+  // so the merged section reads like a single folder.
+  std::vector<Entry> factory = scanDir(systemFactoryDir, kFactoryPrefix, true, state);
+  for (auto& local : scanDir(factoryDir, kFactoryPrefix, true, state)) {
+    const auto it = std::find_if(factory.begin(), factory.end(), [&local](const Entry& shipped) {
+      return shipped.info.id == local.info.id;
+    });
     if (it != factory.end())
-      *it = info;
+      *it = std::move(local);
     else
-      factory.push_back(info);
+      factory.push_back(std::move(local));
   }
-  std::sort(factory.begin(), factory.end(), [](const Info& a, const Info& b) {
-    return a.name.compareIgnoreCase(b.name) < 0;
+  std::sort(factory.begin(), factory.end(), [](const Entry& a, const Entry& b) {
+    return a.info.name.compareIgnoreCase(b.info.name) < 0;
   });
 
   // User presets lead so they own the low MIDI program-change numbers; the
   // factory section follows.
-  std::vector<Info> presets = scan(userDir, kUserPrefix, false);
+  std::vector<Entry> presets = scanDir(userDir, kUserPrefix, false, state);
   presets.insert(presets.end(), std::make_move_iterator(factory.begin()),
                  std::make_move_iterator(factory.end()));
+
+  // Forget files that are gone (remove(), or deleted behind our back).
+  for (auto it = cache.begin(); it != cache.end();)
+    it = state.seen.count(it->first) != 0 ? std::next(it) : cache.erase(it);
 
   // Apply the custom order: within each section, ordered ids first (in file
   // order), then everything else. The sort is stable over the name-sorted
@@ -162,18 +221,45 @@ std::vector<PresetManager::Info> PresetManager::list() const {
   // missing/empty order file leaves the classic ordering untouched.
   const juce::StringArray order = readOrder();
   if (!order.isEmpty()) {
-    auto rank = [&order](const Info& info) {
-      const int index = order.indexOf(info.id);
+    auto rank = [&order](const Entry& entry) {
+      const int index = order.indexOf(entry.info.id);
       return index < 0 ? std::numeric_limits<int>::max() : index;
     };
-    std::stable_sort(presets.begin(), presets.end(), [&](const Info& a, const Info& b) {
-      if (a.factory != b.factory)
-        return !a.factory;  // user section always first
+    std::stable_sort(presets.begin(), presets.end(), [&](const Entry& a, const Entry& b) {
+      if (a.info.factory != b.info.factory)
+        return !a.info.factory;  // user section always first
       return rank(a) < rank(b);
     });
   }
+
+  // Release-level line only when files were actually read and it was slow:
+  // a warm scan never logs; a cold one on a slow disk (issue #169) says so
+  // in the user's log next to whatever the host was doing at the time.
+  const auto elapsedMs = juce::Time::getMillisecondCounterHiRes() - startMs;
+  if (state.parsed > 0 && elapsedMs >= 100.0)
+    juce::Logger::writeToLog("[Presets] Scanned " + juce::String(presets.size()) + " presets (" +
+                             juce::String(state.parsed) + " read from disk) in " +
+                             juce::String(juce::roundToInt(elapsedMs)) + " ms");
   return presets;
 }
+
+std::vector<PresetManager::Info> PresetManager::list() const {
+  std::vector<Info> out;
+  for (auto& entry : entries())
+    out.push_back(std::move(entry.info));
+  return out;
+}
+
+juce::File PresetManager::fileForId(const juce::String& id) const {
+  if (id.isEmpty())
+    return {};
+  for (const auto& entry : entries())
+    if (entry.info.id == id)
+      return entry.file;
+  return {};
+}
+
+// Order
 
 bool PresetManager::move(const juce::String& id, int delta) const {
   if (delta == 0)
@@ -232,8 +318,10 @@ bool PresetManager::writeOrder(const juce::StringArray& ids) const {
   return orderFile().replaceWithText(juce::JSON::toString(juce::var(list)));
 }
 
+// CRUD
+
 juce::ValueTree PresetManager::load(const juce::String& id) const {
-  return readPresetFile(fileForId(id));
+  return presetfile::read(fileForId(id));
 }
 
 PresetManager::Info PresetManager::save(const juce::String& name, juce::ValueTree preset) const {
@@ -246,40 +334,52 @@ PresetManager::Info PresetManager::save(const juce::String& name, juce::ValueTre
     return {};
   }
 
-  // Same-name save overwrites that preset (keeps its id); this is the update path.
-  juce::File file;
-  for (const Info& existing : list())
-    if (!existing.factory && existing.name.compareIgnoreCase(name) == 0)
-      file = fileForId(existing.id);
-  if (file == juce::File())
-    file = userDir.getChildFile(juce::Uuid().toString() + kFileExtension);
+  // Same-name save overwrites that preset (keeps its id); this is the update
+  // path. A legacy file picks up its stem as the stored id here, so the id
+  // the UI and any DAW project already hold stays valid.
+  juce::File current;
+  juce::String rawId;
+  for (const Entry& existing : entries()) {
+    if (!existing.info.factory && existing.info.name.compareIgnoreCase(name) == 0) {
+      current = existing.file;
+      rawId = stripPrefix(existing.info.id, kUserPrefix);
+      break;
+    }
+  }
+  if (rawId.isEmpty())
+    rawId = juce::Uuid().toString();
 
   preset.setProperty("name", name, nullptr);
-  if (!writePresetFile(file, preset)) {
-    juce::Logger::writeToLog("[Presets] Failed to write preset file: " + file.getFullPathName());
+  preset.setProperty("id", rawId, nullptr);
+  if (writeUserPreset(userDir, current, name, preset) == juce::File()) {
+    juce::Logger::writeToLog("[Presets] Failed to write preset file for: " + name);
     return {};
   }
 
   Info info;
-  info.id = kUserPrefix + file.getFileNameWithoutExtension();
+  info.id = kUserPrefix + rawId;
   info.name = name;
   info.factory = false;
   return info;
 }
 
 bool PresetManager::rename(const juce::String& id, const juce::String& newName) const {
-  if (!id.startsWith(kUserPrefix) || newName.trim().isEmpty())
+  const juce::String trimmed = newName.trim();
+  if (!id.startsWith(kUserPrefix) || trimmed.isEmpty())
     return false;
   const juce::File file = fileForId(id);
-  juce::ValueTree preset = readPresetFile(file);
+  juce::ValueTree preset = presetfile::read(file);
   if (!preset.isValid())
     return false;
-  preset.setProperty("name", newName.trim(), nullptr);
-  return writePresetFile(file, preset);
+  preset.setProperty("name", trimmed, nullptr);
+  // Legacy file: the stem was its id; pin it inside before the file moves.
+  preset.setProperty("id", stripPrefix(id, kUserPrefix), nullptr);
+  return writeUserPreset(userDir, file, trimmed, preset) != juce::File();
 }
 
 bool PresetManager::remove(const juce::String& id) const {
   if (!id.startsWith(kUserPrefix))
     return false;
-  return fileForId(id).deleteFile();
+  const juce::File file = fileForId(id);
+  return file != juce::File() && file.deleteFile();
 }

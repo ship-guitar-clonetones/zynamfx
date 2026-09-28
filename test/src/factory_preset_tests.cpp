@@ -3,7 +3,8 @@
 // The installers ship resources/factory-presets/*.t3kpreset verbatim, so the
 // files themselves are release artifacts. These pin what shipping requires:
 //
-//   - every file parses in the real T3KB preset format,
+//   - every file is in the current preset framing (PresetFile.h), named
+//     after its preset, with the stable factory id inside,
 //   - every tone block's active model bytes are embedded, so a fresh install
 //     loads the preset offline (no network, no auth),
 //   - no block embeds bytes its tone no longer references: auditioned
@@ -57,14 +58,24 @@ TEST(FactoryPresetTest, ShippedPresetsAreSlimAndLoadOffline) {
   for (const auto& file : files) {
     SCOPED_TRACE(file.getFileName().toStdString());
 
-    // Real preset framing: T3KB magic + binary ValueTree (see PresetManager).
-    juce::FileInputStream in(file);
-    ASSERT_TRUE(in.openedOk());
-    char magic[4]{};
-    ASSERT_EQ(in.read(magic, 4), 4);
-    ASSERT_EQ(std::memcmp(magic, "T3KB", 4), 0);
-    const juce::ValueTree preset = juce::ValueTree::readFromStream(in);
+    // Real preset framing (see PresetFile.h): the current v2 header form,
+    // since shipped files are regenerated rather than migrated lazily. The
+    // header alone must identify the preset (that's what a cold list() reads)
+    // and agree with the body, and the id must be the stable factory uuid,
+    // not something derived from the readable filename.
+    const auto header = t3k::presetfile::readHeader(file);
+    ASSERT_TRUE(header.valid);
+    EXPECT_FALSE(header.legacy) << "shipped preset is in the v1 framing; run PresetTool migrate";
+    ASSERT_TRUE(header.id.isNotEmpty());
+    ASSERT_TRUE(header.name.isNotEmpty());
+    EXPECT_NE(header.id, file.getFileNameWithoutExtension());
+    EXPECT_EQ(file.getFileNameWithoutExtension(), t3k::presetfile::sanitizeStem(header.name))
+        << "filename is not the sanitized display name";
+
+    const juce::ValueTree preset = t3k::presetfile::read(file);
     ASSERT_TRUE(preset.hasType(PresetManager::kPresetTag));
+    EXPECT_EQ(preset.getProperty("id").toString(), header.id);
+    EXPECT_EQ(preset.getProperty("name").toString(), header.name);
 
     const juce::ValueTree snapshot = preset.getChildWithName("ChainSnapshot");
     ASSERT_TRUE(snapshot.isValid());

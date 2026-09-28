@@ -819,4 +819,5 @@ add_subdirectory(plugin) # Add plugin project
 # for iOS produces something that cannot be run, so keep it out of that build.
 if (NOT T3K_IOS)
     add_subdirectory(test)   # DSP test suite (DspTests, see script/test-dsp.sh)
+    add_subdirectory(tools)  # maintainer utilities (PresetTool), EXCLUDE_FROM_ALL
 endif()

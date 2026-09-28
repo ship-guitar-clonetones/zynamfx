@@ -220,7 +220,7 @@ picker instead (see Known gaps).
   `PresetManager::defaultSystemFactoryDir` points there (`plugin/CMakeLists.txt`
   and `plugin/src/PresetManager.cpp`). iOS bundles are flat, so they land at
   `TONE3000.app/FactoryPresets`. The bundle is read-only, which is the contract
-  that directory already has, and a file with the same uuid stem in
+  that directory already has, and a file carrying the same preset id in
   `Library/TONE3000/Presets/Factory` inside the app container still overrides a
   bundled entry in `list()`. The glob runs at configure time, so a
   new preset file needs a reconfigure.

@@ -257,6 +257,24 @@ juce::String ProcessorBackend::revealLogs() {
   return logFile.getFullPathName();
 }
 
+bool ProcessorBackend::canOpenPresetsFolder() {
+#if JUCE_IOS
+  return false;
+#else
+  return true;
+#endif
+}
+
+bool ProcessorBackend::openPresetsFolder() {
+  const juce::File dir = processor_.getUserPresetsDir();
+  // A fresh install has no folder until the first save; make it so the
+  // user lands somewhere they can drop files into.
+  if (!dir.isDirectory() && !dir.createDirectory()) return false;
+  // startAsProcess opens the folder itself (Finder / Explorer / xdg-open);
+  // revealToUser would select it inside its parent instead.
+  return dir.startAsProcess();
+}
+
 bool ProcessorBackend::canOpenDateTimeSettings() {
 #if JUCE_MAC || JUCE_WINDOWS
   return true;

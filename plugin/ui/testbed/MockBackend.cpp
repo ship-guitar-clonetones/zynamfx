@@ -248,6 +248,33 @@ bool MockBackend::loadPreset(const juce::String& presetId) {
   return true;
 }
 
+bool MockBackend::movePreset(const juce::String& presetId, int delta) {
+  presetMoves_.push_back({presetId, delta});
+  auto* all = presets_.getArray();
+  if (all == nullptr || delta == 0) return false;
+  // Same rule as PresetManager::move: shift by `delta` within the preset's
+  // own section, clamped to that section's ends, then rewrite the whole
+  // list user-first / factory-second the way list() returns it.
+  int index = -1;
+  for (int i = 0; i < all->size(); ++i)
+    if ((*all)[i]["id"].toString() == presetId) index = i;
+  if (index < 0) return false;
+  const bool factory = (*all)[index]["factory"];
+  juce::Array<juce::var> section, others;
+  for (const auto& p : *all) (static_cast<bool>(p["factory"]) == factory ? section : others).add(p);
+  int from = -1;
+  for (int i = 0; i < section.size(); ++i)
+    if (section[i]["id"].toString() == presetId) from = i;
+  const int to = juce::jlimit(0, section.size() - 1, from + delta);
+  if (to == from) return false;
+  section.move(from, to);
+  juce::Array<juce::var> ordered;
+  ordered.addArray(factory ? others : section);
+  ordered.addArray(factory ? section : others);
+  presets_ = ordered;
+  return true;
+}
+
 juce::var MockBackend::getAudioInputLevels() {
   if (signal_ != nullptr) {
     const auto* channels = device_["inputChannels"].getArray();
