@@ -207,6 +207,22 @@ bool MockBackend::setBlockSlimSize(const std::string& blockId, double slimSize) 
   return false;
 }
 
+bool MockBackend::moveBlockToChain(const std::string& blockId, const juce::String& side, int index) {
+  chainMoves_.push_back({blockId, side, index});
+  auto* from = chain_[side == "left" ? "chainRight" : "chain"].getArray();
+  auto* to = chain_[side == "left" ? "chain" : "chainRight"].getArray();
+  if (from == nullptr || to == nullptr) return false;
+  for (int i = 0; i < from->size(); ++i) {
+    if ((*from)[i]["blockId"].toString().toStdString() != blockId) continue;
+    const auto block = (*from)[i];
+    from->remove(i);
+    to->insert(juce::jlimit(0, to->size(), index), block);
+    bumpChain();
+    return true;
+  }
+  return false;
+}
+
 void MockBackend::setMultiCore(bool enabled) {
   chain_.getDynamicObject()->setProperty("multiCore", enabled);
   bumpChain();

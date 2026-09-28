@@ -134,6 +134,18 @@ void ChainView::syncFromNative() {
 void ChainView::applyLanes() {
   const auto& state = services_.chain.state();
   const int tile = tileSize();
+  // A block that changed lanes keeps its tile. Mid-drag this is what keeps
+  // the gesture alive: the tile under the pointer is the component JUCE
+  // delivers the drag to, and rebuilding the lane it left would destroy it
+  // (the pointer's events would then go nowhere, the ghost stuck where it
+  // crossed). Off-drag it just saves rebuilding a tile the resync moved.
+  const auto handOver = [](GalleryLane& from, GalleryLane& to, const std::vector<ChainItem>& toItems) {
+    for (const auto& item : toItems)
+      if (from.tileFor(item.blockId) != nullptr && to.tileFor(item.blockId) == nullptr)
+        to.adoptTile(from.releaseTile(item.blockId));
+  };
+  handOver(left_, right_, lanes_.right);
+  handOver(right_, left_, lanes_.left);
   left_.setItems(lanes_.left, tile);
   right_.setItems(lanes_.right, tile);
   right_.setVisible(stereo());
@@ -405,8 +417,11 @@ void ChainView::finishSort() {
   keyboardSort_ = false;
   duplicating_ = false;
   ghost_.reset();
-  for (auto* l : {&left_, &right_}) l->setPlaceholder({});
-  if (auto* tile = lane(originSide_).tileFor(activeId_)) tile->setTravelling(false);
+  for (auto* l : {&left_, &right_}) {
+    l->setPlaceholder({});
+    // The tile follows the item across lanes, so look for it in both.
+    if (auto* tile = l->tileFor(activeId_)) tile->setTravelling(false);
+  }
   activeId_.clear();
   lanes_ = native_;
   applyLanes();

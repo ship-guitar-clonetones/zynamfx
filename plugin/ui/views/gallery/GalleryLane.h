@@ -39,6 +39,13 @@ public:
   // The travelling tile's slot: hidden so the rail shows through.
   void setPlaceholder(const std::string& blockId);
 
+  // Hand a tile between lanes: the leaving lane releases it (still parented
+  // there until adopted), the entering lane reparents it and reuses it on
+  // its next setItems. Mid-drag the dragged tile is the very component the
+  // pointer's events are addressed to, so it has to survive the crossing.
+  std::unique_ptr<GalleryTile> releaseTile(const std::string& blockId);
+  void adoptTile(std::unique_ptr<GalleryTile> tile);
+
   GalleryTile* tileFor(const std::string& blockId) const;
   int indexOf(const std::string& blockId) const;
 
@@ -54,6 +61,8 @@ private:
   class BranchGap;
 
   void rebuildBranchGaps();
+  // Point a tile's callbacks at this lane (re-done on adoption).
+  void wire(GalleryTile& tile);
 
   Services& services_;
   ChainSide side_;

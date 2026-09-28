@@ -33,6 +33,8 @@
 #include "views/browser/FilterChip.h"
 #include "views/browser/Paginator.h"
 #include "views/browser/ToneCard.h"
+#include "views/gallery/GalleryGeometry.h"
+#include "views/gallery/GalleryTile.h"
 #include "widgets/Avatar.h"
 #include "widgets/ChromeTextButton.h"
 #include "widgets/DragScroller.h"
@@ -1142,6 +1144,110 @@ struct PresetReorderTests : juce::UnitTest {
   }
 };
 
+// Dragging a gallery tile across the stereo seam, through the peer. The tile
+// under the pointer is the component JUCE delivers the drag to, and the live
+// cross-lane reflow rebuilds both lanes: it must carry that tile over rather
+// than destroy it, or the events stop and the ghost freezes where it
+// crossed. The drop is one moveBlockToChain and the gallery ends up showing
+// the store's new lanes.
+struct ChainCrossLaneDragTests : juce::UnitTest {
+  ChainCrossLaneDragTests() : juce::UnitTest("Chain cross-lane drag", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  struct Pointer {
+    juce::ComponentPeer& peer;
+    juce::int64 time = juce::Time::currentTimeMillis();
+    void at(juce::Point<float> pos, bool down) {
+      peer.handleMouseEvent(juce::MouseInputSource::InputSourceType::mouse, pos,
+                            down ? juce::ModifierKeys::leftButtonModifier : juce::ModifierKeys(), 0.0f, 0.0f, ++time);
+      pump(10);
+    }
+  };
+
+  static GalleryTile* tile(juce::Component& root, const std::string& blockId) {
+    return dynamic_cast<GalleryTile*>(drive::find(root, [&](juce::Component& c) {
+      auto* t = dynamic_cast<GalleryTile*>(&c);
+      return t != nullptr && t->blockId() == blockId;
+    }));
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("main-stereo");  // L: l1 l2 ins / R: r1 r2 ins
+    if (scenario == nullptr) {
+      expect(false, "main-stereo scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("cross-lane drag", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto* peer = host.getPeer();
+    expect(peer != nullptr);
+    if (peer == nullptr) return;
+    auto& root = host.pluginRoot();
+
+    auto* l1 = tile(root, "blk-l1");
+    auto* r1 = tile(root, "blk-r1");
+    expect(l1 != nullptr && r1 != nullptr);
+    if (l1 == nullptr || r1 == nullptr) return;
+    auto* leftLane = l1->getParentComponent();
+    auto* rightLane = r1->getParentComponent();
+    expect(leftLane != nullptr && rightLane != nullptr && leftLane != rightLane);
+    const int overlayIdle = root.overlayLayer().getNumChildComponents();
+    juce::Component::SafePointer<GalleryTile> dragged(l1);
+
+    beginTest("the dragged tile survives the crossing and keeps the gesture");
+    Pointer pointer{*peer};
+    const auto& top = peer->getComponent();
+    const auto start = top.getLocalPoint(l1, l1->getLocalBounds().getCentre().toFloat());
+    // Land one slot past r1 (the lane has parted to make room there).
+    const auto end = top.getLocalPoint(r1, r1->getLocalBounds().getCentre().toFloat()
+                                               .translated(r1->getWidth() + gallery::kTileGap, 0.0f));
+    pointer.at(start, true);
+    constexpr int kSteps = 12;
+    for (int i = 1; i <= kSteps; ++i) {
+      pointer.at(start + (end - start) * (static_cast<float>(i) / kSteps), true);
+      expect(dragged != nullptr, "the tile was destroyed mid-drag at step " + juce::String(i));
+      if (dragged == nullptr) break;
+    }
+    if (dragged != nullptr) {
+      expect(dragged->getParentComponent() == rightLane, "the tile changed lanes with its slot");
+      expectEquals(root.overlayLayer().getNumChildComponents(), overlayIdle + 1);  // the ghost
+    }
+
+    beginTest("the drop is one move to the other lane");
+    pointer.at(end, false);
+    pump(100);
+    const auto& moves = backend.chainMoves();
+    expectEquals(static_cast<int>(moves.size()), 1);
+    if (!moves.empty()) {
+      expectEquals(juce::String(moves.back().id), juce::String("blk-l1"));
+      expectEquals(moves.back().side, juce::String("right"));
+      expectEquals(moves.back().index, 1);
+    }
+    expectEquals(root.overlayLayer().getNumChildComponents(), overlayIdle);  // ghost gone
+
+    beginTest("the gallery shows the store's new lanes");
+    const auto& state = root.services().chain.state();
+    expectEquals(static_cast<int>(state.chain.size()), 2);
+    expect(state.chainRight.has_value() && state.chainRight->size() == 4
+           && (*state.chainRight)[1].blockId == "blk-l1");
+    auto* moved = tile(root, "blk-l1");
+    expect(moved != nullptr);
+    if (moved != nullptr) {
+      expect(moved->getParentComponent() == rightLane && moved->isShowing());
+      expect(juce::exactlyEqual(moved->getAlpha(), 1.0f), "not left dimmed as travelling");
+      expect(moved->getX() > r1->getX(), "sits after r1");
+      expect(tile(root, "blk-l2") != nullptr && tile(root, "blk-l2")->getX() == 0, "left lane closed the gap");
+    }
+    window.setVisible(false);
+  }
+};
+
 // The block card's LITE / FULL toggle, clicked through the peer with the
 // per-block size setting on. The store refreshes synchronously inside the
 // click, so the card re-syncs while the toggle's own click is still on the
@@ -1411,6 +1517,7 @@ AccessibilityTests accessibilityTests;
 FocusPolicyTests focusPolicyTests;
 TouchScrollTests touchScrollTests;
 PresetReorderTests presetReorderTests;
+ChainCrossLaneDragTests chainCrossLaneDragTests;
 BlockSizeToggleTests blockSizeToggleTests;
 KnobReadoutTests knobReadoutTests;
 FaceplateEffectsTests faceplateEffectsTests;
