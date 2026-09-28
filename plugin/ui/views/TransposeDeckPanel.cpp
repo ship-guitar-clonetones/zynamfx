@@ -7,9 +7,9 @@ namespace t3k::ui {
 
 namespace {
 
-// Normalised defaults: 0 cents (centre), tonality Off (top), the 30 ms
-// buffer (the second of four detents, a 16 ms readout).
-constexpr float kFineDefault = 0.5f;
+// Defaults: STEP on, tonality Off (top, normalised), the 30 ms buffer (the
+// second of four detents).
+constexpr bool kStepDefault = true;
 constexpr float kTonalityDefault = 1.0f;
 constexpr float kWindowDefault = 1.0f / 3.0f;
 
@@ -19,12 +19,11 @@ constexpr int kSectionWidth = 64;
 constexpr int kSectionGap = 18;
 
 Knob::Options deckKnob(const char* label, const KnobScale& scale, float def, help::Key help,
-                       Knob::Variant variant = Knob::Variant::full, std::optional<int> steps = {}) {
+                       std::optional<int> steps = {}) {
   Knob::Options o;
   o.label = label;
   o.size = theme::kKnobSizeSecondary;
   o.thumb = Knob::Thumb::secondary;
-  o.variant = variant;
   o.scale = &scale;
   o.defaultValue = def;
   o.help = help;
@@ -35,24 +34,30 @@ Knob::Options deckKnob(const char* label, const KnobScale& scale, float def, hel
 }  // namespace
 
 TransposeDeckPanel::TransposeDeckPanel(Services& services)
-    : fine_(services.backend, "transposeFine",
-            deckKnob("Fine", scales::cents(), kFineDefault, help::Key::transposeFine, Knob::Variant::bipolar)),
+    : step_(services.backend, "transposeStep", "STEP", help::Key::transposeStep),
       tonality_(services.backend, "transposeTonality",
                 deckKnob("Tonality", scales::tonalityHz(), kTonalityDefault, help::Key::transposeTonality)),
       window_(services.backend, "transposeWindow",
-              deckKnob("Latency", scales::windowMs(), kWindowDefault, help::Key::transposeWindow,
-                       Knob::Variant::full, 4)) {
-  for (auto* k : {&fine_, &tonality_, &window_}) addAndMakeVisible(*k);
+              deckKnob("Buffer", scales::bufferMs(), kWindowDefault, help::Key::transposeWindow, 4)) {
+  addAndMakeVisible(step_);
+  for (auto* k : {&tonality_, &window_}) addAndMakeVisible(*k);
   primaryOnly = true;          // right-click toggles the panel; don't dismiss on it
   dismissOnAnchorPress = true; // the anchor is the Transpose knob, a control
   setSize(kWidth, kHeight);
 }
 
 void TransposeDeckPanel::resetDeck(Backend& backend) {
-  ParamBinding(backend, "transposeFine").set(kFineDefault);
+  ParamBinding(backend, "transposeStep").set(kStepDefault);
   ParamBinding(backend, "transposeTonality").set(kTonalityDefault);
   ParamBinding(backend, "transposeWindow").set(kWindowDefault);
 }
+
+namespace {
+juce::Rectangle<int> column(juce::Rectangle<int> content, int i) {
+  return {content.getX() + i * (kSectionWidth + kSectionGap), content.getY(), kSectionWidth,
+          content.getHeight()};
+}
+}  // namespace
 
 void TransposeDeckPanel::paint(juce::Graphics& g) {
   const auto box = getLocalBounds().toFloat();
@@ -66,12 +71,16 @@ void TransposeDeckPanel::resized() {
   content.removeFromBottom(kPadBottom);
   content.reduce(kPadSide, 0);
 
+  // STEP takes a knob column, its toggle centred in the panel; the text is
+  // its own label (as the EQ card's PRE has none).
+  const auto step = column(content, 0);
+  step_.setTopLeftPosition(step.getCentreX() - step_.getWidth() / 2,
+                           getLocalBounds().getCentreY() - step_.getHeight() / 2);
   const int height = Knob::heightFor(theme::kKnobSizeSecondary);
-  int i = 0;
-  for (auto* k : {&fine_, &tonality_, &window_}) {
-    k->setBounds(content.getX() + i * (kSectionWidth + kSectionGap),
-                 content.getBottom() - height + Knob::kEditorOverflow, kSectionWidth, height);
-    ++i;
+  int i = 1;
+  for (auto* k : {&tonality_, &window_}) {
+    const auto c = column(content, i++);
+    k->setBounds(c.getX(), content.getBottom() - height + Knob::kEditorOverflow, kSectionWidth, height);
   }
 }
 

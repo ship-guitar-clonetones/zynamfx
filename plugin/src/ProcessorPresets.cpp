@@ -19,7 +19,7 @@ const std::vector<juce::String>& TONE3000Processor::presetParameterIds() {
       "toneBass",       "toneMid",          "toneTreble",
       "gateThreshold",  "gateEnabled",      "gateRelease",
       "gateHold",       "gateRange",        "toneEqEnabled",
-      "transposeEnabled", "transposeSemitones", "transposeFine",
+      "transposeEnabled", "transposeSemitones", "transposeStep",
       "transposeTonality", "transposeWindow",
       "spreadEnabled",  "spreadOffset",     "spreadWobble",
       "spreadWobbleEnabled", "spreadCrossover", "spreadCrossoverEnabled",

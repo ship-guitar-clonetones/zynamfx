@@ -213,22 +213,30 @@ flowchart LR
   lookahead, a slower attack only softens pick transients.
 - **Transpose**: a polyphonic pitch shifter on the clean DI, ahead of the
   amp, so a `-2` plays a standard-tuned guitar as drop D through the whole
-  rig. Off by default; the faceplate knob sets whole semitones (±12) and
-  powering on is what adds latency. The knob is also hidden by default:
-  Plugin Settings → Effects picks which of Gate and Transpose the faceplate
-  shows (view settings only; an effect that is switched on always shows, so
-  a preset that uses it stays reachable). Right-clicking the group opens a deck
-  with Fine (±50 cents), Tonality (1-20 kHz, the frequency above which the
-  input bypasses the shifter, which keeps pick noise and string squeak
-  natural; Off at the top) and Latency (the engine's 20 / 30 / 40 / 60 ms
-  delay buffer, read out as the 11 / 16 / 21 / 31 ms it reports to the
-  host). Power, Latency and Tonality changes blend over 25 ms like the
-  stereo image's, never click. The engine is a time-domain
+  rig. Off by default; the faceplate knob sets the shift, two octaves
+  either way (±24), and powering on is what adds latency. The knob is also
+  hidden by default: Plugin Settings → Effects picks which of Gate and
+  Transpose the faceplate shows (view settings only; an effect that is
+  switched on always shows, so a preset that uses it stays reachable).
+  Right-clicking the group opens a deck with STEP (on by default: the knob
+  snaps to whole semitones; off, it sweeps smoothly with Shift-drag for
+  fine control, so it plays like a whammy), Tonality (1-20 kHz, the
+  frequency above which the input bypasses the shifter, which keeps pick
+  noise and string squeak natural; Off at the top) and Buffer (the engine's
+  delay buffer, 20 / 30 / 40 / 60 ms; the tap's delay sweeps between a 2 ms
+  floor and the buffer end, so the latency reported to the host is the
+  midpoint, 11 / 16 / 21 / 31 ms). Power, Buffer and Tonality changes blend over
+  25 ms like the stereo image's, never click. The engine is a time-domain
   correlation-spliced delay line with onset re-sync, so pick attacks pass
   in a few ms whatever the buffer; the buffer sets the lowest note it holds
   a full period of (20 ms is guitar-only, 30 ms, the default, covers bass)
-  and how often it splices. The research behind it (benchmarks against a
-  phase vocoder, candidates, listening results) is recorded in
+  and how often it splices. Two octaves up is as clean as one; two octaves
+  down is on pitch but grainy, a sub-octave effect rather than a clean
+  shift. Each splice crossfades for as long as the
+  material needs (30 ms on a single note, up to 120 ms on a chord, where
+  no lag lines every string up), so chords sustain without a periodic
+  chuff. The research behind it (benchmarks against a phase vocoder,
+  candidates, chords, the two-octave range, listening results) is recorded in
   [`plugin/docs/transpose.md`](plugin/docs/transpose.md).
 - **Mono mode**: only the Left chain runs and the pan stage is skipped. With
   Spread on, the chain output becomes an ADT-style stereo double; see
@@ -320,9 +328,9 @@ IR assets in `test/files`:
 - `transpose_tests.cpp`: the pitch shifter's contracts (off is bit-exact and
   latency-free, the reported latency matches the engine and tracks the
   power switch alone, 0 st is a pure delay, a shift lands on pitch at unity
-  gain, the tonality limit passes highs unshifted, a pick attack re-syncs
-  the tap, stereo shares one tap, absent parameters in older state fall
-  back to off).
+  gain, a splice between unrelated taps holds the level, the tonality limit
+  passes highs unshifted, a pick attack re-syncs the tap, stereo shares one
+  tap, absent parameters in older state fall back to off).
 - `spread_tests.cpp`, `swap_fade_tests.cpp`, `branch_tests.cpp`, and friends
   cover the doubler, engine-swap fades, and chain routing.
 

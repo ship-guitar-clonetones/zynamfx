@@ -150,7 +150,7 @@ void TONE3000Processor::resolveParamRefs() {
   paramRefs.osFactor = get("osFactor");
   paramRefs.transposeEnabled = get("transposeEnabled");
   paramRefs.transposeSemitones = get("transposeSemitones");
-  paramRefs.transposeFine = get("transposeFine");
+  paramRefs.transposeStep = get("transposeStep");
   paramRefs.transposeTonality = get("transposeTonality");
   paramRefs.transposeWindow = get("transposeWindow");
 }
@@ -308,23 +308,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
 
   // Transpose (faceplate, right of the Gate group; see Transpose.h). Off by
   // default: powering it on is what adds latency, so a fresh chain stays
-  // transparent. Whole semitones, so an AudioParameterInt: the UI drives it
-  // normalised like every knob, but automation and text entry snap.
+  // transparent. The shift is a continuous float: with STEP on (the
+  // default) the processor rounds it to whole semitones on the way to the
+  // engine and the knob detents, with STEP off the knob sweeps smoothly
+  // like a whammy pedal (Shift-drag for fine control).
   layout.add(std::make_unique<juce::AudioParameterBool>(
       juce::ParameterID{"transposeEnabled", 39}, "transposeEnabled", false));
-  layout.add(std::make_unique<juce::AudioParameterInt>(
-      juce::ParameterID{"transposeSemitones", 40}, "transposeSemitones", -Transpose::kSemitoneRange,
-      Transpose::kSemitoneRange, 0));
-  // Transpose advanced-panel deck, in real units like the gate deck's. Fine
-  // trims the shift in cents (a song tuned 75 cents up is -12 + fine). The
+  layout.add(std::make_unique<juce::AudioParameterFloat>(
+      juce::ParameterID{"transposeSemitones", 40}, "transposeSemitones",
+      static_cast<float>(-Transpose::kSemitoneRange), static_cast<float>(Transpose::kSemitoneRange), 0.0f));
+  layout.add(std::make_unique<juce::AudioParameterBool>(
+      juce::ParameterID{"transposeStep", 44}, "transposeStep", true));
+  // Transpose advanced-panel deck, in real units like the gate deck's. The
   // tonality limit rides a log map over the range where it does something
   // on a guitar; its top end (20 kHz) is "off", the default: a pure shift.
-  // The window (the engine's delay buffer, read out as the latency it
-  // reports) is a 4-way choice and not automatable because, like the
-  // oversampling factor, changing it changes the reported latency.
-  layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"transposeFine", 41}, "transposeFine", -Transpose::kCentsRange,
-      Transpose::kCentsRange, 0.0f));
+  // The window (the engine's delay buffer, 20 / 30 / 40 / 60 ms) is a
+  // 4-way choice and not automatable because, like the oversampling
+  // factor, changing it changes the reported latency.
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"transposeTonality", 42}, "transposeTonality",
       juce::NormalisableRange<float>(
@@ -335,8 +335,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
           }),
       Transpose::kTonalityOffHz));
   juce::StringArray windows;
-  for (size_t w = 0; w < Transpose::kWindowMs.size(); ++w)
-    windows.add(juce::String(juce::roundToInt(Transpose::latencyMs(static_cast<Transpose::Window>(w)))) + " ms");
+  for (const int ms : Transpose::kWindowMs) windows.add(juce::String(ms) + " ms");
   layout.add(std::make_unique<juce::AudioParameterChoice>(
       juce::ParameterID{"transposeWindow", 43}, "transposeWindow", windows,
       static_cast<int>(Transpose::kDefaultWindow),
@@ -1059,12 +1058,14 @@ void TONE3000Processor::updateCachedParameters() {
   cacheChainInvertLeft = loadBool(paramRefs.chainInvertLeft);
   cacheChainInvertRight = loadBool(paramRefs.chainInvertRight);
 
-  // Transpose, in the engine's units. The int/choice raw values are already
-  // denormalised (stored as floats); round so they land exactly on their
-  // steps. The tonality knob's top end means off.
+  // Transpose, in the engine's units. STEP rounds the shift to whole
+  // semitones here, so the engine never sees the toggle and a host that
+  // automates the knob with STEP on still gets semitones. The choice's raw
+  // value is already denormalised (stored as a float); round so it lands
+  // exactly on its step. The tonality knob's top end means off.
   cacheTransposeEnabled = loadBool(paramRefs.transposeEnabled);
-  cacheTranspose.semitones = static_cast<int>(std::lround(paramRefs.transposeSemitones->load()));
-  cacheTranspose.cents = paramRefs.transposeFine->load();
+  const float semitones = paramRefs.transposeSemitones->load();
+  cacheTranspose.semitones = loadBool(paramRefs.transposeStep) ? std::round(semitones) : semitones;
   const float tonalityHz = paramRefs.transposeTonality->load();
   cacheTranspose.tonalityHz = tonalityHz < Transpose::kTonalityOffHz ? tonalityHz : 0.0f;
   cacheTranspose.window =

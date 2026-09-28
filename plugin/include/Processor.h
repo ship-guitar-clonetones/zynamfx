@@ -1038,7 +1038,7 @@ private:
     std::atomic<float>* osFactor = nullptr;
     std::atomic<float>* transposeEnabled = nullptr;
     std::atomic<float>* transposeSemitones = nullptr;
-    std::atomic<float>* transposeFine = nullptr;
+    std::atomic<float>* transposeStep = nullptr;
     std::atomic<float>* transposeTonality = nullptr;
     std::atomic<float>* transposeWindow = nullptr;
   } paramRefs;

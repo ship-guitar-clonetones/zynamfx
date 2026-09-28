@@ -4,7 +4,9 @@
 // is off, the power stays bright; right-click anywhere on the group
 // (Ctrl-click on macOS, touch-and-hold on the knob) opens the deck above the
 // plate; Alt/Option-click on the knob resets the semitones and the deck
-// together. Off is the default: the power is what adds latency.
+// together. Off is the default: the power is what adds latency. The knob
+// covers ±24 semitones and detents to whole ones while the deck's STEP is
+// on; with STEP off it sweeps (Shift-drag: fine) like a whammy pedal.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -38,11 +40,14 @@ public:
 
 private:
   void toggleDeck();
+  void syncStep();
 
   Services& services_;
   DimGroup dim_;
   ParamKnob semitones_;
   ParamPowerButton power_;
+  // The deck's STEP toggle decides whether the knob detents (see syncStep).
+  ParamBinding step_;
   TransposeDeckPanel deck_;
 };
 

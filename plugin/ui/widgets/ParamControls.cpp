@@ -37,4 +37,15 @@ void ParamPowerButton::sync() {
   if (onValueChange) onValueChange(on);
 }
 
+ParamTextToggle::ParamTextToggle(Backend& backend, const juce::String& paramId, juce::String label,
+                                 help::Key help)
+    : ChromeTextButton(std::move(label), help), binding_(backend, paramId) {
+  setArmed(binding_.boolValue());
+  binding_.onChange = [this] { setArmed(binding_.boolValue()); };
+  onClick = [this] {
+    binding_.set(!binding_.boolValue());
+    setArmed(binding_.boolValue());  // the host write is synchronous; don't wait for the echo
+  };
+}
+
 }  // namespace t3k::ui

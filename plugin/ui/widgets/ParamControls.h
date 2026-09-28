@@ -4,6 +4,7 @@
 #pragma once
 
 #include "ChromeIconButton.h"
+#include "ChromeTextButton.h"
 #include "Knob.h"
 #include "services/ParamBinding.h"
 
@@ -35,6 +36,18 @@ public:
 
 private:
   void sync();
+  ParamBinding binding_;
+};
+
+// A text chrome button (the EQ card's PRE) toggling a bool parameter: armed
+// while the parameter is on; a click flips it.
+class ParamTextToggle : public ChromeTextButton {
+public:
+  ParamTextToggle(Backend& backend, const juce::String& paramId, juce::String label, help::Key help);
+  ParamBinding& binding() { return binding_; }
+  bool value() const { return binding_.boolValue(); }
+
+private:
   ParamBinding binding_;
 };
 

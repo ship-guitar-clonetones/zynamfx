@@ -10,7 +10,18 @@
 // Tuning, all in ms so every rate behaves the same. The values are the ones
 // the bench in plugin/docs/transpose.md settled on; none is exposed.
 namespace {
-constexpr double kFadeMs = 6.0;          // crossfade of a drift splice
+// A drift splice crossfades over kFadeMs when its lag matches well and
+// stretches toward kFadeMaxMs as the match worsens (ncc from kFadeNccHi
+// down to kFadeNccLo). On a dissonant chord no lag lines every partial up;
+// a short fade turns each mismatched partial's phase step into a click,
+// a long one spreads it below the chord. kFadeMinMs is the shortest fade
+// the geometry plans for: a splice landing at the far end of its range
+// has only that much buffer left to fade in.
+constexpr double kFadeMs = 30.0;
+constexpr double kFadeMaxMs = 120.0;
+constexpr double kFadeMinMs = 6.0;
+constexpr double kFadeNccHi = 0.95;
+constexpr double kFadeNccLo = 0.6;
 constexpr double kOnsetFadeMs = 2.0;     // crossfade of an onset re-sync
 constexpr double kMaxCorrMs = 25.0;      // correlation window (capped at the buffer)
 constexpr double kOnsetSpanMs = 4.0;     // an onset re-sync lands within this of the floor
@@ -20,7 +31,8 @@ constexpr double kDetectorSmoothMs = 2.0;
 constexpr int kHistoryCells = 50;        // 1 ms energy cells kept for the detector
 constexpr int kHistorySkipCells = 5;     // the attack itself is not its own reference
 constexpr double kOnsetOverMin = 7.94;   // 9 dB over the recent floor ...
-constexpr double kOnsetOverMax = 1.26;   // ... and 1 dB over the recent ceiling (a new peak)
+constexpr double kOnsetOverMax = 3.98;   // ... and 6 dB over the recent ceiling (a new peak;
+                                         // a beating dyad swings its HF energy by less)
 // Lag search granularity: 4 samples at 48 kHz, refined to the sample around
 // the coarse best. Free in quality on the bench, 3x cheaper than exhaustive.
 constexpr double kCoarseStepRate = 12000.0;
@@ -29,6 +41,20 @@ constexpr double kCoarseStepRate = 12000.0;
 // instead of running as one burst: at a 16-sample host buffer the burst
 // alone (400-800 us at 48 kHz) blew the callback budget and clicked.
 constexpr double kSearchLeadMs = 4.0;
+// An upshift tap gains on the write head, so every fade and every search
+// lead spends buffer at the drift rate (three samples a sample at +24).
+// Whatever they leave is the range of jumps a splice may choose from, and
+// a splice is only clean at a whole number of periods: the range has to be
+// at least a period long for every note to have one. Half the buffer is
+// kept for it; where the fades and the lead don't fit beside that (above
+// +8 on the 20 ms buffer, +11 on 30 ms) they shrink to make room. Smaller
+// shares keep longer fades but leave notes whose period the range misses
+// off-pitch (plugin/docs/transpose.md, Two octaves).
+constexpr double kUpshiftLandShare = 0.5;
+// A pitch change smaller than this (in ratio; ~1.7 st around unity) keeps a
+// pending search: the landing moves by at most the change times the lead,
+// ~20 samples, which the landing range's margins cover.
+constexpr double kSearchKeepRatio = 0.1;
 // Power and tonality blends, the same length as the image decks'
 // (kDeckFadeSeconds): every transition passes through a mix, never a jump.
 constexpr double kBlendSeconds = 0.025;
@@ -109,14 +135,19 @@ struct Transpose::Impl {
   std::array<Ring, kMaxChannels> dryRings;
   int64_t written = 0;  // samples written so far; the newest is written - 1
 
-  // Geometry at the current rate / window, in samples.
-  int dMin = 0, dMax = 0, fadeLen = 0, onsetFadeLen = 0, corrLen = 0;
-  int onsetSpan = 0, refractory = 0, cellLen = 1, coarseStep = 1, searchLead = 1;
+  // Geometry at the current rate / window, in samples. fadeLo..fadeHi is
+  // the drift fade's range and searchLeadNow the drift search's lead here
+  // (the constants above, cut down by the buffer and the ratio, see
+  // updateFadeRange).
+  int dMin = 0, dMax = 0, corrLen = 0;
+  int fadeLen = 0, fadeMaxLen = 0, fadeMinLen = 0, fadeLo = 0, fadeHi = 0, onsetFadeLen = 0;
+  int onsetSpan = 0, refractory = 0, cellLen = 1, coarseStep = 1, searchLead = 1, searchLeadNow = 1;
 
-  // Read taps (absolute positions) and the crossfade between them.
+  // Read taps (absolute positions) and the crossfade between them. fadeNcc
+  // is how well the two correlate, which sets the fade's gain law.
   double rA = 0.0, rB = 0.0;
   bool fading = false;
-  double fade = 0.0, fadeInc = 0.0;
+  double fade = 0.0, fadeInc = 0.0, fadeNcc = 1.0;
 
   // Lag search, incremental. The reference is the tap's recent waveform,
   // copied when the search starts; candidates are buffer positions scored
@@ -128,7 +159,7 @@ struct Transpose::Impl {
   struct Search {
     bool active = false, ready = false;
     int lo = 0, hi = 0, next = 0, perSample = 1;
-    double bestScore = -1e9;
+    double bestScore = -1e9, bestNcc = 0.0;
     int bestDelay = 0;
     int64_t now0 = 0, a0 = 0;
     int64_t resultJump = 0;
@@ -156,13 +187,53 @@ struct Transpose::Impl {
     dMin = minDelaySamples(sampleRate);
     dMax = windowSamples(params.window, sampleRate);
     corrLen = std::min(dMax, static_cast<int>(sampleRate * kMaxCorrMs * 0.001));
+    updateFadeRange();
+  }
+
+  // The longest drift fade and the search lead this ratio and window
+  // allow. An upshift tap gains on the write head, so one cycle spends
+  // buffer on the fade that lands the tap, the next search's lead and the
+  // fade after it, all at the drift rate (`landLo` in process()). The
+  // longest fade is held to a sixth of the range, and where the cycle
+  // would leave less than kUpshiftLandShare of the buffer to land in, the
+  // fade and the lead scale down together until it does. A downshift tap
+  // only runs deeper, which costs ring memory, not range, so it keeps the
+  // full span and the full lead.
+  void updateFadeRange() {
+    const double drift = std::abs(1.0 - ratio);
+    double hi = fadeMaxLen;
+    double lead = searchLead;
+    int floor = fadeMinLen;
+    if (ratio > 1.0) {
+      hi = std::max<double>(fadeMinLen, std::min(hi, static_cast<double>(dMax - dMin) / (6.0 * drift)));
+      const double cost = drift * (2.0 * hi + lead + 4.0) + 6.0;
+      const double budget = dMax * (1.0 - kUpshiftLandShare);
+      if (cost > budget) {
+        const double scale = budget / cost;
+        hi *= scale;
+        lead *= scale;
+        floor = 8;
+      }
+    }
+    fadeHi = std::max(floor, static_cast<int>(hi));
+    fadeLo = std::min(fadeLen, fadeHi);
+    searchLeadNow = std::max(1, static_cast<int>(lead));
   }
 
   // Delay floor the tap may approach at the current ratio: an upshift tap
   // gains on the write head during a fade, so the floor moves out to keep
   // the interpolator behind the newest sample.
   int lowGuard() const {
-    return std::max(dMin, static_cast<int>(std::max(0.0, ratio - 1.0) * fadeLen) + 4);
+    return std::max(dMin, static_cast<int>(std::max(0.0, ratio - 1.0) * fadeHi) + 4);
+  }
+
+  // Fade length for a drift splice whose best lag matched with `ncc`,
+  // within `room`, the samples the destination tap can fade before it runs
+  // out of buffer.
+  int fadeFor(double ncc, double room) const {
+    const double t = juce::jlimit(0.0, 1.0, (kFadeNccHi - ncc) / (kFadeNccHi - kFadeNccLo));
+    const double len = fadeLo + t * (fadeHi - fadeLo);
+    return std::max(8, static_cast<int>(std::min(len, room)));
   }
 
   // 0 means off: the crossover keeps its last cutoff and blends out.
@@ -242,10 +313,12 @@ struct Transpose::Impl {
   void consider(int d) {
     const double curDelay = static_cast<double>(search.now0 - search.a0);
     const double jump = std::max(1.0, std::abs(curDelay - static_cast<double>(d)));
-    const double s = -(1.0 - nccAt(search.now0 - d)) / jump;
+    const double ncc = nccAt(search.now0 - d);
+    const double s = -(1.0 - ncc) / jump;
     if (s > search.bestScore) {
       search.bestScore = s;
       search.bestDelay = d;
+      search.bestNcc = ncc;
     }
   }
 
@@ -268,14 +341,20 @@ struct Transpose::Impl {
     }
   }
 
-  // Crossfade to the tap position rA + jump.
+  // Crossfade to the tap position rA + jump, the one the search just found.
+  // A plan kept across a pitch change (see setParams) is checked here: a
+  // destination ahead of the write head or off the ring is dropped and the
+  // next sample plans afresh.
   void startFade(int64_t jump, int fadeSamples) {
+    search.ready = false;
+    const double destDelay = static_cast<double>(written - 1) - (rA + static_cast<double>(jump));
+    if (destDelay < 2.0 || destDelay > static_cast<double>(rings[0].buf.size()) - 8.0) return;
     // Keep rA's fraction so the splice is a pure integer lag.
     rB = rA + static_cast<double>(jump);
     fading = true;
     fade = 0.0;
     fadeInc = 1.0 / fadeSamples;
-    search.ready = false;
+    fadeNcc = juce::jlimit(0.0, 1.0, search.bestNcc);
   }
 
   // Runs the detector on one control sample; true on a pick attack.
@@ -313,6 +392,8 @@ void Transpose::prepare(double sampleRate, int maxBlockSamples) {
   auto& s = *impl_;
   s.sampleRate = sampleRate;
   s.fadeLen = std::max(8, static_cast<int>(sampleRate * kFadeMs * 0.001));
+  s.fadeMaxLen = std::max(s.fadeLen, static_cast<int>(sampleRate * kFadeMaxMs * 0.001));
+  s.fadeMinLen = std::max(8, static_cast<int>(sampleRate * kFadeMinMs * 0.001));
   s.onsetFadeLen = std::max(8, static_cast<int>(sampleRate * kOnsetFadeMs * 0.001));
   s.onsetSpan = static_cast<int>(sampleRate * kOnsetSpanMs * 0.001);
   s.refractory = static_cast<int>(sampleRate * kRefractoryMs * 0.001);
@@ -322,9 +403,10 @@ void Transpose::prepare(double sampleRate, int maxBlockSamples) {
   s.hpA = std::exp(-2.0 * juce::MathConstants<double>::pi * kDetectorHpfHz / sampleRate);
   s.smoothA = std::exp(-1.0 / (sampleRate * kDetectorSmoothMs * 0.001));
   // Rings hold the largest window plus the correlation reach behind the
-  // farthest candidate and the overshoot of a late search and a fade.
+  // farthest candidate and the overshoot of a late search and of a
+  // downshift tap running deeper through the longest fade.
   const int maxCorr = static_cast<int>(sampleRate * kMaxCorrMs * 0.001);
-  const int reach = windowSamples(Window::ms60, sampleRate) + maxCorr + 2 * s.fadeLen + 2 * s.searchLead + 64;
+  const int reach = windowSamples(Window::ms60, sampleRate) + maxCorr + s.fadeMaxLen + 2 * s.searchLead + 64;
   for (auto& r : s.rings) r.init(reach);
   s.control.init(reach);
   s.ref.assign(static_cast<size_t>(maxCorr), 0.0f);
@@ -377,14 +459,23 @@ void Transpose::setParams(const Params& p) {
     s.applyWindow();
     s.search = Impl::Search{};
   }
-  // Exact compares on purpose: these are parameter values, and a change of
+  // Exact compare on purpose: this is a parameter value, and a change of
   // any size must reach the engine.
-  if (p.semitones != s.params.semitones || !juce::exactlyEqual(p.cents, s.params.cents)) {
+  if (!juce::exactlyEqual(p.semitones, s.params.semitones)) {
     s.params.semitones = p.semitones;
-    s.params.cents = p.cents;
-    const double semis = static_cast<double>(p.semitones) + static_cast<double>(p.cents) / 100.0;
-    s.ratio = std::pow(2.0, semis / 12.0);
-    s.search = Impl::Search{};  // planned for the old drift
+    const double ratio = std::pow(2.0, static_cast<double>(p.semitones) / 12.0);
+    // A pending search was planned for the old drift: its candidates were
+    // shifted by the distance the tap covers during the lead. A small
+    // same-direction change (a knob sweep with STEP off, a block at a time)
+    // moves the landing by a few samples, inside the margins the landing
+    // range keeps, so the plan stands; a sweep never arrives at the buffer
+    // end without one. A direction flip or a big jump would land the tap
+    // off the buffer, so those start over.
+    const auto direction = [](double r) { return r > 1.0 ? 1 : r < 1.0 ? -1 : 0; };
+    if (direction(ratio) != direction(s.ratio) || std::abs(ratio - s.ratio) > kSearchKeepRatio)
+      s.search = Impl::Search{};
+    s.ratio = ratio;
+    s.updateFadeRange();
   }
   if (!juce::exactlyEqual(p.tonalityHz, s.params.tonalityHz)) {
     s.params.tonalityHz = p.tonalityHz;
@@ -406,9 +497,11 @@ void Transpose::process(juce::AudioBuffer<float>& buffer) {
   // padded by a few samples so a planned search always completes before
   // the tap reaches the trigger.
   const double drift = std::abs(1.0 - ratio);
-  const double leadDrift = drift * (s.searchLead + 4);
+  const double leadDrift = drift * (s.searchLeadNow + 4);
   const int leadDriftI = static_cast<int>(std::ceil(leadDrift));
-  const int fadeDrift = static_cast<int>(std::ceil(drift * s.fadeLen));
+  // An upshift fade always runs fadeHi (fadeLo meets it there); a downshift
+  // one is planned for the shortest and gets whatever room the landing has.
+  const int fadeDrift = static_cast<int>(std::ceil(drift * (ratio > 1.0 ? s.fadeHi : s.fadeMinLen)));
 
   for (int i = 0; i < numSamples; ++i) {
     const int64_t now = s.written++;
@@ -426,9 +519,9 @@ void Transpose::process(juce::AudioBuffer<float>& buffer) {
     const int guard = s.lowGuard();
     const bool onset = s.detectOnset(control);
     // Where a splice may land (delay at splice time). Downshift: anywhere
-    // from the floor up to where the fade and the next search's lead still
-    // fit before dMax. Upshift: the mirror image above the guard. The
-    // onset re-sync targets the front of that range.
+    // from the floor up to where the shortest fade and the next search's
+    // lead still fit before dMax. Upshift: the mirror image above the
+    // guard. The onset re-sync targets the front of that range.
     const int landLo = ratio > 1.0 ? std::min(guard + fadeDrift + leadDriftI + 2, s.dMax) : s.dMin;
     const int landHi = ratio < 1.0 ? std::max(s.dMin, s.dMax - fadeDrift - leadDriftI - 2) : s.dMax;
     if (!s.fading) {
@@ -453,23 +546,39 @@ void Transpose::process(juce::AudioBuffer<float>& buffer) {
         // simply overshoots dMax by the lead; the rings have the room.
         if (!s.search.active && !s.search.ready && delay >= s.dMax - leadDrift) {
           const int lo = std::max(4, landLo - leadDriftI);
-          s.beginSearch(lo, std::max(lo, landHi - leadDriftI), s.searchLead);
+          s.beginSearch(lo, std::max(lo, landHi - leadDriftI), s.searchLeadNow);
         }
-        if (s.search.ready && delay >= s.dMax) s.startFade(s.search.resultJump, s.fadeLen);
+        if (s.search.ready && delay >= s.dMax) {
+          // The destination keeps drifting deeper while it fades in, so
+          // it may fade for as long as it takes to reach the end itself
+          // (less the lead the next search needs).
+          const double dest = delay - static_cast<double>(s.search.resultJump);
+          const double room = (static_cast<double>(s.dMax) - dest - leadDrift - 2.0) / drift;
+          s.startFade(s.search.resultJump, s.fadeFor(s.search.bestNcc, room));
+        }
       } else if (ratio > 1.0) {
         // Upshift: the tap gains on the write head toward the guard; the
-        // candidates sit deeper than where they will land.
+        // candidates sit deeper than where they will land. The guard
+        // already leaves room for the longest fade.
         if (!s.search.active && !s.search.ready && delay <= guard + leadDrift)
-          s.beginSearch(landLo + leadDriftI, landHi + leadDriftI, s.searchLead);
-        if (s.search.ready && delay <= guard) s.startFade(s.search.resultJump, s.fadeLen);
+          s.beginSearch(landLo + leadDriftI, landHi + leadDriftI, s.searchLeadNow);
+        if (s.search.ready && delay <= guard) s.startFade(s.search.resultJump, s.fadeFor(s.search.bestNcc, s.fadeHi));
       }
     }
     if (s.search.active) s.stepSearch(s.search.perSample);
 
-    // Read.
-    float gainB = 0.0f;
+    // Read. The fade is a raised cosine; taps that don't correlate add in
+    // power rather than amplitude, so the gains are normalised by the taps'
+    // correlation (r = 1 leaves the plain complementary fade, r = 0 is the
+    // equal-power one), and the level holds through the fade either way.
+    float gainA = 1.0f, gainB = 0.0f;
     if (s.fading) {
       gainB = static_cast<float>(0.5 - 0.5 * std::cos(juce::MathConstants<double>::pi * s.fade));
+      gainA = 1.0f - gainB;
+      const float r = static_cast<float>(s.fadeNcc);
+      const float norm = std::sqrt(gainA * gainA + gainB * gainB + 2.0f * gainA * gainB * r);
+      gainA /= norm;
+      gainB /= norm;
       s.fade += s.fadeInc;
     }
     if (s.primeLeft > 0 && --s.primeLeft == 0 && s.enabled) s.wetMix.setTargetValue(1.0f);
@@ -478,7 +587,7 @@ void Transpose::process(juce::AudioBuffer<float>& buffer) {
     for (int ch = 0; ch < numChannels; ++ch) {
       auto& ring = s.rings[static_cast<size_t>(ch)];
       float wet = ring.read(s.rA);
-      if (s.fading) wet = wet * (1.0f - gainB) + gainB * ring.read(s.rB);
+      if (s.fading) wet = wet * gainA + gainB * ring.read(s.rB);
       auto& dryRing = s.dryRings[static_cast<size_t>(ch)];
       dryRing.write(now, s.dryHighpass.processSample(ch, dry[ch]));
       const float split = s.wetLowpass.processSample(ch, wet) + dryRing.at(now - s.dMin);
