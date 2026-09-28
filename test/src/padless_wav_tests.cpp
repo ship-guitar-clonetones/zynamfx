@@ -1,24 +1,20 @@
-// Missing-RIFF-pad-byte repair (wavMissingRiffPadByte in
-// ProcessorModelLoader.cpp)
+// Pad-less WAVs
 //
 // Some catalog IR WAVs end in an odd-sized data chunk but omit the trailing
 // pad byte the RIFF spec requires (their header's RIFF size counts it, the
-// file doesn't ship it). JUCE 9's WAV reader rejects the whole data chunk
-// over that one byte (the rounded-up chunk length overruns the stream), so
-// the file read as zero samples and short cab IRs silently degraded to a
-// dry passthrough. The loader now appends the missing pad byte before JUCE
-// reads the file. These tests pin:
+// file doesn't ship it). JUCE 9.0.1's WAV reader rejected the whole data
+// chunk over that one byte, so the file read as zero samples and short cab
+// IRs silently degraded to a dry passthrough; the loader used to append the
+// byte itself. JUCE 9.0.2 reads such files as every other program does, so
+// the loader hands them straight to JUCE, and these tests pin that a
+// pad-less IR keeps loading through both real paths:
 //
-//   - the JUCE behavior being worked around (if an upgrade starts accepting
-//     pad-less files, the workaround can go),
-//   - that a pad-less IR loads and sounds identical to its well-formed twin
-//     through the real chain (the model-cache path: downloads, presets,
-//     embedded DAW state),
-//   - that a pad-less WAV survives drop-time validation (loadLocalTone).
+//   - the model-cache path (downloads, presets, embedded DAW state), where
+//     it must sound identical to its well-formed twin through the chain,
+//   - drop-time validation (loadLocalTone).
 #include "chain_test_helpers.h"
 
 #include <gtest/gtest.h>
-#include <juce_audio_formats/juce_audio_formats.h>
 
 #include <cstdint>
 #include <random>
@@ -29,8 +25,8 @@ namespace {
 constexpr int kBlock = 512;
 
 // 24-bit mono 48 kHz PCM WAV with an odd-sized data chunk, shaped like the
-// catalog files that trip JUCE: the RIFF size always counts the data chunk's
-// pad byte; `includePadByte` controls whether the byte itself is present.
+// catalog files: the RIFF size always counts the data chunk's pad byte;
+// `includePadByte` controls whether the byte itself is present.
 std::vector<uint8_t> makeOddChunkWav(const std::vector<float>& samples, bool includePadByte) {
   const uint32_t dataSize = static_cast<uint32_t>(samples.size()) * 3;
   EXPECT_EQ(dataSize % 2u, 1u) << "test needs an odd-sized data chunk";
@@ -117,37 +113,15 @@ juce::ValueTree irBlockFromBytes(const juce::String& blockId, int toneId, int mo
   return block;
 }
 
-std::unique_ptr<juce::AudioFormatReader> readerFor(const std::vector<uint8_t>& bytes) {
-  juce::AudioFormatManager formatManager;
-  formatManager.registerBasicFormats();
-  return std::unique_ptr<juce::AudioFormatReader>(formatManager.createReaderFor(
-      std::make_unique<juce::MemoryInputStream>(bytes.data(), bytes.size(), false)));
-}
-
 }  // namespace
-
-// Pins the JUCE behavior the repair works around: the well-formed twin reads
-// fully, the pad-less variant reads as empty (or not at all). If a JUCE
-// upgrade makes the second expectation fail, the pad-byte repair in
-// ProcessorModelLoader.cpp is no longer needed.
-TEST(WavRepairTest, JuceRejectsWavMissingItsRiffPadByte) {
-  const auto kernel = makeKernel();
-
-  const auto wellFormed = readerFor(makeOddChunkWav(kernel, true));
-  ASSERT_NE(wellFormed, nullptr);
-  EXPECT_EQ(wellFormed->lengthInSamples, static_cast<juce::int64>(kernel.size()));
-
-  const auto padless = readerFor(makeOddChunkWav(kernel, false));
-  EXPECT_TRUE(padless == nullptr || padless->lengthInSamples == 0)
-      << "JUCE now accepts pad-less WAVs; the pad-byte repair can be retired";
-}
 
 // The model-cache load path (downloads, presets, embedded DAW state): a
 // pad-less IR must load and convolve identically to its well-formed twin.
 // Left lane gets the pad-less bytes, right lane the well-formed ones; with
-// identical input on both channels the outputs must match. Without the
-// repair the left lane loads an empty kernel and passes (padded) dry signal.
-TEST(WavRepairTest, PadlessIrMatchesWellFormedTwinThroughChain) {
+// identical input on both channels the outputs must match. A reader that
+// rejected the pad-less file would leave the left lane an empty kernel
+// passing (padded) dry signal.
+TEST(PadlessWavTest, PadlessIrMatchesWellFormedTwinThroughChain) {
   const auto kernel = makeKernel();
 
   ChainTestProcessor proc;
@@ -170,7 +144,7 @@ TEST(WavRepairTest, PadlessIrMatchesWellFormedTwinThroughChain) {
   const auto in = makeNoise(240 * kBlock, 1234, 0.25f);
   const auto [l, r] = processStereo(proc, in);
 
-  // The repaired lane is indistinguishable from the well-formed one.
+  // The pad-less lane is indistinguishable from the well-formed one.
   EXPECT_LT(settledMaxChannelDiff(l, r), 1e-4f);
 
   // And both actually convolved: the kernel has no dominant first tap, so a
@@ -187,8 +161,8 @@ TEST(WavRepairTest, PadlessIrMatchesWellFormedTwinThroughChain) {
 }
 
 // Drop-time validation (loadLocalTone): the same pad-less file must be
-// accepted, stashed repaired, and load through the normal pipeline.
-TEST(WavRepairTest, PadlessWavSurvivesDropValidationAndLoads) {
+// accepted, stashed, and load through the normal pipeline.
+TEST(PadlessWavTest, PadlessWavSurvivesDropValidationAndLoads) {
   const auto bytes = makeOddChunkWav(makeKernel(), false);
 
   juce::DynamicObject::Ptr entry = new juce::DynamicObject();

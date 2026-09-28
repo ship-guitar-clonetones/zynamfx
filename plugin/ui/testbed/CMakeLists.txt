@@ -48,6 +48,7 @@ target_sources(UiTestbed PRIVATE
 
 target_compile_definitions(UiTestbed PRIVATE
     JUCE_WEB_BROWSER=0
+    JUCE_USE_WEBP=0
     JUCE_USE_CURL=0
     # Captures pump the message loop synchronously between drive steps.
     JUCE_MODAL_LOOPS_PERMITTED=1

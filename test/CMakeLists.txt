@@ -30,6 +30,7 @@ target_sources(DspTests PRIVATE
     src/midi_map_tests.cpp
     src/multicore_tests.cpp
     src/outgain_tests.cpp
+    src/padless_wav_tests.cpp
     src/preset_tests.cpp
     src/processor_tests.cpp
     src/spread_tests.cpp
@@ -38,7 +39,6 @@ target_sources(DspTests PRIVATE
     src/tone_refresh_tests.cpp
     src/transpose_tests.cpp
     src/tuner_tests.cpp
-    src/wav_repair_tests.cpp
     src/worker_pool_tests.cpp
     # Compiled straight from the plugin tree so the tests exercise the real
     # processor, not a copy. GUI sources are excluded; HEADLESS=1 below
@@ -82,6 +82,7 @@ target_include_directories(DspTests PRIVATE
 
 target_compile_definitions(DspTests PRIVATE
     JUCE_WEB_BROWSER=0
+    JUCE_USE_WEBP=0
     JUCE_USE_CURL=0
     # Prevent windows.h min/max macros from breaking std::min/std::max in
     # AudioDSPTools and plugin code (same as plugin/CMakeLists.txt).
