@@ -35,6 +35,15 @@ public:
   void parentHierarchyChanged() override;
   bool keyPressed(const juce::KeyPress& key) override;
 
+  // JUCE 9 leaves Windows multi-touch off unless the editor opts in. Without
+  // it the HWND is never registered for touch and WM_POINTER falls through to
+  // DefWindowProc, which runs Windows' own tap/press-and-hold recogniser and
+  // only emits emulated mouse messages once the finger lifts: our hold timers
+  // (knob advanced popover, tile menus) never get a mouseDown to start from.
+  // Opting in delivers touch as it happens. The cost is WM_GESTURE going away
+  // (no mouseMagnify), which nothing here uses.
+  bool usesWindowsMultiTouch() const override { return true; }
+
 private:
   static constexpr int kMaxExtraHeight = 160;  // banner (~44) + hint bar (36) + headroom
   // How long a taller design box keeps the current scale while the host

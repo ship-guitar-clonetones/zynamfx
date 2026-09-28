@@ -34,6 +34,7 @@ public:
         host(*backend, scenario, fixtures) {
     backend->setLive(live);
     setUsingNativeTitleBar(true);
+    setUsingWindowsMultiTouch(true);  // touch arrives live, as in the plugin (see NativeEditor.h)
     setContentNonOwned(&host, true);
     setResizable(true, false);
     getConstrainer()->setFixedAspectRatio(design::kWidth / double(host.getHeight()));

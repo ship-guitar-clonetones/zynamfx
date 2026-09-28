@@ -267,6 +267,9 @@ void NativeEditor::parentHierarchyChanged() {
     const int h = getHeight();
     restoringSize_ = true;
     window->setUsingNativeTitleBar(true);
+    // Plugin wrappers read usesWindowsMultiTouch(); the standalone's window
+    // owns the peer instead, so opt it in here (see NativeEditor.h).
+    window->setUsingWindowsMultiTouch(true);
     setSize(w, h);
     juce::Component::SafePointer<NativeEditor> self(this);
     juce::MessageManager::callAsync([self] {
