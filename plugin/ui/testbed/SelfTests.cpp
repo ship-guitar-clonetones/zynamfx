@@ -646,28 +646,29 @@ struct ReadoutTests : juce::UnitTest {
     expectEquals(scales::gateRangeDb().format(0.0), juce::String("20 dB"));
 
     beginTest("transpose readouts mirror the processor's ranges");
-    // Whole semitones, signed; the centre is 0 (the MockBackend seed).
+    // Semitones, signed, ±24; the centre is 0 (the MockBackend seed). Whole
+    // values (STEP on) read whole, anything else to a tenth.
     expectEquals(scales::semitones().format(0.5), juce::String("0 st"));
-    expectEquals(scales::semitones().format(0.0), juce::String("-12 st"));
-    expectEquals(scales::semitones().format(1.0), juce::String("+12 st"));
+    expectEquals(scales::semitones().format(0.0), juce::String("-24 st"));
+    expectEquals(scales::semitones().format(1.0), juce::String("+24 st"));
     expectEquals(scales::semitones().format(scales::semitones().fromDisplay(-2)), juce::String("-2 st"));
+    expectEquals(scales::semitones().format(scales::semitones().fromDisplay(2.5)), juce::String("+2.5 st"));
+    expectEquals(scales::semitones().format(scales::semitones().fromDisplay(-0.3)), juce::String("-0.3 st"));
     expectEquals(scales::semitones().editText(0.5), juce::String("0"));
-    expectEquals(scales::cents().format(0.5), juce::String("0 ct"));
-    expectEquals(scales::cents().format(1.0), juce::String("+50 ct"));
-    expectEquals(scales::cents().format(0.0), juce::String("-50 ct"));
+    expectEquals(scales::semitones().editText(scales::semitones().fromDisplay(2.5)), juce::String("2.5"));
     // Tonality: log 1-20 kHz, the top end reads Off (the default seed).
     expectEquals(scales::tonalityHz().format(1.0), juce::String("Off"));
     expectEquals(scales::tonalityHz().format(0.0), juce::String("1.0 kHz"));
     expectWithinAbsoluteError(scales::tonalityHz().toDisplay(scales::tonalityHz().fromDisplay(8000)), 8000.0,
                               1e-6);
-    // Window: four buffer detents, read as the latency each reports; typed
-    // values snap to the nearest.
-    expectEquals(scales::windowMs().format(0.0), juce::String("11 ms"));
-    expectEquals(scales::windowMs().format(1.0 / 3), juce::String("16 ms"));
-    expectEquals(scales::windowMs().format(2.0 / 3), juce::String("21 ms"));
-    expectEquals(scales::windowMs().format(1.0), juce::String("31 ms"));
-    expectWithinAbsoluteError(scales::windowMs().fromDisplay(15), 1.0 / 3, 1e-6);
-    expectWithinAbsoluteError(scales::windowMs().fromDisplay(30), 1.0, 1e-6);
+    // Buffer: four detents read as the buffer size; typed values snap to
+    // the nearest.
+    expectEquals(scales::bufferMs().format(0.0), juce::String("20 ms"));
+    expectEquals(scales::bufferMs().format(1.0 / 3), juce::String("30 ms"));
+    expectEquals(scales::bufferMs().format(2.0 / 3), juce::String("40 ms"));
+    expectEquals(scales::bufferMs().format(1.0), juce::String("60 ms"));
+    expectWithinAbsoluteError(scales::bufferMs().fromDisplay(28), 1.0 / 3, 1e-6);
+    expectWithinAbsoluteError(scales::bufferMs().fromDisplay(55), 1.0, 1e-6);
     expectEquals(scales::offsetMs().format(0.5), juce::String("0 ms"));
     expectEquals(scales::offsetMs().format(0.25), juce::String("12.0 ms L"));
     expectEquals(scales::crossoverHz().format(0.5), juce::String("130 Hz"));

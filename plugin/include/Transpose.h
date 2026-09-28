@@ -18,9 +18,11 @@
  * end it has to jump back; the jump lands where the buffer's recent
  * waveform best matches the tap's (normalised cross-correlation, scored as
  * damage per splice over splices per second so a long jump with a good
- * match beats a short perfect one), and the two taps crossfade over a few
- * ms. On periodic material that is a whole number of periods, so the joint
- * is inaudible; chords get the best compromise lag. Time-domain, so bass
+ * match beats a short perfect one), and the two taps crossfade. On periodic
+ * material that is a whole number of periods, so the joint is inaudible
+ * and the fade is short (30 ms); a chord gets the best compromise lag, and
+ * the worse the match the longer the fade (up to 120 ms), so the partials
+ * that don't line up drift across instead of clicking. Time-domain, so bass
  * is no harder than guitar: a 41 Hz E1 shifts as cleanly as an E4, which is
  * where the vocoder fell down.
  *
@@ -29,14 +31,22 @@
  * freshest end of the buffer, so attacks arrive a few ms late regardless of
  * where the tap had drifted; only the previous note's tail absorbs the
  * joint. The felt latency is therefore set by the attacks, not by the
- * buffer, and the buffer size is a quality trade: the lowest note it can
- * hold a full period of. 20 ms is a guitar setting (an E1 period is 24 ms);
+ * buffer, and the buffer size (the deck's Buffer knob, the Window here) is
+ * a quality trade: the lowest note it can hold a full period of, and how
+ * often it splices. 20 ms is a guitar setting (an E1 period is 24 ms);
  * 30 ms is the default and works for bass; 40 / 60 splice less often.
  *
  * Latency reported to the host: the tap's mean delay, (floor + buffer) / 2,
  * a constant per Window and rate; the semitone knob never moves it (the
  * engine keeps running at a 1.0 ratio through 0, where the tap simply
  * stops drifting).
+ *
+ * The shift is continuous (semitones is a float): the deck's STEP toggle
+ * decides whether the processor hands over whole semitones or the knob's
+ * exact position, so with STEP off the knob sweeps like a whammy pedal. A
+ * pitch change takes effect on the next sample; a pending lag search
+ * survives it unless the drift changes direction or jumps by a lot, so a
+ * sweep never leaves the tap at the buffer end without a plan.
  *
  * Lifecycle, like the image decks': every transition passes through a
  * blend, never a jump. Power blends the shifted signal against the dry
@@ -70,14 +80,13 @@
 class Transpose {
 public:
   static constexpr int kMaxChannels = 2;
-  static constexpr int kSemitoneRange = 12;    // knob is ±12
-  static constexpr float kCentsRange = 50.0f;  // fine trim is ±50
+  static constexpr int kSemitoneRange = 24;  // knob is ±24
   // Tonality knob span (log); the top end means off (a pure shift).
   static constexpr float kTonalityMinHz = 1000.0f;
   static constexpr float kTonalityOffHz = 20000.0f;
 
   // The delay buffer the read tap drifts across (see the class comment);
-  // the deck's Latency knob, one detent each. The floor is the tap's
+  // the deck's Buffer knob, one detent each. The floor is the tap's
   // closest approach to the write head, where attacks are re-synced to.
   enum class Window { ms20, ms30, ms40, ms60 };
   static constexpr std::array<int, 4> kWindowMs{20, 30, 40, 60};
@@ -89,10 +98,10 @@ public:
   }
 
   /** The user-facing controls, in real units (the APVTS stores them the
-      same way). Semitones + cents form one pitch ratio. */
+      same way). Semitones is continuous; the processor rounds it when the
+      STEP toggle is on, so the engine never knows about the toggle. */
   struct Params {
-    int semitones = 0;
-    float cents = 0.0f;
+    float semitones = 0.0f;
     // Frequency above which the dry bypasses the shifter. 0: off.
     float tonalityHz = 0.0f;
     Window window = kDefaultWindow;

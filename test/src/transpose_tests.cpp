@@ -7,19 +7,23 @@
 //                   parameters matches the engine at every window and rate;
 //                   at a 1.0 ratio the output is a pure delay at the floor
 //                   and unity gain; the shift lands on the expected frequency
-//                   including the fine trim; the tonality limit passes the
-//                   highs unshifted; a pick attack re-syncs the tap to the
-//                   floor; stereo channels share one tap; a mono buffer
-//                   against the stereo engine is safe; rate / block-size /
-//                   window changes and ±12 extremes stay finite; a window
-//                   change keeps the shift; power, window and tonality
-//                   changes blend (no step, no hole) and a powered-off
-//                   engine stops running once its fade-out lands.
+//                   at ±1 and ±2 octaves and at a fractional shift; a splice
+//                   between uncorrelated taps holds the level; the tonality
+//                   limit passes the highs unshifted; a pick attack re-syncs
+//                   the tap to the floor; stereo channels share one tap; a
+//                   mono buffer against the stereo engine is safe; rate /
+//                   block-size / window changes and ±24 extremes stay
+//                   finite; a smooth ±24 sweep (STEP off) keeps the tone
+//                   continuous; a window change keeps the shift; power,
+//                   window and tonality changes blend (no step, no hole) and
+//                   a powered-off engine stops running once its fade-out
+//                   lands.
 //   ProcessorTest   powered off the plugin is bit-exact and zero-latency;
 //                   powering on reports boundary + window latency from the
-//                   message thread; the parameters round-trip through state
-//                   and presets; a state or preset saved before Transpose
-//                   existed lands it on the defaults (off).
+//                   message thread; STEP rounds the shift for the engine;
+//                   the parameters round-trip through state and presets; a
+//                   state or preset saved before Transpose existed lands it
+//                   on the defaults (off).
 //
 // Splice quality (sidebands, warble, onset timing on real DIs) is the
 // bench's job, see plugin/docs/transpose.md.
@@ -66,6 +70,14 @@ void expectFinite(const juce::AudioBuffer<float>& buf) {
       ASSERT_TRUE(std::isfinite(buf.getReadPointer(ch)[i])) << "ch " << ch << " sample " << i;
       ASSERT_LT(std::abs(buf.getReadPointer(ch)[i]), 10.0f);
     }
+}
+
+// Largest sample-to-sample step in [from, to).
+float maxStep(const std::vector<float>& x, int from, int to) {
+  float m = 0.0f;
+  for (int i = from + 1; i < to; ++i)
+    m = std::max(m, std::abs(x[static_cast<size_t>(i)] - x[static_cast<size_t>(i - 1)]));
+  return m;
 }
 
 // Energy at `expected` must dominate energy left at `original` in the
@@ -124,21 +136,26 @@ TEST(TransposeTest, UnityRatioIsAPureDelayAtTheFloor) {
   EXPECT_NEAR(gain, 0.0, 0.05);
 }
 
-TEST(TransposeTest, OctaveUpAndDownLandOnTheFrequency) {
+TEST(TransposeTest, OctavesUpAndDownLandOnTheFrequency) {
+  // Every buffer: two octaves up on the short ones is where the upshift
+  // geometry has to shrink its fades to keep a landing range (a splice
+  // with nowhere to choose from is not period-matched and drags the pitch).
   const auto in = makeSine(3 * 48000, 440.0, 0.5f);
-  Transpose::Params up, down;
-  up.semitones = 12;
-  down.semitones = -12;
-  expectShiftedTo(runTranspose(in, up), 440.0, 880.0);
-  expectShiftedTo(runTranspose(in, down), 440.0, 220.0);
+  for (const int semis : {12, -12, 24, -24})
+    for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
+      Transpose::Params p;
+      p.semitones = static_cast<float>(semis);
+      p.window = Transpose::windowFromIndex(w);
+      expectShiftedTo(runTranspose(in, p), 440.0, 440.0 * std::pow(2.0, semis / 12.0));
+    }
 }
 
-TEST(TransposeTest, FineTrimJoinsTheRatio) {
-  // -2 st and +50 cents is a ratio of 2^(-1.5/12).
+TEST(TransposeTest, FractionalShiftsAreContinuous) {
+  // The parameter is continuous (STEP is the processor's business): -1.5 st
+  // is a ratio of 2^(-1.5/12), not -1 or -2.
   const auto in = makeSine(3 * 48000, 440.0, 0.5f);
   Transpose::Params p;
-  p.semitones = -2;
-  p.cents = 50.0f;
+  p.semitones = -1.5f;
   expectShiftedTo(runTranspose(in, p), 440.0, 440.0 * std::pow(2.0, -1.5 / 12.0));
 }
 
@@ -156,6 +173,29 @@ TEST(TransposeTest, ShiftedToneKeepsUnityGainAtEveryWindow) {
                         db(goertzelPower(in.data() + 48000, 65536, 220.0));
     EXPECT_NEAR(gain, 0.0, 1.0) << "window " << w;
   }
+}
+
+TEST(TransposeTest, SpliceBetweenUncorrelatedTapsHoldsTheLevel) {
+  // On noise no lag matches, so every drift splice crossfades two
+  // uncorrelated signals over the longest fade (120 ms). A plain
+  // complementary fade would dip 3 dB in the middle of each one; the gains
+  // are normalised by the taps' correlation so the level holds. 20 ms RMS
+  // windows of the shifted noise stay within 1 dB of their median.
+  const auto in = makeNoise(4 * 48000, 21, 0.4f);
+  Transpose::Params p;
+  p.semitones = -2;
+  const auto out = runTranspose(in, p);
+  constexpr int kWin = 960;
+  std::vector<double> rms;
+  for (int end = 48000 + kWin; end <= static_cast<int>(out.size()); end += kWin) {
+    double acc = 0.0;
+    for (int i = end - kWin; i < end; ++i) acc += static_cast<double>(out[static_cast<size_t>(i)]) * out[static_cast<size_t>(i)];
+    rms.push_back(db(acc / kWin));
+  }
+  auto sorted = rms;
+  std::nth_element(sorted.begin(), sorted.begin() + static_cast<long>(sorted.size() / 2), sorted.end());
+  const double median = sorted[sorted.size() / 2];
+  for (size_t k = 0; k < rms.size(); ++k) EXPECT_NEAR(rms[k], median, 1.0) << "window " << k;
 }
 
 TEST(TransposeTest, TonalityLimitPassesTheHighsUnshifted) {
@@ -275,8 +315,8 @@ TEST(TransposeTest, SurvivesRateBlockAndWindowChanges) {
   // Every window, switched live, at both shift directions.
   for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
     p.window = Transpose::windowFromIndex(w);
-    for (const int semis : {12, -12}) {
-      p.semitones = semis;
+    for (const int semis : {24, -24}) {
+      p.semitones = static_cast<float>(semis);
       t.setParams(p);
       for (int i = 0; i < 8; ++i) run(1024, 10 + static_cast<unsigned>(w) + static_cast<unsigned>(i));
     }
@@ -284,14 +324,49 @@ TEST(TransposeTest, SurvivesRateBlockAndWindowChanges) {
 }
 
 TEST(TransposeTest, ExtremeShiftsStayBounded) {
-  for (const int semis : {-12, 12}) {
+  for (const int semis : {-24, 24}) {
     Transpose::Params p;
-    p.semitones = semis;
+    p.semitones = static_cast<float>(semis);
     const auto out = runTranspose(makeNoise(static_cast<int>(kFs), 555u + static_cast<unsigned>(semis), 0.5f), p);
     for (const float s : out) {
       ASSERT_TRUE(std::isfinite(s)) << semis;
       ASSERT_LT(std::abs(s), 10.0f) << semis;
     }
+  }
+}
+
+TEST(TransposeTest, SmoothSweepNeverBreaksTheTone) {
+  // STEP off, the knob sweeps: the shift changes a little every block, the
+  // whole ±24 both ways in 4 s. A pending lag search must survive the small
+  // changes (a tap arriving at the buffer end without a plan would run off
+  // the ring), so the tone stays continuous: no sample step past a 220 Hz
+  // tone's own (~0.014 at 0.5), no hole, everything finite.
+  Transpose t;
+  t.prepare(kFs, kBlock);
+  t.setEnabled(true);
+  constexpr int kBlocks = 4 * 48000 / kBlock;
+  const auto in = makeSine(kBlocks * kBlock, 220.0, 0.5f);
+  std::vector<float> out;
+  juce::AudioBuffer<float> buf(1, kBlock);
+  for (int b = 0; b < kBlocks; ++b) {
+    // A triangle: 0 -> +24 -> -24 -> 0.
+    const double phase = static_cast<double>(b) / kBlocks;
+    const double semis = phase < 0.25 ? 96.0 * phase : phase < 0.75 ? 24.0 - 96.0 * (phase - 0.25) : -24.0 + 96.0 * (phase - 0.75);
+    Transpose::Params p;
+    p.semitones = static_cast<float>(semis);
+    t.setParams(p);
+    buf.copyFrom(0, 0, in.data() + b * kBlock, kBlock);
+    t.process(buf);
+    out.insert(out.end(), buf.getReadPointer(0), buf.getReadPointer(0) + kBlock);
+  }
+  for (const float s : out) ASSERT_TRUE(std::isfinite(s));
+  // The shifted tone at +24 st is 880 Hz, whose own step is ~0.058; allow
+  // for the fades between uncorrelated taps on top.
+  EXPECT_LT(maxStep(out, 48000, static_cast<int>(out.size())), 0.12f);
+  for (int end = 48000; end <= static_cast<int>(out.size()); end += 480) {
+    double acc = 0.0;
+    for (int i = end - 480; i < end; ++i) acc += static_cast<double>(out[static_cast<size_t>(i)]) * out[static_cast<size_t>(i)];
+    EXPECT_GT(std::sqrt(acc / 480), 0.15) << "hole at " << end;  // the tone's RMS is 0.35
   }
 }
 
@@ -306,18 +381,6 @@ TEST(TransposeTest, WindowChangeKeepsTheShift) {
   const auto out = runTranspose(in, a, kFs, &b, 94 * kBlock);  // on a block edge, or never applied
   expectShiftedTo(out, 440.0, 880.0);
 }
-
-namespace {
-
-// Largest sample-to-sample step in [from, to).
-float maxStep(const std::vector<float>& x, int from, int to) {
-  float m = 0.0f;
-  for (int i = from + 1; i < to; ++i)
-    m = std::max(m, std::abs(x[static_cast<size_t>(i)] - x[static_cast<size_t>(i - 1)]));
-  return m;
-}
-
-}  // namespace
 
 TEST(TransposeTest, WindowChangeIsSeamless) {
   // Shrinking the buffer from 60 to 20 ms while the tap sits deep in it:
@@ -445,15 +508,16 @@ TEST(ProcessorTest, TransposeDefaultsAreOffAndMatchTheDsp) {
   TONE3000Processor proc;
   const Transpose::Params p;
   EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 0.0f);
-  EXPECT_FLOAT_EQ(denormalised(proc, "transposeSemitones"), static_cast<float>(p.semitones));
-  EXPECT_NEAR(denormalised(proc, "transposeFine"), p.cents, 1e-4f);
+  EXPECT_NEAR(denormalised(proc, "transposeSemitones"), p.semitones, 1e-4f);
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeStep")->load(), 1.0f);  // whole semitones
   EXPECT_FLOAT_EQ(denormalised(proc, "transposeTonality"), Transpose::kTonalityOffHz);  // off
   EXPECT_FLOAT_EQ(denormalised(proc, "transposeWindow"), static_cast<float>(p.window));
-  // The knob's ends and centre map to whole semitones.
+  // The knob's ends and centre: ±24, 0 at noon; the range is continuous.
   auto* semis = proc.parameters.getParameter("transposeSemitones");
-  EXPECT_FLOAT_EQ(semis->convertFrom0to1(0.0f), -12.0f);
-  EXPECT_FLOAT_EQ(semis->convertFrom0to1(0.5f), 0.0f);
-  EXPECT_FLOAT_EQ(semis->convertFrom0to1(1.0f), 12.0f);
+  EXPECT_FLOAT_EQ(semis->convertFrom0to1(0.0f), -24.0f);
+  EXPECT_NEAR(semis->convertFrom0to1(0.5f), 0.0f, 1e-4f);  // a float range: noon is 0 to the ulp
+  EXPECT_FLOAT_EQ(semis->convertFrom0to1(1.0f), 24.0f);
+  EXPECT_NEAR(semis->convertFrom0to1(semis->convertTo0to1(-1.5f)), -1.5f, 1e-4f);
   // The tonality log map round-trips its ends.
   auto* tonality = proc.parameters.getParameter("transposeTonality");
   EXPECT_NEAR(tonality->convertFrom0to1(0.0f), Transpose::kTonalityMinHz, 0.5f);
@@ -521,8 +585,8 @@ TEST(ProcessorTest, TransposeSurvivesStateRoundTrip) {
   {
     TONE3000Processor a;
     a.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
-    setDenormalised(a, "transposeSemitones", -3.0f);
-    setDenormalised(a, "transposeFine", 25.0f);
+    setDenormalised(a, "transposeSemitones", -3.25f);
+    a.parameters.getParameter("transposeStep")->setValueNotifyingHost(0.0f);
     setDenormalised(a, "transposeTonality", 4000.0f);
     setDenormalised(a, "transposeWindow", 2.0f);
     a.getStateInformation(state);
@@ -530,8 +594,8 @@ TEST(ProcessorTest, TransposeSurvivesStateRoundTrip) {
   TONE3000Processor b;
   b.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
   EXPECT_FLOAT_EQ(b.parameters.getRawParameterValue("transposeEnabled")->load(), 1.0f);
-  EXPECT_FLOAT_EQ(denormalised(b, "transposeSemitones"), -3.0f);
-  EXPECT_NEAR(denormalised(b, "transposeFine"), 25.0f, 0.01f);
+  EXPECT_NEAR(denormalised(b, "transposeSemitones"), -3.25f, 1e-4f);
+  EXPECT_FLOAT_EQ(b.parameters.getRawParameterValue("transposeStep")->load(), 0.0f);
   EXPECT_NEAR(denormalised(b, "transposeTonality"), 4000.0f, 1.0f);
   EXPECT_FLOAT_EQ(denormalised(b, "transposeWindow"), 2.0f);
 }
@@ -551,7 +615,7 @@ TEST(ProcessorTest, StateFromBeforeTransposeLandsOnItsDefaults) {
   ASSERT_TRUE(tree.isValid());
   juce::ValueTree params = tree.getChildWithName("PARAMETERS");
   ASSERT_TRUE(params.isValid());
-  for (const auto* id : {"transposeEnabled", "transposeSemitones", "transposeFine", "transposeTonality",
+  for (const auto* id : {"transposeEnabled", "transposeSemitones", "transposeStep", "transposeTonality",
                          "transposeWindow"}) {
     const auto child = params.getChildWithProperty("id", id);
     ASSERT_TRUE(child.isValid()) << id;
@@ -571,7 +635,27 @@ TEST(ProcessorTest, StateFromBeforeTransposeLandsOnItsDefaults) {
   EXPECT_NEAR(proc.parameters.getRawParameterValue("gateThreshold")->load(), -40.0f, 0.01f)
       << "the old state's own parameters must still restore";
   EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 0.0f);
-  EXPECT_FLOAT_EQ(denormalised(proc, "transposeSemitones"), 0.0f);
+  EXPECT_NEAR(denormalised(proc, "transposeSemitones"), 0.0f, 1e-4f);
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeStep")->load(), 1.0f);
+}
+
+TEST(ProcessorTest, TransposeStepRoundsTheShiftForTheEngine) {
+  // The knob left at -1.6 st: with STEP on the engine plays -2 (whole
+  // semitones, whatever the host automates), with STEP off it plays -1.6.
+  for (const bool step : {true, false}) {
+    TONE3000Processor proc;
+    proc.setPlayConfigDetails(2, 2, kFs, kBlock);
+    proc.prepareToPlay(kFs, kBlock);
+    proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
+    proc.parameters.getParameter("transposeStep")->setValueNotifyingHost(step ? 1.0f : 0.0f);
+    setDenormalised(proc, "transposeSemitones", -1.6f);
+    pumpMessages();
+    const auto out = processThrough(proc, makeSine(4 * 48000, 440.0, 0.5f));
+    const double played = 440.0 * std::pow(2.0, (step ? -2.0 : -1.6) / 12.0);
+    const double other = 440.0 * std::pow(2.0, (step ? -1.6 : -2.0) / 12.0);
+    // 0.4 st apart, ~10 Hz here: a 1.4 s window resolves them.
+    expectShiftedTo(out, other, played);
+  }
 }
 
 TEST(ProcessorTest, PresetsCarryTranspose) {
@@ -589,18 +673,18 @@ TEST(ProcessorTest, PresetsCarryTranspose) {
 
     proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
     setDenormalised(proc, "transposeSemitones", -2.0f);
-    setDenormalised(proc, "transposeFine", -10.0f);
+    proc.parameters.getParameter("transposeStep")->setValueNotifyingHost(0.0f);
     const juce::var dropD = proc.savePreset("Drop D");
     ASSERT_TRUE(dropD.isObject());
 
     ASSERT_TRUE(proc.loadPreset(stock["id"].toString()));
     EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 0.0f);
-    EXPECT_FLOAT_EQ(denormalised(proc, "transposeSemitones"), 0.0f);
+    EXPECT_NEAR(denormalised(proc, "transposeSemitones"), 0.0f, 1e-4f);
 
     ASSERT_TRUE(proc.loadPreset(dropD["id"].toString()));
     EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 1.0f);
-    EXPECT_FLOAT_EQ(denormalised(proc, "transposeSemitones"), -2.0f);
-    EXPECT_NEAR(denormalised(proc, "transposeFine"), -10.0f, 0.01f);
+    EXPECT_NEAR(denormalised(proc, "transposeSemitones"), -2.0f, 1e-4f);
+    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeStep")->load(), 0.0f);
   }
   tmp.deleteRecursively();
 }

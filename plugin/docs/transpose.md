@@ -9,7 +9,10 @@ the reference feel) and unstable on bass. This document lists the
 candidates that were benchmarked, the scorer, the iterations that failed,
 and the engine that shipped: a correlation-spliced delay line with onset
 re-sync. Listening tests agreed with the numbers (30, 40 and 60 ms splicer
-buffers all pass; the 60 ms vocoder does not).
+buffers all pass; the 60 ms vocoder does not). Chords and the two-octave
+range have their own sections, each with the problem, what was measured
+and how the engine handles it; Implementation lists how the shipped code
+differs from the bench prototype.
 
 Assets referenced below live in `plugin/docs/transpose/`. The bench harness
 (C++ candidates + Python scorer) is described in enough detail to rebuild;
@@ -79,10 +82,11 @@ behind the write head drifts linearly between `dMin` (2 ms) and `dMax`
 jumps back. Rather than a fixed jump (the periodic flutter of a two-tap
 shifter) it scores every candidate delay in the legal range by how well its
 recent waveform matches the current one (normalised cross-correlation over
-a 20-25 ms window), then crossfades to the chosen position with a 6 ms
-raised-cosine fade while both taps keep running at the pitch ratio. With
-the splice placed where the two waveforms agree, the crossfade is nearly
-inaudible on periodic material.
+a 20-25 ms window), then crossfades to the chosen position with a
+raised-cosine fade while both taps keep running at the pitch ratio (6 ms in
+the prototype and the tables below; the shipped engine's fade follows the
+match quality, see Chords). With the splice placed where the two
+waveforms agree, the crossfade is nearly inaudible on periodic material.
 
 Two additions to the basic design:
 
@@ -124,11 +128,12 @@ is a late transient. Variants tried, in order:
 5. Peak-hold only: safe, but caught 36 of 296 attacks in the Power riff.
 6. **Final:** 600 Hz HPF energy with 2 ms smoothing, held in 1 ms cells
    for the last 5-49 ms. Trigger when it rises 9 dB over the recent
-   *minimum* AND 1 dB over the recent *maximum* (the second condition is
-   what rejects periodic HF pulses: they never exceed their own recent
-   peaks). 40 ms refractory; the history is reset to the current level on
-   trigger. Result: 0-4 false triggers per 3 s steady tone, median attack
-   latency 7 ms on Mayer.
+   *minimum* AND over the recent *maximum* (the second condition is what
+   rejects periodic HF pulses: they never exceed their own recent peaks).
+   40 ms refractory; the history is reset to the current level on trigger.
+   Result: 0-4 false triggers per 3 s steady tone, median attack latency
+   7 ms on Mayer. The maximum margin was 1 dB here; the shipped engine
+   uses 6 dB, which beating chords do not clear (see Chords).
 
 ## The benchmark
 
@@ -276,6 +281,198 @@ Power - Guitar, -2 st, 0-3 kHz:
 The wet files are aligned to the dry by nominal latency, so A/B'ing them in
 a DAW compares artifacts, not delay.
 
+## Chords
+
+The corpus above is mostly single notes, riffs and a few chords. Sustained
+open chords are the splicer's hardest case, and a hand-played take of open
+chords at -2 st (30 ms buffer) against a commercial input transpose is
+where the two are told apart: on single notes and riffs they are hard to
+distinguish; on a sustained chord a splicer with a short fixed crossfade
+has a soft, periodic "chuff", a few times a second. In the spectrogram it
+is a vertical bar at each drift splice, filling the gaps between the
+partials.
+
+![Chord at -2 st: dry, fixed 6 ms fades, adaptive fades](transpose/chords_spectrogram.png)
+
+### Why chords splice badly
+
+A single note has a period, so the lag search finds a jump that is a whole
+number of periods and every partial lines up across the splice. A chord has
+no common period. The best lag lines up one string's partials and leaves
+the others with a phase step, and a 6 ms crossfade turns each step into a
+6 ms event, ~170 Hz wide in frequency: wide enough to spill into the
+valleys between partials. With five or six strings' worth of mismatched
+partials the spill adds up to a broadband bump at every splice. The same
+step spread over 120 ms is ~8 Hz wide and stays under the partial.
+
+A chord also fools a naive onset detector. Its strings beat against each
+other, and the beating swings the high-passed energy the detector watches
+by a few dB; with a "new peak" condition of 1 dB over the recent maximum,
+the swells pass for pick attacks (the 17 s chord section, seven strums,
+logged 38 re-syncs). A false re-sync is the worst kind of splice: a 2 ms
+fade at an arbitrary lag.
+
+### Metric
+
+`valley excess`: per 2.5 ms STFT frame (4096 Hann), the 25th-percentile
+level over 100-1500 Hz is the floor between the partials; subtract its
+400 ms running median and a splice bump shows as a positive excursion.
+Reported over sustained frames (onsets masked from the clean take): mean
+and 95th percentile in dB, and bumps per second (peaks over 6 dB).
+
+### What was tried
+
+Each variant was rendered from the same take and scored per section
+(chords / riff / bass / dissonant bass dyads), so a fix for the chords
+could not quietly cost the riffs: fixed longer fades (12, 20, 30, 45, 60,
+80, 120 ms), which help the chords in proportion to their length but put a
+long fade under every splice, single notes included; fade length by match
+quality, which gives the long fade only where it is needed; a
+pre-emphasised control signal for the lag search; a higher detector
+high-pass (1500 / 2500 Hz) against the false re-syncs; the detector
+ceiling at 3, 4, 5 and 6 dB; and a third tap so an onset arriving inside a
+long drift fade could cut straight in. The combination below scored best on
+every section; the third tap and the pre-emphasis bought nothing
+measurable.
+
+### How the engine handles chords
+
+1. **Fade length follows the match.** A drift splice fades over 30 ms when
+   its lag correlates at 0.95 or better, stretching linearly to 120 ms at
+   0.6 or worse. A downshift tap only runs deeper while it fades, so the
+   fade may last until the destination reaches the buffer end (less the
+   next search's lead). An upshift tap gains on the write head, so its
+   longest fade is capped to a sixth of the range and the guard moves out
+   by that drift (see Two octaves for the wider range's budget).
+2. **Level-normalised crossfade.** Two taps that don't correlate add in
+   power, not amplitude: a plain complementary fade dips 3 dB in the middle
+   when the taps are unrelated, which over 120 ms is a pump. The fade gains
+   are normalised by the taps' measured correlation (r = 1 leaves the
+   complementary fade, r = 0 is the equal-power one), so the level holds
+   whatever the match.
+3. **Detector ceiling 6 dB.** An attack has to rise 9 dB over the recent
+   floor and 6 dB over the recent ceiling, which a beating chord does not
+   reach. Real attacks on the corpus are unaffected (the onset columns
+   below).
+
+On the chord take, -2 st, 30 ms buffer, against the same engine with a
+fixed 6 ms fade and a 1 dB ceiling:
+
+| section | | clean | fixed 6 ms fade | adaptive fade |
+|---|---|---|---|---|
+| chords | valley excess mean / p95 dB | 0.55 / 7.0 | 1.60 / 15.8 | 0.59 / 7.3 |
+| | bumps/s | 1.1 | 5.2 | 1.2 |
+| | re-syncs / drift splices in 17 s | | 38 / 66 | 16 / 74 |
+| riff | valley excess mean / p95 dB | 0.73 / 22.4 | 1.56 / 22.0 | 1.32 / 21.8 |
+| | bumps/s | 2.3 | 4.7 | 2.4 |
+| bass | valley excess mean / p95 dB | 4.49 / 35.8 | 6.10 / 41.1 | 5.25 / 39.8 |
+| | bumps/s | 4.1 | 4.4 | 4.7 |
+
+The chord section lands on the clean take's own figures (its bumps are the
+strums). Listening agrees: no chuff, and the riff and bass sections are
+indistinguishable from the fixed-fade render.
+
+Excerpts, first four chords of the take (9 s, 48 kHz 16-bit, aligned by
+nominal latency, peak-normalised as a set):
+[dry](transpose/chords_-2st_dry.wav),
+[fixed 6 ms fade](transpose/chords_-2st_fixed6ms.wav),
+[adaptive fade](transpose/chords_-2st_adaptive.wav).
+
+On the full corpus (same scorer as the tables above, 30 ms buffer, means;
+each cell is fixed 6 ms fade -> adaptive fade):
+
+| st | synth sideband dB | pitch cents | bass sideband dB | DI warble | DI onset ms | DI atk |
+|---|---|---|---|---|---|---|
+| -2 | -20.4 -> **-23.7** | 1.1 -> 0.6 | -7.0 -> **-11.1** | 1.84 -> 1.79 | -5.1 -> -1.4 | 1.00 -> 1.01 |
+| -4 | -16.5 -> **-19.4** | 2.6 -> 0.8 | -2.1 -> -4.2 | 1.74 -> 1.75 | -3.0 -> 0.2 | 1.11 -> 1.10 |
+| -12 | -12.2 -> -13.2 | 1.3 -> 0.9 | -5.2 -> -5.2 | 1.84 -> 2.34 | 0.6 -> 2.9 | 1.32 -> 1.39 |
+| +4 | -19.1 -> **-23.6** | 1.6 -> 1.5 | -6.2 -> **-15.2** | 1.68 -> 1.49 | -1.4 -> -2.6 | 0.88 -> 0.89 |
+| +12 | -17.6 -> -17.6 | 0.4 -> 0.4 | -9.6 -> -9.6 | 1.16 -> 1.14 | -1.1 -> -0.7 | 0.69 -> 0.66 |
+
+Sidebands (the corpus's chords and dyads are where they live) are 3-9 dB
+lower at every interval the long fade can reach; +12 st is identical
+because its geometry caps the fade short. Pitch is tighter. The costs: DI
+onsets arrive 2-4 ms later on average (the false re-syncs the 1 dB ceiling
+fired on swells counted as early arrivals; real attacks still land within
+the floor + re-sync span, see the unit test), and at -12 st the DI warble
+is 2.3 dB against 1.8, a 120 ms fade under a fast riff being more visible
+than a 6 ms one. CPU is the same (0.22-0.37%).
+
+## Two octaves
+
+Transpose covers -24..+24 st. Up to an octave either way is the plain case
+above; two octaves stresses the geometry in different ways up and down.
+
+### Up
+
+An upshift tap gains on the write head at (ratio - 1) samples a sample:
+three at +24. Everything one cycle does costs buffer at that rate: the fade
+that lands the tap, the next search's lead, the fade after it. Whatever is
+left is the range of jumps a splice may choose from, and a splice is only
+clean at a whole number of periods, so that range has to be at least a
+period long for every note to have one in it. On the 30 ms buffer at +24
+the chord geometry's 6 ms fade and 4 ms lead alone want 2300 samples of a
+1440-sample buffer: the landing range collapses to a point, the splice is
+whatever lag falls there, and the pitch is wrong (440 Hz plays at 1790 Hz
+instead of 1760; on the note bench the range of jumps holds a multiple of
+E2's period but not A2's, so every other note is a quarter tone off).
+
+The engine budgets for it. Half the buffer is kept as the landing range,
+so the range of jumps is at least half a buffer long (on 30 ms, a whole
+period of any note above 67 Hz); where the fades and lead don't fit beside
+it they shrink together. The budget binds only above +8 st on 20 ms and
++11 st on 30 ms, so the chord behaviour above is unaffected; at +12 st on
+30 ms the fade is 5.5 ms instead of 6. Landing shares of a sixth and a
+third were also measured: the fades stay longer, and notes whose period
+the range misses stay off-pitch.
+
+### Down
+
+A downshift tap only runs deeper, so nothing collapses, but at a quarter of
+the input rate it falls back through the buffer and splices every ~40 ms,
+each splice repeating ~30 ms of input. That is audible as grain on
+anything sustained.
+
+### Measurements
+
+Note bench (steady synthetic notes; guitar = E2..E4, bass = E1, A1),
+30 ms buffer:
+
+| st | guitar pitch max cents | guitar sideband dB | bass pitch max cents | bass sideband dB |
+|---|---|---|---|---|
+| +12 | 0.9 | -27.3 | 1.4 | -25.2 |
+| +24 | 0.3 | -25.8 | 0.6 | -22.7 |
+| -12 | 1.3 | -22.3 | 1.4 | -9.8 |
+| -24 | 3.4 | -9.1 | 1.6 | -2.3 |
+
+On the corpus (synth chords + DIs), +24 st on 30 ms scores -17.0 dB
+sidebands and 0.98 dB DI warble against -19.4 dB and 1.04 dB at +12: two
+octaves up is as clean as one. Two octaves down is on pitch but grainy:
+sidebands sit 10-15 dB above the -12 st figures on every buffer, and the
+longer buffers help (-12.4 dB on 60 ms). It is a usable sub-octave effect,
+not a clean shift. The 20 ms buffer is guitar-only at every interval: a
+bass note's period does not fit it.
+
+## Controls
+
+- **Transpose**, -24..+24 st, a continuous parameter.
+- **STEP** (on by default) snaps the knob to whole semitones; off, the
+  knob sweeps smoothly and Shift-drag is the fine control, so it plays like
+  a whammy. The engine only ever sees a semitone value; the processor
+  rounds it while STEP is on.
+- **Tonality**, the crossover above which the input bypasses the shifter.
+- **Buffer**, the shifter's delay buffer, 20 / 30 / 40 / 60 ms. The tap's
+  delay sweeps between the 2 ms floor and the buffer end, and the host is
+  told the midpoint, (2 + N) / 2 = 11 / 16 / 21 / 31 ms.
+
+A smooth sweep asks the engine for a new ratio every block. A pending lag
+search is planned for a drift, so a same-direction change of up to 0.1 in
+ratio (~1.7 st around unity) keeps it: the landing moves by a few samples,
+inside the landing range's margins, and the tap never reaches the buffer
+end without a splice planned. A direction flip or a bigger jump starts the
+search over, and a plan whose destination lies ahead of the write head is
+dropped at the splice.
+
 ## Implementation
 
 The shipped engine is `plugin/include/Transpose.h` /
@@ -298,11 +495,17 @@ dependencies. Where it differs from the bench prototype:
   window is contiguous and the dot product vectorises. Worst block at 16
   samples: 13-100 us; average CPU 0.15-0.35%. Only the onset re-sync (a
   4 ms candidate range) searches at once.
+- **Adaptive, level-normalised fade** (see Chords). A drift splice fades
+  over 30 ms at a correlation of 0.95 or better, up to 120 ms at 0.6 or
+  worse, and the two taps' gains are normalised by that correlation so the
+  level holds through the fade. The onset re-sync keeps its 2 ms fade.
+  Above +8 st on 20 ms and +11 st on 30 ms the upshift fade and search lead
+  shrink so half the buffer stays free to land in (see Two octaves).
 - **Fixed floor.** The prototype moved the 2 ms floor out for upshifts;
   the plugin keeps the reported latency independent of the knob and moves
-  the splice trigger out by the distance an upshift tap gains during a fade
-  (`max(floor, fade shrink)`; summing them instead landed +12 st on the
-  20 ms buffer 9 cents low).
+  the splice trigger out by the distance an upshift tap gains during its
+  longest fade (`max(floor, fade shrink)`; summing them instead landed
+  +12 st on the 20 ms buffer 9 cents low).
 - **Stereo** shares one control path (detector and lag search on the
   channel mean) and one tap position; each channel has its own ring, so
   the image cannot smear.
@@ -313,9 +516,12 @@ dependencies. Where it differs from the bench prototype:
   filters run whether or not the limit is engaged (four biquads a channel)
   so engaging it does not start them cold. The rings hold full-band audio,
   so the lag search is unaffected.
-- **Latency control** = buffer size, four detents 20 / 30 / 40 / 60 ms,
-  read out as the latency each reports ((2 + N) / 2 = 11 / 16 / 21 / 31 ms).
-  Default 30 ms.
+- **Buffer knob** = the delay buffer, four detents 20 / 30 / 40 / 60 ms,
+  default 30 ms; the latency each reports is (2 + N) / 2 = 11 / 16 / 21 /
+  31 ms.
+- **STEP** lives in the processor: the semitone parameter is a float, and
+  the processor rounds it for the engine while STEP is on; the knob snaps
+  to detents. The engine has no notion of the toggle.
 - **Transitions blend** over 25 ms, like the image decks'. Power
   crossfades dry and wet; the engine keeps running until the fade-out
   lands, then the processor bypasses it, so off stays bit-exact. The
@@ -331,13 +537,18 @@ dependencies. Where it differs from the bench prototype:
 
 Unit tests (`test/src/transpose_tests.cpp`): latency figure matches the
 engine at every window and rate; 0 st is a pure delay at the floor at unity
-gain; octave / fine-trim shifts land on frequency; shifted tones keep unity
-gain at every window (splices land on whole periods); the tonality limit
-passes a 6 kHz partial unshifted while shifting a 440 Hz one; a pick attack
+gain; ±1 and ±2 octaves land on frequency at every window, and so does a
+fractional shift; shifted tones keep unity
+gain at every window (splices land on whole periods); a splice between
+uncorrelated taps (shifted noise, every fade at its 120 ms longest) holds
+the level within 1 dB; the tonality limit passes a 6 kHz partial unshifted
+while shifting a 440 Hz one; a pick attack
 after a drifting sustain arrives within floor + re-sync span + fade
 (measured 2.6-7 ms); stereo channels stay exactly proportional through every
 splice; +12 st on the 20 ms buffer stays within 3 cents; mono buffers,
-rate / block / window changes and ±12 st stay finite; power on/off, a
+rate / block / window changes and ±24 st stay finite; a smooth sweep
+0 -> +24 -> -24 -> 0 over four seconds (STEP off) passes a 220 Hz tone with
+no step and no hole; power on/off, a
 60 to 20 ms window change and a tonality engage all pass a 220 Hz tone
 with no sample step over twice the tone's own and no hole, and a powered-off
 engine reports itself stopped within 50 ms.
@@ -351,7 +562,10 @@ engine reports itself stopped within 50 ms.
   audible.
 - Long-term: a polyphonic-aware lag search (score per-band) for chords with
   very different fundamentals, which is where the remaining -12 st
-  sidebands live.
+  sidebands live. The long fade hides a chord's mismatched partials; a
+  per-band search would line them up instead.
 - The bench itself lives outside the repo (`/tmp/t3k-bench`: `bench.cpp`,
   `shifters.h`, `metrics.py`, `render_listen.py`, `doc_assets.py`, plus a
-  `plugin_shifter.h` wrapper that scores the shipped class).
+  `plugin_shifter.h` wrapper that scores the shipped class, and for the
+  chord take `bars.py` (valley excess) and `glitch.py` (per-partial
+  instantaneous frequency deviation).
