@@ -130,6 +130,11 @@ public:
   virtual void copyToClipboard(const juce::String& text) = 0;
   virtual bool copyLogs() = 0;
   virtual juce::String revealLogs() = 0;
+  // Open the user presets folder in the OS file browser (creating it if no
+  // preset has been saved yet). False on platforms with no file browser to
+  // open (iOS); the UI hides the section.
+  virtual bool canOpenPresetsFolder() = 0;
+  virtual bool openPresetsFolder() = 0;
   // False when the platform has no settings URI (the UI hides the button).
   virtual bool canOpenDateTimeSettings() = 0;
   virtual bool openDateTimeSettings() = 0;

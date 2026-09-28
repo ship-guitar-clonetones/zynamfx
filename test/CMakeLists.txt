@@ -48,6 +48,7 @@ target_sources(DspTests PRIVATE
     ../plugin/src/BlockSpectrum.cpp
     ../plugin/src/MidiMapper.cpp
     ../plugin/src/NamEngine.cpp
+    ../plugin/src/PresetFile.cpp
     ../plugin/src/PresetManager.cpp
     ../plugin/src/Processor.cpp
     ../plugin/src/ProcessorChain.cpp

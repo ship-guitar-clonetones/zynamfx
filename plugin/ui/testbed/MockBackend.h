@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "MockSignal.h"
 #include "backend/Backend.h"
@@ -69,7 +70,14 @@ public:
   bool loadPreset(const juce::String& presetId) override;
   bool renamePreset(const juce::String&, const juce::String&) override { return true; }
   bool deletePreset(const juce::String&) override { return true; }
-  bool movePreset(const juce::String&, int) override { return true; }
+  // Reorders presets_ within the preset's section like the real store, and
+  // records the call so self-tests can check what the browser asked for.
+  bool movePreset(const juce::String& presetId, int delta) override;
+  struct Move {
+    juce::String id;
+    int delta{0};
+  };
+  const std::vector<Move>& presetMoves() const { return presetMoves_; }
 
   juce::var getAudioDeviceState() override { return device_; }
   juce::var setAudioDeviceType(const juce::String&) override { return okResult(); }
@@ -111,6 +119,8 @@ public:
   void copyToClipboard(const juce::String&) override {}
   bool copyLogs() override { return true; }
   juce::String revealLogs() override { return "/tmp/TONE3000.log"; }
+  bool canOpenPresetsFolder() override { return true; }
+  bool openPresetsFolder() override { return true; }
   bool canOpenDateTimeSettings() override { return true; }
   bool openDateTimeSettings() override { return true; }
   bool forwardKeyToHost(HostKey) override { return false; }
@@ -128,6 +138,7 @@ private:
   juce::var device_;
   juce::var midiMap_;
   juce::var presets_;
+  std::vector<Move> presetMoves_;
   juce::var meters_;
   juce::var tuner_;
   juce::var autoMeasure_;

@@ -135,9 +135,13 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
       midi_("MIDI Mapping",
             "Control the plugin from pedals and knobs. Mappings are saved with the plugin and work in your DAW too."),
       midiSection_(services),
+      presets_("Presets",
+               "Your saved presets are files in a folder you can back up, share, or copy to another computer."),
+      openPresets_("Open presets folder", FormButton::text(form::kBodyPx, false, theme::kLinkBlue)),
+      openPresetsBox_(openPresets_, static_cast<float>(openPresets_.preferredHeight())),
       diagnostics_("Diagnostics", "Copy recent diagnostic logs to the clipboard and paste them into a bug report."),
       copyLogs_("Copy Logs", FormButton::cta()),
-      revealLogs_("Reveal log file on disk", FormButton::text(form::kSmallPx, false, theme::kSubtle)),
+      revealLogs_("Reveal log file on disk", FormButton::text(form::kBodyPx, false, theme::kLinkBlue)),
       copyLogsBox_(copyLogs_, static_cast<float>(copyLogs_.preferredHeight())),
       revealLogsBox_(revealLogs_, static_cast<float>(revealLogs_.preferredHeight())),
       logStatus_(juce::String(), form::kSmallPx),
@@ -205,6 +209,15 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
   midi_.setInlineLabel();
   midi_.content().add(midiSection_);
   add(midi_);
+
+  // Presets: a link to the folder the files live in. Hidden where there is
+  // no file browser to open (iOS).
+  if (services_.backend.canOpenPresetsFolder()) {
+    presets_.setInlineLabel();
+    presets_.content().add(openPresetsBox_);
+    openPresets_.onClick = [this] { services_.backend.openPresetsFolder(); };
+    add(presets_);
+  }
 
   // Diagnostics.
   diagnostics_.setInlineLabel();

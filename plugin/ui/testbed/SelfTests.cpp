@@ -1045,6 +1045,102 @@ struct TouchScrollTests : juce::UnitTest {
   }
 };
 
+// Drag-reordering a preset in the browser, through the peer. The drop
+// rebuilds the row list (destroying the dragged Row) and then asks the store
+// to move the preset: the move must carry the real id, not whatever is left
+// in the freed row, and the browser must end up showing the store's order.
+struct PresetReorderTests : juce::UnitTest {
+  PresetReorderTests() : juce::UnitTest("Preset reorder", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  struct Pointer {
+    juce::ComponentPeer& peer;
+    juce::int64 time = juce::Time::currentTimeMillis();
+    void at(juce::Point<float> pos, bool down) {
+      peer.handleMouseEvent(juce::MouseInputSource::InputSourceType::mouse, pos,
+                            down ? juce::ModifierKeys::leftButtonModifier : juce::ModifierKeys(), 0.0f, 0.0f, ++time);
+      pump(10);
+    }
+  };
+
+  // The browser row showing `name`, or null.
+  static juce::Component* rowNamed(juce::Component& root, const juce::String& name) {
+    auto* label = drive::find(root, [&](juce::Component& c) {
+      auto* b = dynamic_cast<Clickable*>(&c);
+      return b != nullptr && c.isShowing() && b->accessibleName() == name && c.getHelpText().isEmpty();
+    });
+    return label != nullptr ? label->getParentComponent() : nullptr;
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("chrome-preset-browse");  // two user presets, three factory
+    if (scenario == nullptr) {
+      expect(false, "chrome-preset-browse scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("preset reorder", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto* peer = host.getPeer();
+    expect(peer != nullptr);
+    if (peer == nullptr) return;
+    auto& root = host.pluginRoot();
+
+    beginTest("open the browser in reorder mode");
+    drive::clickByHelp(root, "Presets:");
+    pump(300);
+    drive::clickByHelp(root, "Reorder:");
+    pump(100);
+    auto* first = rowNamed(root, "My Lead Tone");
+    auto* second = rowNamed(root, "Church Sunday");
+    auto* grip = first != nullptr ? drive::find(*first, [](juce::Component& c) {
+      return c.getHelpText().startsWith("Drag:");
+    }) : nullptr;
+    expect(first != nullptr && second != nullptr && grip != nullptr);
+    if (first == nullptr || second == nullptr || grip == nullptr) return;
+    expect(first->getY() < second->getY());
+    auto idOf = [&](const juce::String& name) {
+      for (const auto& p : *backend.getPresetList()["presets"].getArray())
+        if (p["name"].toString() == name) return p["id"].toString();
+      return juce::String();
+    };
+    const auto firstId = idOf("My Lead Tone");
+    expect(firstId.isNotEmpty());
+
+    beginTest("dragging the first user preset below the second moves it by +1");
+    Pointer pointer{*peer};
+    const auto start = peer->getComponent().getLocalPoint(grip, grip->getLocalBounds().getCentre().toFloat());
+    const float rowHeight = static_cast<float>(first->getHeight());
+    pointer.at(start, true);
+    for (int i = 1; i <= 6; ++i) pointer.at(start.translated(0, rowHeight * 1.5f * static_cast<float>(i) / 6), true);
+    pointer.at(start.translated(0, rowHeight * 1.5f), false);
+    pump(100);
+    const auto& moves = backend.presetMoves();
+    expectEquals(static_cast<int>(moves.size()), 1);
+    if (!moves.empty()) {
+      expectEquals(moves.back().id, firstId);
+      expectEquals(moves.back().delta, 1);
+    }
+
+    beginTest("the browser shows the store's new order");
+    first = rowNamed(root, "My Lead Tone");
+    second = rowNamed(root, "Church Sunday");
+    expect(first != nullptr && second != nullptr);
+    if (first != nullptr && second != nullptr) expect(second->getY() < first->getY());
+    // User section swapped; the factory section follows it untouched.
+    const auto list = backend.getPresetList()["presets"];
+    expectEquals(list[0]["name"].toString(), juce::String("Church Sunday"));
+    expectEquals(list[1]["name"].toString(), juce::String("My Lead Tone"));
+    expectEquals(list[2]["name"].toString(), juce::String("Crunch Rhythm"));
+    window.setVisible(false);
+  }
+};
+
 // The block card's LITE / FULL toggle, clicked through the peer with the
 // per-block size setting on. The store refreshes synchronously inside the
 // click, so the card re-syncs while the toggle's own click is still on the
@@ -1313,6 +1409,7 @@ RichFlowTests richFlowTests;
 AccessibilityTests accessibilityTests;
 FocusPolicyTests focusPolicyTests;
 TouchScrollTests touchScrollTests;
+PresetReorderTests presetReorderTests;
 BlockSizeToggleTests blockSizeToggleTests;
 KnobReadoutTests knobReadoutTests;
 FaceplateEffectsTests faceplateEffectsTests;

@@ -22,7 +22,9 @@ install, load tones, and use it.
   [`plugin/docs/local-models.md`](plugin/docs/local-models.md).
 - **Build a signal chain.** Multiple NAM and IR blocks, per-block EQ and
   gain/mix, drag to reorder, dual chains in stereo mode with branching,
-  undo/redo, and presets.
+  undo/redo, and presets. Presets are plain files named after the preset
+  (Plugin Settings → Presets opens the folder), so they can be backed up or
+  copied between machines.
 - **Cross-platform.** One plugin on macOS, Windows, Linux, and iOS
   (Standalone). The UI is JUCE/C++ (`plugin/ui/`), drawn natively on every
   platform: no browser engine, no web runtime, nothing to install beside the
@@ -354,6 +356,7 @@ Debug`.
 | `plugin/docs/`  | Design docs (UI, spread, oversampling, multi-core, local models) |
 | `test/`         | GoogleTest DSP suite + test assets                    |
 | `script/`       | Build, packaging, and install helpers                 |
+| `tools/`        | Maintainer utilities, not built by default (`PresetTool` regenerates the shipped presets) |
 | `libs/`         | CPM-fetched dependencies (JUCE, GoogleTest, ...)      |
 | `design/`       | Figma exports and UI reference assets                 |
 

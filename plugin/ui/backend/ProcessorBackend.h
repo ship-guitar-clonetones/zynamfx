@@ -107,6 +107,8 @@ public:
   void copyToClipboard(const juce::String& text) override;
   bool copyLogs() override;
   juce::String revealLogs() override;
+  bool canOpenPresetsFolder() override;
+  bool openPresetsFolder() override;
   bool canOpenDateTimeSettings() override;
   bool openDateTimeSettings() override;
   bool forwardKeyToHost(HostKey key) override;

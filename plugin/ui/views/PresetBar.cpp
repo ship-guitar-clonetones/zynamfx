@@ -531,6 +531,10 @@ void PresetBar::BrowsePanel::endDrag(Row& row) {
   row.setDragging(false);
   const int from = row.sectionIndex();
   const int to = dragTarget_;
+  // Everything needed from the row, taken now: rebuild() below destroys
+  // every Row including this one, so `row` is dead from that point on.
+  const juce::String id = row.preset().id;
+  const bool factory = row.preset().factory;
   if (to == from) {
     layoutRows();
     return;
@@ -539,17 +543,19 @@ void PresetBar::BrowsePanel::endDrag(Row& row) {
   // then factory, matching the native list (PC labels index into it).
   auto list = fullList();
   std::vector<PresetInfo> section, others;
-  for (const auto& p : list) (p.factory == row.preset().factory ? section : others).push_back(p);
+  for (const auto& p : list) (p.factory == factory ? section : others).push_back(p);
   auto item = section[static_cast<size_t>(from)];
   section.erase(section.begin() + from);
   section.insert(section.begin() + to, item);
   // Factory presets list after the user's; the moved section keeps its place.
-  auto& first = row.preset().factory ? others : section;
-  auto& second = row.preset().factory ? section : others;
+  auto& first = factory ? others : section;
+  auto& second = factory ? section : others;
   first.insert(first.end(), second.begin(), second.end());
   ordered_ = std::move(first);
   rebuild();
-  owner_.services_.presets.move(row.preset().id, to - from);
+  // The store refresh inside move() drops ordered_ and rebuilds from the
+  // persisted order, so a failed move snaps the rows back.
+  owner_.services_.presets.move(id, to - from);
 }
 
 // Bar

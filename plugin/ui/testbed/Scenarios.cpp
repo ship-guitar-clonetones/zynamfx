@@ -386,6 +386,11 @@ const std::map<juce::String, Drive>& drives() {
            click(root, *picker);
          wait(400);
        }},
+      {"settings-presets",
+       [](PluginRoot& root, MockBackend&) {
+         openSettings(root);
+         scrollSettingsTo(root, "Presets");
+       }},
       {"settings-system", [](PluginRoot& root, MockBackend&) { openSystemSettings(root); }},
       {"settings-system-mic-denied", [](PluginRoot& root, MockBackend&) { openSystemSettings(root); }},
       {"settings-system-feedback-risk", [](PluginRoot& root, MockBackend&) { openSystemSettings(root); }},
