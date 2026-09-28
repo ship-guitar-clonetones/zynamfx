@@ -487,10 +487,12 @@ add_dependencies(${PROJECT_NAME} NAM)
 
 # No browser engine anywhere in the plugin: the UI is drawn by JUCE, so
 # juce_gui_extra's WebBrowserComponent (and its WebKitGTK / WebView2 runtime
-# dependencies) stays out of the build.
+# dependencies) stays out of the build. Likewise the vendored libwebp
+# (JUCE 9.0.3+): nothing here reads or writes WebP.
 target_compile_definitions(${PROJECT_NAME}
     PUBLIC
         JUCE_WEB_BROWSER=0
+        JUCE_USE_WEBP=0
         JUCE_VST3_CAN_REPLACE_VST2=0
 )
 
@@ -531,17 +533,6 @@ endif()
 # toolchains don't grow a header dependency.
 if (UNIX AND NOT APPLE AND NOT HEADLESS)
     target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_JACK=1)
-endif()
-
-# Linux: stay on the classic core-X11 input path. JUCE 9 rewrote Linux input
-# around XInput2 (per-window XI2 registration, core ButtonPress/Motion events
-# discarded when XI2 >= 2.2 is present, which is every modern system). A missed
-# or racing XI2 registration leaves a window rendering but mouse-dead, seen
-# intermittently in the JUCE 9 standalone on Linux (resolved by relaunch). The
-# only feature XInput2 buys is multitouch, which this plugin doesn't use, so
-# disable the whole path and keep the battle-tested JUCE 8 behavior.
-if (UNIX AND NOT APPLE)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_USE_XINPUT=0)
 endif()
 
 # Use native macOS title bar for standalone app. On iOS there is no title bar

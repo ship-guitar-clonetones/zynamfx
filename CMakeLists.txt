@@ -67,8 +67,8 @@ include(cmake/cpm.cmake)
 # Download JUCE using CPM
 CPMAddPackage(
     NAME JUCE
-    GIT_TAG 9.0.1
-    VERSION 9.0.1
+    GIT_TAG 9.0.3
+    VERSION 9.0.3
     GITHUB_REPOSITORY juce-framework/JUCE
     SOURCE_DIR ${LIB_DIR}/juce
 )
@@ -323,102 +323,50 @@ if (EXISTS "${_juce_standalone_cpp}")
     endif()
 endif()
 
-# T3K_AUDIO_DEFAULT_SETUP: fix a JUCE 9 regression in
-# AudioDeviceManager::setAudioDeviceSetup. JUCE 8 treated an unset (0) sample
-# rate / buffer size as "use the device defaults" (chooseBestSampleRate /
-# chooseBestBufferSize). JUCE 9.0.1 replaced both with
-# findNearestValue(available, requested), and nearest-to-0 is the device
-# MINIMUM: switching devices with a zeroed setup (our
-# StandaloneAudioSettings::setDevice, and JUCE's own first-boot initialise)
-# opens e.g. a Focusrite on ALSA at 44.1 kHz with a 16-sample period, which
-# the DSP chain cannot survive (observed as a segfault on device pick on
-# Linux). Restore the JUCE 8 semantics for unset values; explicit requests
-# keep JUCE 9's nearest-supported clamping. Also passes the resolved sample
-# rate (not the raw, possibly-0 request) to the post-open buffer-size
-# correction, which stock JUCE 9 gets wrong too. Idempotent configure-time
-# patch, same rationale as the patches above. Cross-platform file, so this
-# applies everywhere. Drop when upstream fixes it.
+# T3K_AUDIO_DEFAULT_SETUP: the default sample rate for an unset (0) request
+# in AudioDeviceManager::setAudioDeviceSetup. JUCE 9.0.3 resolves a 0 rate /
+# buffer to device defaults again (9.0.1 fed the 0 to findNearestValue and
+# opened at the device minimum, a 16-sample ALSA period the chain could not
+# survive), but its default rate is "whatever the device is at now, else
+# 44.1 kHz", and that "current" rate is taken on trust. A device that is
+# not yet open, or reports a rate outside its own list, then lands wherever
+# findNearestValue(44100) falls, which can be below 44.1 kHz. Prefer the
+# lowest rate at or above 44.1 kHz instead, falling back to nearest 48 kHz
+# (the rate the chains run at); the buffer default is the device's own, as
+# upstream. Idempotent configure-time patch, same rationale as the patches
+# above. Cross-platform file, so this applies everywhere.
 set(_juce_adm_cpp "${LIB_DIR}/juce/modules/juce_audio_devices/audio_io/juce_AudioDeviceManager.cpp")
 if (EXISTS "${_juce_adm_cpp}")
     file(READ "${_juce_adm_cpp}" _juce_adm_src)
     if (NOT _juce_adm_src MATCHES "T3K_AUDIO_DEFAULT_SETUP")
         set(_juce_adm_old
-[=[    const auto sampleRate = findNearestValue (Span { currentAudioDevice->getAvailableSampleRates() }, currentSetup.sampleRate);
-    const auto preBufferSize = findNearestValue (Span { currentAudioDevice->getAvailableBufferSizes() }, currentSetup.bufferSize);
+[=[static double getDefaultRequestedSampleRate (AudioIODevice& device)
+{
+    if (const auto current = device.getCurrentSampleRate(); current > 0.0)
+        return current;
 
-    error = currentAudioDevice->open (currentSetup.inputChannels,
-                                      currentSetup.outputChannels,
-                                      sampleRate,
-                                      preBufferSize);
-
-    if (error.isEmpty())
-    {
-        // The available buffer sizes may have changed, if the sample rate has
-        // changed. If so we'll need to reconfigure with a different buffer size.
-        const auto postBufferSize = findNearestValue (Span { currentAudioDevice->getAvailableBufferSizes() }, currentSetup.bufferSize);
-
-        if (preBufferSize != postBufferSize)
-        {
-            error = currentAudioDevice->open (currentSetup.inputChannels,
-                                              currentSetup.outputChannels,
-                                              currentSetup.sampleRate,
-                                              postBufferSize);
-        }
-    }]=])
+    return 44100.0;
+}]=])
         set(_juce_adm_new
-[=[    // T3K_AUDIO_DEFAULT_SETUP: an unset (0) rate/buffer request must mean
-    // "device defaults" (JUCE 8 semantics), never findNearestValue's
-    // nearest-to-0, which is the device minimum (16-sample ALSA periods).
-    const auto t3kResolveSampleRate = [this]
-    {
-        if (currentSetup.sampleRate > 0)
-            return findNearestValue (Span { currentAudioDevice->getAvailableSampleRates() }, currentSetup.sampleRate);
+[=[static double getDefaultRequestedSampleRate (AudioIODevice& device)
+{
+    // T3K_AUDIO_DEFAULT_SETUP: only trust the current rate when the device
+    // lists it; otherwise the lowest rate at or above 44.1 kHz, else the
+    // caller's findNearestValue settles 48 kHz to the closest available.
+    const auto rates = device.getAvailableSampleRates();
 
-        const auto rates = currentAudioDevice->getAvailableSampleRates();
+    if (const auto current = device.getCurrentSampleRate();
+        current > 0.0 && rates.contains (current))
+        return current;
 
-        if (const auto current = currentAudioDevice->getCurrentSampleRate();
-            current > 0 && rates.contains (current))
-            return current;
+    double lowestAbove44 = 0.0;
 
-        double lowestAbove44 = 0.0;
+    for (const auto sr : rates)
+        if (sr >= 44100.0 && (lowestAbove44 < 1.0 || sr < lowestAbove44))
+            lowestAbove44 = sr;
 
-        for (const auto sr : rates)
-            if (sr >= 44100.0 && (lowestAbove44 < 1.0 || sr < lowestAbove44))
-                lowestAbove44 = sr;
-
-        return lowestAbove44 > 0.0 ? lowestAbove44
-                                   : findNearestValue (Span { rates }, 48000.0);
-    };
-
-    const auto t3kResolveBufferSize = [this]
-    {
-        return currentSetup.bufferSize > 0
-             ? findNearestValue (Span { currentAudioDevice->getAvailableBufferSizes() }, currentSetup.bufferSize)
-             : currentAudioDevice->getDefaultBufferSize();
-    };
-
-    const auto sampleRate = t3kResolveSampleRate();
-    const auto preBufferSize = t3kResolveBufferSize();
-
-    error = currentAudioDevice->open (currentSetup.inputChannels,
-                                      currentSetup.outputChannels,
-                                      sampleRate,
-                                      preBufferSize);
-
-    if (error.isEmpty())
-    {
-        // The available buffer sizes may have changed, if the sample rate has
-        // changed. If so we'll need to reconfigure with a different buffer size.
-        const auto postBufferSize = t3kResolveBufferSize();
-
-        if (preBufferSize != postBufferSize)
-        {
-            error = currentAudioDevice->open (currentSetup.inputChannels,
-                                              currentSetup.outputChannels,
-                                              sampleRate,
-                                              postBufferSize);
-        }
-    }]=])
+    return lowestAbove44 > 0.0 ? lowestAbove44 : 48000.0;
+}]=])
         string(REPLACE "${_juce_adm_old}" "${_juce_adm_new}" _juce_adm_src "${_juce_adm_src}")
         if (NOT _juce_adm_src MATCHES "T3K_AUDIO_DEFAULT_SETUP")
             message(FATAL_ERROR
@@ -427,7 +375,7 @@ if (EXISTS "${_juce_adm_cpp}")
                 "anchors in CMakeLists.txt.")
         endif()
         file(WRITE "${_juce_adm_cpp}" "${_juce_adm_src}")
-        message(STATUS "Patched JUCE AudioDeviceManager: unset rate/buffer requests use device defaults, not device minimum")
+        message(STATUS "Patched JUCE AudioDeviceManager: unset sample rate request prefers 44.1 kHz and up, then 48 kHz")
     endif()
 endif()
 
@@ -478,79 +426,15 @@ if (EXISTS "${_juce_alsa_cpp}")
     endif()
 endif()
 
-# T3K_ALSA_INPUT_CHANS_SYNC: ALSAThread::open() fills currentInputChans and
-# inputChannelDataForCallback together in one loop over the *requested* input
-# mask, then widens currentInputChans alone (ensureMinimumNumBitsSet) up to
-# the hardware's channel-count floor afterward - so on a device whose floor
-# is above the request (e.g. fixed at 2 channels, request is 1), the bitset
-# getActiveInputChannels() reports gains a bit with no matching entry in
-# inputChannelDataForCallback. AudioDeviceManager's CallbackMaxSizeEnforcer
-# sizes its stored channel vectors from that (now too-wide) bitset, fills in
-# only the channels the real callback array actually has, and forwards the
-# rest as null/stale pointers - which is what then reads out of bounds
-# reliably on any device reconfiguration. Confirmed live with gdb: the input
-# open genuinely hands the callback exactly 1 channel pointer while
-# getActiveInputChannels() still reports 2. Fix from upstream JUCE PR
-# https://github.com/juce-framework/JUCE/pull/1706 (unmerged as of this
-# writing) - widen the *request* before the fill loop, so the bitset and the
-# channel array agree by construction; drop this patch once it lands.
-# Idempotent configure-time patch, same rationale as the patches above.
-set(_juce_alsa_cpp2 "${LIB_DIR}/juce/modules/juce_audio_devices/native/juce_ALSA_linux.cpp")
-if (EXISTS "${_juce_alsa_cpp2}")
-    file(READ "${_juce_alsa_cpp2}" _juce_alsa_src2)
-    if (NOT _juce_alsa_src2 MATCHES "T3K_ALSA_INPUT_CHANS_SYNC")
-        set(_juce_alsa_old2
-[=[        error.clear();
-        sampleRate = newSampleRate;
-        bufferSize = newBufferSize;
-
-        int maxInputsRequested = inputChannels.getHighestBit() + 1;]=])
-        set(_juce_alsa_new2
-[=[        error.clear();
-        sampleRate = newSampleRate;
-        bufferSize = newBufferSize;
-
-        // T3K_ALSA_INPUT_CHANS_SYNC: widen the *request* before the fill loop
-        // below builds currentInputChans and inputChannelDataForCallback
-        // together, so the two stay in agreement (matches the output path a
-        // few lines below, which already widens before its own fill loop). A
-        // request for no input channels at all is left alone rather than
-        // being widened to the minimum.
-        if (inputChannels.getHighestBit() >= 0)
-            ensureMinimumNumBitsSet (inputChannels, (int) minChansIn);
-
-        int maxInputsRequested = inputChannels.getHighestBit() + 1;]=])
-        string(REPLACE "${_juce_alsa_old2}" "${_juce_alsa_new2}" _juce_alsa_src2 "${_juce_alsa_src2}")
-
-        # The widening used to happen here, after the fill loop; it's now done
-        # to the request before the loop runs instead, so drop the old call.
-        set(_juce_alsa_old2b
-[=[            ensureMinimumNumBitsSet (currentInputChans, (int) minChansIn);
-
-            if (! inputDevice->setParameters ((unsigned int) sampleRate,]=])
-        set(_juce_alsa_new2b
-[=[            if (! inputDevice->setParameters ((unsigned int) sampleRate,]=])
-        string(REPLACE "${_juce_alsa_old2b}" "${_juce_alsa_new2b}" _juce_alsa_src2 "${_juce_alsa_src2}")
-
-        if (NOT _juce_alsa_src2 MATCHES "T3K_ALSA_INPUT_CHANS_SYNC")
-            message(FATAL_ERROR
-                "T3K_ALSA_INPUT_CHANS_SYNC: failed to patch ${_juce_alsa_cpp2}. "
-                "The JUCE source layout likely changed in this version. Update the patch "
-                "anchors in CMakeLists.txt.")
-        endif()
-        file(WRITE "${_juce_alsa_cpp2}" "${_juce_alsa_src2}")
-        message(STATUS "Patched JUCE ALSAThread: widen the input channel request before the callback-array fill loop")
-    endif()
-endif()
-
 # T3K_CALLBACK_ENFORCER_NULL_SAFE: CallbackMaxSizeEnforcer sizes its stored
 # channel vectors from the device's active-channel bitsets in
 # audioDeviceAboutToStart, but only fills in the number of channels the
 # device actually passes to each callback, then forwards the *vector's full
 # size* to the inner callback (AudioProcessorPlayer) regardless. If a
-# device's bitsets and channel counts ever disagree - which they can even
-# with T3K_ALSA_INPUT_CHANS_SYNC applied, for any other AudioIODevice
-# backend with the same class of mismatch - the tail of those vectors still
+# device's bitsets and channel counts ever disagree - JUCE 9.0.3 fixed the
+# ALSA case (the input request is widened to the hardware floor before the
+# callback array is built), but any other AudioIODevice backend with the
+# same class of mismatch is still exposed - the tail of those vectors still
 # holds the null pointers std::vector::resize() default-constructed, and
 # gets forwarded as if they were real channels: AudioProcessorPlayer memcpys
 # from them unconditionally, and LevelMeter::updateLevel dereferences them
