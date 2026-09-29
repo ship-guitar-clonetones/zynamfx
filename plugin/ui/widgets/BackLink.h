@@ -1,6 +1,7 @@
 // "← LABEL" takeover header link (ChainBlock.tsx's ← BLOCK, ToneBrowser.tsx's
 // ← SELECT TONE): a 16px arrow, a 16px gap and the label in 16px mono
-// upper-case on a 1.4 line box. Sizes itself from the label.
+// upper-case on a 1.4 line box. Sizes itself from the label; with no label
+// (the browser's signed-out sign-in page) it is the arrow alone.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>

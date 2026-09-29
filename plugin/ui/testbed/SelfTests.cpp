@@ -177,6 +177,9 @@ struct ScriptedSession : ToneSession {
   void searchTones(const ToneQuery&, int, int, Reply<TonePage> reply) override {
     reply(Result<TonePage>::fail("n/a"));
   }
+  void listTrending(const juce::String&, Reply<std::vector<Tone>> reply) override {
+    reply(Result<std::vector<Tone>>::fail("n/a"));
+  }
   void listTaxonomy(Taxonomy, const juce::String&, Reply<std::vector<TaxonomyEntry>> reply) override {
     reply(Result<std::vector<TaxonomyEntry>>::fail("n/a"));
   }
@@ -188,6 +191,7 @@ struct ScriptedSession : ToneSession {
   void retryFlow() override {}
   void cancelFlow() override {}
   void clearAuthError() override {}
+  void startDeviceFlow() override {}
   void fetchPluginVersion(Reply<juce::var> reply) override { reply(Result<juce::var>::fail("n/a")); }
   AuthFlow flow;
 };
@@ -330,7 +334,7 @@ struct LoopbackServerTests : juce::UnitTest {
       juce::MessageManager::getInstance()->runDispatchLoopUntil(20);
     fetcher.join();
     expectEquals(status.load(), 200);
-    expect(page.contains("return to the TONE3000 plugin"));
+    expect(page.contains("signed in.") && page.contains("return to the TONE3000 Plugin"));
     expectEquals(query, juce::String("code=abc&state=xyz"));
 
     beginTest("one redirect per flow: the listener is gone afterwards");
@@ -533,6 +537,52 @@ struct Tone3000ClientTests : juce::UnitTest {
     expect(anon.ok());
     expectEquals(static_cast<int>(http.sent.size()), 1);
     expect(http.sent[0].authorization.isEmpty());
+
+    beginTest("device authorization: the code pair, with the defaults the response leaves out");
+    http.sent.clear();
+    http.answer = [](const HttpRequest&) {
+      return jsonResponse(200, R"({"device_code":"D1","user_code":"BCDF-GHJK",
+        "verification_uri":"https://www.tone3000.com/activate",
+        "verification_uri_complete":"https://www.tone3000.com/activate?user_code=BCDF-GHJK",
+        "expires_in":600,"interval":5})");
+    };
+    std::optional<DeviceAuthorization> device;
+    client.requestDeviceAuthorization([&](Result<DeviceAuthorization> r) {
+      if (r) device = *r;
+    });
+    expect(device.has_value());
+    expectEquals(device->deviceCode, juce::String("D1"));
+    expectEquals(device->userCode, juce::String("BCDF-GHJK"));
+    expectEquals(device->verificationUriComplete, juce::String("https://www.tone3000.com/activate?user_code=BCDF-GHJK"));
+    expectEquals(device->intervalS, 5);
+    expect(http.sent[0].url.endsWith("/api/v1/oauth/device_authorization"));
+    expect(http.sent[0].body == "client_id=pk_test");
+    const auto bare = DeviceAuthorization::fromVar(
+        juce::JSON::parse(R"({"device_code":"D","user_code":"U","verification_uri":"https://t/activate"})"));
+    expect(bare && bare->verificationUriComplete == "https://t/activate" && bare->intervalS == 5 &&
+           bare->expiresInS == 600);
+    expect(!DeviceAuthorization::fromVar(juce::JSON::parse(R"({"user_code":"U"})")).has_value());
+
+    beginTest("device poll: the grant, the server's pending codes as errors, tokens on approval");
+    http.sent.clear();
+    http.answer = [](const HttpRequest&) { return jsonResponse(400, R"({"error":"authorization_pending"})"); };
+    juce::String pollError;
+    client.pollDeviceToken("D1", [&](Result<Tokens> r) { pollError = r ? juce::String() : r.error; });
+    expectEquals(pollError, juce::String("authorization_pending"));
+    expect(http.sent[0].url.endsWith("/api/v1/oauth/token"));
+    expect(http.sent[0].body.contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"));
+    expect(http.sent[0].body.contains("device_code=D1") && http.sent[0].body.contains("client_id=pk_test"));
+    http.answer = [](const HttpRequest&) { return jsonResponse(400, R"({"error":"slow_down"})"); };
+    client.pollDeviceToken("D1", [&](Result<Tokens> r) { pollError = r ? juce::String() : r.error; });
+    expectEquals(pollError, juce::String("slow_down"));
+    http.answer = [](const HttpRequest&) {
+      return jsonResponse(200, R"({"access_token":"A6","refresh_token":"R6","expires_in":3600})");
+    };
+    std::optional<Tokens> granted;
+    client.pollDeviceToken("D1", [&](Result<Tokens> r) {
+      if (r) granted = *r;
+    });
+    expect(granted && granted->access == "A6" && granted->refresh == "R6");
   }
 };
 

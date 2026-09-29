@@ -35,6 +35,20 @@ struct Tokens {
   static std::optional<Tokens> fromTokenResponse(const juce::var& v, juce::int64 nowMs);
 };
 
+// A device authorization (RFC 8628 §3.2): the code the user types at
+// `verificationUri` (or reaches through `verificationUriComplete`, the QR
+// code's target), and how to poll for it.
+struct DeviceAuthorization {
+  juce::String deviceCode;  // the poll's secret, never shown
+  juce::String userCode;    // "BCDF-GHJK"
+  juce::String verificationUri;
+  juce::String verificationUriComplete;
+  int expiresInS = 600;
+  int intervalS = 5;
+
+  static std::optional<DeviceAuthorization> fromVar(const juce::var& v);
+};
+
 class Tone3000Client {
 public:
   // Errors carry the web client's codes / messages ("token_refresh_failed",
@@ -68,6 +82,16 @@ public:
   void exchangeCode(const juce::String& code, const juce::String& codeVerifier, const juce::String& redirectUri,
                     Reply<Tokens> reply);
 
+  // Device flow (RFC 8628)
+  // POST /oauth/device_authorization: a fresh code pair for this client.
+  void requestDeviceAuthorization(Reply<DeviceAuthorization> reply);
+  // One poll of the token endpoint for the device code. Until the user
+  // acts it fails with the server's code, which the caller acts on:
+  // "authorization_pending" (ask again after the interval), "slow_down"
+  // (add 5 s to it), "expired_token", "access_denied". A failure with no
+  // server code ("token_refresh_failed") is a transport error.
+  void pollDeviceToken(const juce::String& deviceCode, Reply<Tokens> reply);
+
   // Authenticated calls
   // Bearer fetch with one retry on 401 (the expiry-check race).
   void fetch(const juce::String& path, const juce::String& method, const juce::String& jsonBody,
@@ -83,6 +107,9 @@ public:
   // A tone listing by its ready-made path (ToneQuery::requestPath): the
   // PaginatedResponse payload.
   void listTones(const juce::String& path, Reply<juce::var> reply);
+  // /tones/trending[?gear=]: the homepage's top-10 feed, `{ data: Tone[] }`.
+  // Needs no session (the signed-out preview), Bearer when there is one.
+  void listTrending(const juce::String& gear, Reply<juce::var> reply);
   // /tags, /makes or /users (creators), most-used first, one page of
   // `pageSize`, narrowed by `query` when non-empty.
   void listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply);
@@ -95,6 +122,9 @@ private:
   void refresh(const juce::String& refreshToken);
   void settleRefresh(Result<juce::String> result);
   void postTokenForm(const juce::StringPairArray& form, Reply<Tokens> reply);
+  // An x-www-form-urlencoded POST to an OAuth endpoint.
+  void postForm(const juce::String& path, const juce::StringPairArray& form,
+                std::function<void(HttpResponse)> onDone);
   void bearerRequest(const juce::String& path, const juce::String& method, const juce::String& jsonBody,
                      const juce::String& token, std::function<void(HttpResponse)> onDone);
   void anonymousRequest(const juce::String& path, const juce::StringPairArray& headers,

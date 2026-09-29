@@ -37,7 +37,11 @@ PluginRoot::PluginRoot(Services& services)
   banner_.onDismiss = [this](const juce::String& id) { services_.banners.dismiss(id); };
 
   // Network-dependent entry points pass the connection gate first.
+  // A plain login lands back on the chain. One sign-in at a time: the
+  // header stays live over the sign-in screen, so a second press is not a
+  // second browser tab.
   header_.onLogin = [this] {
+    if (signInShown()) return;
     services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::plain); });
   };
   header_.onLogout = [this] { logout(); };
@@ -121,29 +125,31 @@ std::unique_ptr<Modal> PluginRoot::openModal(Args&&... args) {
 
 void PluginRoot::restackModals() {
   if (updateNotice_) updateNotice_->toFront(false);
-  if (oauthOverlay_) oauthOverlay_->toFront(false);
   if (connectionModal_) connectionModal_->toFront(false);
 }
 
+// The sign-in screen is up exactly while the flow is not idle; the screen
+// itself follows the phase moves. Posted: the change arrives from inside
+// the button handler that started it.
 void PluginRoot::authFlowChanged() {
   juce::MessageManager::callAsync([self = juce::Component::SafePointer(this)] {
     if (self == nullptr) return;
-    auto& s = self->services_;
-    const auto& flow = s.session.authFlow();
-    if (flow.phase == ToneSession::AuthFlow::Phase::idle) {
-      self->oauthOverlay_.reset();
-      return;
+    const bool inFlight = self->services_.session.authFlow().phase != ToneSession::AuthFlow::Phase::idle;
+    if (inFlight == self->signInShown()) return;
+    if (inFlight) {
+      self->signIn_ = std::make_unique<SignInScreen>(self->services_);
+      // Right above the browser when there is one (it is where a browse
+      // sign-in returns to), else above the faceplate; under a tuner,
+      // Settings and the overlay.
+      juce::Component* below = self->browser_ ? static_cast<juce::Component*>(self->browser_.get())
+                                              : static_cast<juce::Component*>(&self->faceplate_);
+      self->addChildComponent(*self->signIn_, self->getIndexOfChildComponent(below) + 1);
+      self->services_.hints.setHover({});
+    } else {
+      self->signIn_.reset();
     }
-    if (self->oauthOverlay_) {
-      self->oauthOverlay_->setFlow(flow);  // phase moves keep one scrim up
-      return;
-    }
-    auto modal = self->openModal<OAuthOverlay>(flow);
-    modal->onRetry = [&s] { s.session.retryFlow(); };
-    modal->onDismiss = [&s] { s.session.clearAuthError(); };
-    modal->onCancel = [&s] { s.session.cancelFlow(); };
-    self->oauthOverlay_ = std::move(modal);
-    self->restackModals();
+    self->syncTakeovers();
+    self->resized();
   });
 }
 
@@ -340,9 +346,10 @@ void PluginRoot::setBrowserShown(bool shown) {
       services_.loadFlow.clearPendingTargets();
       setBrowserShown(false);
     };
-    // The browser's sign-in gate runs the login flow and returns to this
+    // The browser's sign-in CTAs run the login flow and return to this
     // same browser.
     browser_->onSignIn = [this] {
+      if (signInShown()) return;
       services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::browse); });
     };
     // Right above the faceplate: under a tuner, Settings and the overlay.
@@ -357,10 +364,12 @@ void PluginRoot::setBrowserShown(bool shown) {
 // What a takeover covers is hidden, not left painting underneath: the meters
 // tick at 30 Hz and would otherwise repaint for nothing.
 void PluginRoot::syncTakeovers() {
-  const bool tuner = tunerShown(), browser = browserShown();
-  main_.setVisible(!tuner && !browser);
-  faceplate_.setVisible(tuner || !browser);
-  if (browser_) browser_->setVisible(!tuner);
+  const bool tuner = tunerShown(), browser = browserShown(), signIn = signInShown();
+  const bool column = browser || signIn;  // something covers the whole column
+  main_.setVisible(!tuner && !column);
+  faceplate_.setVisible(tuner || !column);
+  if (browser_) browser_->setVisible(!tuner && !signIn);
+  if (signIn_) signIn_->setVisible(!tuner);
 }
 
 void PluginRoot::closeTunerThen(const std::function<void()>& fn) {
@@ -413,8 +422,7 @@ void PluginRoot::closeSettings() {
 void PluginRoot::resized() {
   overlay_.setBounds(getLocalBounds());
   if (settings_ != nullptr) settings_->setBounds(getLocalBounds());
-  for (auto* modal : {static_cast<ModalLayer*>(updateNotice_.get()), static_cast<ModalLayer*>(oauthOverlay_.get()),
-                      static_cast<ModalLayer*>(connectionModal_.get())})
+  for (auto* modal : {static_cast<ModalLayer*>(updateNotice_.get()), static_cast<ModalLayer*>(connectionModal_.get())})
     if (modal != nullptr) modal->setBounds(getLocalBounds());
 
   // The banner strip, then the content column at its full height; while
@@ -427,6 +435,7 @@ void PluginRoot::resized() {
   if (hintsVisible_) hintBar_.setBounds(column.removeFromBottom(hintH));
   header_.setBounds(column.removeFromTop(PluginHeader::kHeight));
   if (browser_) browser_->setBounds(column);  // the rest, faceplate included
+  if (signIn_) signIn_->setBounds(column);
   faceplate_.setBounds(column.removeFromBottom(Faceplate::kHeight));
   main_.setBounds(column);
   if (tuner_) tuner_->setBounds(column);

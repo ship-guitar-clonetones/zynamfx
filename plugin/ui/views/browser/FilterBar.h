@@ -12,6 +12,11 @@
 // Creators) look their options up as the user types. While a profile filter
 // is set the catalog-only controls dim: the profile streams list by gear
 // alone, so the rest of the query is parked until the profile clears.
+//
+// Signed out (the browser's trending preview) the row is the gear chips
+// alone: the trending feed takes one gear filter and nothing else. The gear
+// pick is the same query field, so it carries over into the search once
+// the user signs in.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -48,6 +53,8 @@ public:
   void refresh() { refreshChips(); }
   // Whether the catalog-only controls are parked behind a profile filter.
   bool profileLocked() const { return query_.profile != Profile::none; }
+  // Gear chips alone (signed out), or the full row.
+  void setGearOnly(bool gearOnly);
 
   // Any filter changed: the browser fetches page 1.
   std::function<void()> onChange;
@@ -60,6 +67,9 @@ private:
   void buildChips();
   void layoutChips();
   void refreshChips();
+  // The profile chip's avatar, once a signed-in user with one is known (the
+  // row may be built signed out and live through the sign-in).
+  void loadAvatar();
   // A filter changed: refresh the row, close any open menu (a press on a
   // chip's × while its menu is up), tell the owner.
   void changed();
@@ -83,6 +93,7 @@ private:
   Services& services_;
   BrowserState& state_;
   ToneQuery& query_;  // state_.query
+  bool gearOnly_ = false;
 
   std::unique_ptr<DragScroller> scroller_;
   juce::Component row_;
@@ -93,6 +104,7 @@ private:
   std::unique_ptr<FilterChip> verified_, profile_;
   std::vector<std::unique_ptr<FilterChip>> gear_;
   ImageLoader::Request avatarRequest_;
+  juce::String avatarUrl_;  // the one requested, if any
   juce::Rectangle<int> divider_;
 
   // The open menu and, for a taxonomy menu, its debounced lookup.

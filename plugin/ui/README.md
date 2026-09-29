@@ -122,8 +122,11 @@ plugin/ui/
                       DbMeter, DotMeter, TextField, DragScroller, …);
                       widgets/form/ is the
                       settings form kit (FormItem layout, rows, controls)
+  vendor/             third-party code carried in-tree, each with its licence:
+                      qrcodegen (Nayuki's QR Code generator, MIT)
   views/              screens, wiring widgets to services: PluginRoot,
-                      PluginHeader, Faceplate, MainScreen, TunerView, …
+                      PluginHeader, Faceplate, MainScreen, TunerView,
+                      SignInScreen, …
     gallery/          ChainView, GalleryLane, ToneTile, AddTile, StereoPanRail
     block/            BlockDetail, BlockCard, BlockInfoPanel, BlockEqView
     browser/          ToneBrowser (the Select tone takeover: search + FilterBar over
@@ -131,7 +134,7 @@ plugin/ui/
                       FilterChip / FilterMenu, ToneCard, Paginator, BrowserPrompt
     settings/         SettingsScreen, PluginSettingsPage, SystemSettingsPage,
                       MidiMapSection, …
-    modals/           ConnectionModal, OAuthOverlay, UpdateNotice
+    modals/           ConnectionModal, UpdateNotice
   testbed/            UiTestbed: Main (--capture/--compare/--selftest/--bench),
                       Host (the root over the mocks, fitted like NativeEditor),
                       MockBackend, MockSession, MockSignal (the bench's moving
@@ -203,21 +206,54 @@ from (`port of KnobControl.tsx`); that is lineage, recorded in
 
 OAuth (PKCE) runs in the system browser. `Tone3000Session::login` starts
 `LoopbackServer` on `127.0.0.1:<ephemeral>`, opens the authorize URL with
-`redirect_uri=http://localhost:<port>/`, and dims the plugin (`OAuthOverlay`
-gains a Cancel button after a few seconds, since the user may never come
-back from the browser). The redirect lands on the loopback, is checked
-against the PKCE `state`, exchanged for tokens (`Tone3000Client`, persisted
-in `UiPrefs`, refreshed transparently with a single in-flight refresh and one
-401 retry). A login started from the tone browser (`LoginIntent::browse`)
-lands back in it. Closing the editor stops the listener; a stale callback is
-ignored.
+`redirect_uri=http://localhost:<port>/`, and the plugin shows the
+`SignInScreen` for as long as the session's `AuthFlow` is not idle: a full
+page in the tone browser's slot (Select Tone mockup 13301:49740) with a
+bare ← that abandons the sign-in, the loading dots over "Sign in on your
+browser then return here.", and under them the two ways round a browser
+that did not open. Every entry point (account menu, info panel, the tone
+browser's CTAs) shows this same screen; only the landing differs: a login
+started from the tone browser (`LoginIntent::browse`) comes back to it,
+the rest land on the chain.
+
+The browser launch is best effort — JUCE reports success once the launcher
+forks, so a browser that refuses to start (Chromium under root on Linux)
+gives no error — hence the fallbacks, always offered:
+
+- **Copy link** puts the authorize URL (`AuthFlow::authorizeUrl`) on the
+  clipboard, for any browser on this machine: the loopback listener takes
+  the redirect from whichever browser completes it.
+- **Use your phone** runs the device flow (RFC 8628, `startDeviceFlow`):
+  `POST /oauth/device_authorization`, then a QR code (`widgets/QrCode`)
+  of `verification_uri_complete` beside the `user_code` and where to type
+  it, while the session polls `/oauth/token` with the device-code grant at
+  the server's interval (`slow_down` adds 5 s; `expired_token`,
+  `access_denied` and the code's own deadline end it with a reason and a
+  New code button).
+
+The launch is attempted on every platform regardless; only a launcher that
+refuses outright is reported (`AuthFlow::browserProblem`, the copy says
+so), and a browser that starts and dies simply leaves the user on the
+fallbacks. All paths feed the same token store: the first to finish signs
+in and the others are dropped. The redirect is checked against the PKCE `state` and
+exchanged for tokens (`Tone3000Client`, persisted in `UiPrefs`, refreshed
+transparently with a single in-flight refresh and one 401 retry). Closing
+the editor stops the listener and the polling; a stale callback is ignored.
 
 ## The tone browser (Select tone)
 
 The screen takes over everything under the header (meters, chain and
 faceplate; `PluginRoot` mounts it only while open and hides what it
-covers). The whole screen needs a session: signed out it shows only the
-sign-in prompt. Signed in, `ToneBrowser` pins a search box and a `FilterBar`
+covers). Searching needs a session. Signed out, the screen is a preview
+instead: the gear chips alone (`FilterBar::setGearOnly`) over TONE3000's
+trending feed (`ToneSession::listTrending`, `GET /tones/trending[?gear=]`,
+which takes no token; the feed's one filter is the gear, and the pick is
+the same `ToneQuery::gear` so it carries into the search after sign-in),
+with a `BrowserPrompt` CTA under the cards ("Discover a zillion more tones."
+/ "Sign in or create free account"). A card click opens the sign-in page
+(the bare `←` back to the cards, the prompt centred); either button runs the
+browse-intent login, which lands back on this same screen signed in
+(`browser-signed-out*`). Signed in, `ToneBrowser` pins a search box and a `FilterBar`
 above the card grid and the `Paginator` below it; the grid scrolls between
 the two, fading out under each, and asks `ToneSession::searchTones` for one
 page at a time. The ← row zooms with the window; the body under it does
@@ -229,9 +265,11 @@ fit at the default width (`browser-zoom-wide`, `browser-zoom-three-up`,
 
 - `BrowserState` (`services/`, one per editor) is what the screen keeps
   between visits: the `ToneQuery`, whether the filter row is unfolded, the
-  page and the page's results. The browser is mounted only while open, so
-  coming back renders the last page at once with no fetch; it refreshes on
-  the next search, filter change or page turn. Closing the editor forgets it.
+  page and the page's results (flagged when they are the signed-out
+  trending feed, so a return across a sign-in or out fetches instead). The
+  browser is mounted only while open, so coming back renders the last page
+  at once with no fetch; it refreshes on the next search, filter change or
+  page turn. Closing the editor forgets it.
 - `ToneQuery` (model) is the one place the filters live: text, sort, gear,
   format, tags / makes / creators, calibrated, verified, profile. It builds
   the API path itself (`requestPath`): `/tones/search` with the query string,

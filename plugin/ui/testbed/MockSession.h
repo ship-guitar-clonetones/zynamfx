@@ -26,6 +26,9 @@ public:
   // (`api.search`); a profile filter answers with the suite's 3-page slice
   // of them (`api.gated`).
   void searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) override;
+  // The fixture tones of the gear (all of them when none), at most ten, in
+  // fixture order (`api.trending`).
+  void listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) override;
   // The names carried by `apiTones` (their tags, makes and creators),
   // narrowed by the text (`api.taxonomy`).
   void listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) override;
@@ -33,17 +36,22 @@ public:
   void selectTone(int toneId, Done done) override;
   void ensureNativeAuth(Done done) override;
 
-  // Login honours `api.authorize: 'stall'` (the browser never comes back:
-  // the scrim stays up). The initial phase comes from the suite's `query`:
-  // `?code=` lands as returning (with `api.token: 'stall'` it stays there),
-  // `?t3k-nav-error=1` as the failed-navigation error, and `?canceled=true`
-  // with a `browse` login intent lands in the tone browser.
+  // Login honours `api.authorize`: 'stall' (the browser never comes back:
+  // the sign-in screen stays up) and 'browser-failed' (the same, with the
+  // browser reported as not opened). The initial phase comes from the
+  // suite's `query`: `?code=` lands as returning (with `api.token: 'stall'`
+  // it stays there), `?t3k-nav-error=1` as the failed-navigation error, and
+  // `?canceled=true` with a `browse` login intent lands in the tone browser.
   void login(LoginIntent intent) override;
   void logout() override;
   const AuthFlow& authFlow() const override { return flow_; }
   void retryFlow() override { login(LoginIntent::plain); }
   void cancelFlow() override;
   void clearAuthError() override;
+  // The device code answers a beat later (`api.device`: 'stall' never
+  // answers, 'error' fails to get one, 'expired' gets one that has expired,
+  // 'approve' signs in a beat after showing it).
+  void startDeviceFlow() override;
 
   // `offlineAfterLoad` cuts the network; probes never accuse anyone.
   bool online() const override { return !offline_; }
@@ -59,6 +67,8 @@ private:
   void answer(const char* group, Reply<T> reply, std::function<Result<T>()> fallback);
 
   void setFlow(AuthFlow::Phase phase, juce::String error = {});
+  // Signed in: the flow closes and a browse-intent login opens the browser.
+  void finishSignIn();
   // The fixture tones that satisfy the catalog part of `query`.
   std::vector<Tone> matching(const ToneQuery& query) const;
 
@@ -68,6 +78,7 @@ private:
   bool offline_;
   juce::var gatedPage_;
   AuthFlow flow_;
+  LoginIntent intent_ = LoginIntent::plain;
   juce::var user_;
   juce::var apiTones_;
   juce::var api_;

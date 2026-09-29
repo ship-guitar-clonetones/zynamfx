@@ -11,7 +11,10 @@
 namespace t3k::ui {
 
 namespace {
-constexpr const char* kSignInHeading = "Sign in to search zillions of tones on TONE3000.";
+// The preview's copy (Select Tone mockups, signed out): the CTA under the
+// trending cards, and the page a card click lands on.
+constexpr const char* kTrendingFooterCopy = "Discover a zillion more tones.";
+constexpr const char* kSignInHeading = "Sign in to see your tones and discover a zillion new ones.";
 constexpr const char* kSignInLabel = "Sign in or create free account";
 constexpr const char* kFetchError = "Failed to load tones from TONE3000.";
 constexpr const char* kPickError = "Failed to load that tone. Please try again.";
@@ -74,6 +77,7 @@ ToneBrowser::ToneBrowser(Services& services)
     : services_(services),
       state_(services.browser),
       back_("Select Tone", help::Key::closeToneBrowser),
+      signInBack_({}, help::Key::browserBackToTrending),
       body_(std::make_unique<Body>(*this)),
       filters_(services, services.browser),
       scroller_(std::make_unique<DragScroller>(DragScroller::Axis::vertical)),
@@ -83,6 +87,8 @@ ToneBrowser::ToneBrowser(Services& services)
     if (onClose) onClose();
   };
   addAndMakeVisible(back_);
+  signInBack_.onClick = [this] { setSignInPageShown(false); };
+  addChildComponent(signInBack_);
   addAndMakeVisible(*body_);
 
   search_.setPlaceholder(juce::String::fromUTF8("Search\xe2\x80\xa6"));
@@ -111,8 +117,10 @@ ToneBrowser::ToneBrowser(Services& services)
 
   services_.session.addListener(this);
   services_.zoom.addListener(this);
-  // Back to the page this screen was left on; a fresh visit fetches.
-  if (state_.result && !signedOut()) {
+  // Back to the page this screen was left on, so long as it is the same
+  // kind of page (a signed-in search page, or the signed-out trending feed);
+  // a fresh visit, or one across a sign-in / out, fetches.
+  if (state_.result && state_.resultIsTrending == signedOut() && !authPending()) {
     loading_ = false;
     rebuildCards();
     rebuildBody();
@@ -127,7 +135,12 @@ ToneBrowser::~ToneBrowser() {
 }
 
 // State
-void ToneBrowser::sessionChanged() { fetch(); }
+void ToneBrowser::sessionChanged() {
+  // Signed in from the sign-in page: it is done with; signed out: the
+  // preview starts on its cards.
+  signInPage_ = false;
+  fetch();
+}
 
 void ToneBrowser::authFlowChanged() {
   // Held back during an OAuth return; the fetch goes out once it clears.
@@ -157,15 +170,10 @@ void ToneBrowser::fetch() {
   // loading state; authFlowChanged reruns this once it clears.
   if (authPending()) return;
 
-  // Signed out: the gate alone (a fetch would only fail with
+  // Signed out: the trending preview (a search would only fail with
   // not_authenticated and trip the client's re-auth callback).
   if (signedOut()) {
-    fetchScope_.reset();
-    state_.result.reset();
-    loading_ = false;
-    error_ = false;
-    rebuildCards();
-    rebuildBody();
+    fetchTrending();
     return;
   }
 
@@ -174,8 +182,28 @@ void ToneBrowser::fetch() {
   error_ = false;
   rebuildBody();
   services_.session.searchTones(state_.query, state_.page, kPageSize, fetchScope_.wrap([this](ui::Result<TonePage> r) {
-    if (r) pageLoaded(std::move(*r.value));
-    else pageFailed();
+    if (r) {
+      state_.resultIsTrending = false;
+      pageLoaded(std::move(*r.value));
+    } else {
+      pageFailed();
+    }
+  }));
+}
+
+// The trending feed is one unpaginated page (the API's top 10 for the
+// gear), so it lands as a TonePage and the grid needs to know nothing.
+void ToneBrowser::fetchTrending() {
+  fetchScope_.reset();
+  loading_ = true;
+  error_ = false;
+  rebuildBody();
+  services_.session.listTrending(state_.query.gear, fetchScope_.wrap([this](ui::Result<std::vector<Tone>> r) {
+    if (!r) return pageFailed();
+    TonePage page;
+    page.data = std::move(*r.value);
+    state_.resultIsTrending = true;
+    pageLoaded(std::move(page));
   }));
 }
 
@@ -187,9 +215,11 @@ void ToneBrowser::pageLoaded(TonePage page) {
   // Jump to the top whenever fresh results land (page turn / filter).
   scroller_->setViewPosition(0, 0);
   const auto& result = *state_.result;
-  help::announce(result.data.empty() ? juce::String(emptyCopy())
-                                     : juce::String(result.data.size()) + " tones, page " + juce::String(result.page) +
-                                           " of " + juce::String(result.totalPages));
+  if (result.data.empty()) help::announce(emptyCopy());
+  else if (state_.resultIsTrending) help::announce(juce::String(result.data.size()) + " trending tones");
+  else
+    help::announce(juce::String(result.data.size()) + " tones, page " + juce::String(result.page) + " of " +
+                   juce::String(result.totalPages));
 }
 
 void ToneBrowser::pageFailed() {
@@ -213,7 +243,16 @@ void ToneBrowser::pick(const Tone& tone) {
   }));
 }
 
+void ToneBrowser::setSignInPageShown(bool shown) {
+  if (shown == signInPage_) return;
+  signInPage_ = shown;
+  rebuildBody();
+  scroller_->setViewPosition(0, 0);
+  if (shown) help::announce(kSignInHeading);
+}
+
 const char* ToneBrowser::emptyCopy() const {
+  if (state_.resultIsTrending) return "No trending tones of this type right now. Try another.";
   if (state_.query.text.isNotEmpty()) return "No tones match. Try a different search or fewer filters.";
   switch (state_.query.profile) {
     case Profile::none: return "No tones match. Try fewer filters.";
@@ -231,6 +270,12 @@ void ToneBrowser::rebuildCards() {
   for (const auto& tone : state_.result->data) {
     auto card = std::make_unique<ToneCard>(services_.images, tone);
     card->onClick = [this, id = tone.id] {
+      // Loading a tone needs the session: signed out, a card is the way to
+      // the sign-in page.
+      if (preview()) {
+        setSignInPageShown(true);
+        return;
+      }
       const auto it = std::find_if(cards_.begin(), cards_.end(), [id](const auto& c) { return c->tone().id == id; });
       if (it != cards_.end()) pick((*it)->tone());
     };
@@ -240,19 +285,28 @@ void ToneBrowser::rebuildCards() {
 }
 
 void ToneBrowser::rebuildBody() {
-  const bool gate = gated();
+  const bool previewing = preview();
+  if (!previewing) signInPage_ = false;  // the page belongs to the preview
+  const bool signInPage = signInPage_;
   const bool showError = error_ && !loading_;
   const bool hasCards = state_.result && !state_.result->data.empty();
 
-  // The search controls exist only for a session. A profile filter's
-  // stream searches titles alone.
-  search_.setVisible(!gate);
-  filters_.setVisible(!gate);
+  // The header row: ← SELECT TONE closes the browser; the sign-in page has
+  // the bare ← back to the cards instead.
+  back_.setVisible(!signInPage);
+  signInBack_.setVisible(signInPage);
+
+  // The search box exists only for a session; signed out the filter row is
+  // the gear chips alone (the trending feed's one filter). A profile
+  // filter's stream searches titles alone.
+  search_.setVisible(!previewing);
+  filters_.setGearOnly(previewing);
+  filters_.setVisible(!signInPage);
   search_.setHelpText(help::text(filters_.profileLocked() ? help::Key::browserSearchProfile : help::Key::browserSearch));
 
-  // Body prompt: the sign-in gate, or the fetch error with Try again.
+  // Body prompt: the sign-in page, or the fetch error with Try again.
   bodyPrompt_.reset();
-  if (gate) {
+  if (signInPage) {
     bodyPrompt_ = std::make_unique<BrowserPrompt>(true, kSignInHeading, kCopyMaxWidth, makeFilledButton(kSignInLabel));
     bodyPrompt_->button().onClick = [this] {
       if (onSignIn) onSignIn();
@@ -263,13 +317,25 @@ void ToneBrowser::rebuildBody() {
   }
   if (bodyPrompt_) content_->addAndMakeVisible(*bodyPrompt_);
 
+  // The preview's CTA closes the list once the feed has answered (it stays
+  // put under the dimmed cards while another gear loads).
+  footerPrompt_.reset();
+  if (previewing && !signInPage && !showError && (hasCards || !loading_)) {
+    footerPrompt_ =
+        std::make_unique<BrowserPrompt>(true, kTrendingFooterCopy, kCopyMaxWidth, makeFilledButton(kSignInLabel));
+    footerPrompt_->button().onClick = [this] {
+      if (onSignIn) onSignIn();
+    };
+    content_->addAndMakeVisible(*footerPrompt_);
+  }
+
   // First load (nothing to dim yet): dots alone. Nothing found: the copy.
-  dots_.setVisible(!gate && !showError && !hasCards && loading_);
-  content_->emptyCopy = !gate && !showError && !hasCards && !loading_ ? emptyCopy() : juce::String();
+  dots_.setVisible(!signInPage && !showError && !hasCards && loading_);
+  content_->emptyCopy = !signInPage && !showError && !hasCards && !loading_ ? emptyCopy() : juce::String();
 
   // Cards stay mounted while a new page loads, dimmed and inert under the
   // busy overlay. Other cards dim while one pick resolves.
-  const bool cardsVisible = !gate && !showError && hasCards;
+  const bool cardsVisible = !signInPage && !showError && hasCards;
   for (auto& card : cards_) {
     card->setVisible(cardsVisible);
     const bool picking = pickingId_ && *pickingId_ == card->tone().id;
@@ -285,7 +351,7 @@ void ToneBrowser::rebuildBody() {
     gridBusy_.reset();
   }
 
-  const bool paginate = !gate && !error_ && state_.result && state_.result->totalPages > 1;
+  const bool paginate = !signInPage && !error_ && state_.result && state_.result->totalPages > 1;
   paginator_.setVisible(paginate);
   if (paginate) {
     paginator_.set(state_.page, state_.result->totalPages);
@@ -305,6 +371,7 @@ void ToneBrowser::resized() {
   const int w = getWidth();
   const int colW = std::min(kColumnWidth, w);
   back_.setTopLeftPosition((w - colW) / 2, kPadTop);
+  signInBack_.setTopLeftPosition((w - colW) / 2, kPadTop);
   const int top = kPadTop + BackLink::kHeight;
   const int h = std::max(0, getHeight() - top);
 
@@ -326,7 +393,10 @@ void ToneBrowser::layoutBody() {
   if (search_.isVisible()) {
     y += kHeaderGap;
     search_.setBounds(colX, y, colW, kSearchHeight);
-    y += kSearchHeight + kHeaderGap;
+    y += kSearchHeight;
+  }
+  if (filters_.isVisible()) {
+    y += kHeaderGap;
     filters_.setColumn({colX, y, colW, FilterBar::kHeight});
     y += FilterBar::kHeight;
   }
@@ -368,7 +438,11 @@ void ToneBrowser::layoutContent() {
   // Tone grid / empty state / prompt.
   y += kContentPadTop;
   if (bodyPrompt_) {
-    bodyPrompt_->setBounds(colX, y, colW, bodyPrompt_->heightFor(colW));
+    // The sign-in page's prompt sits in the middle of the body (the
+    // mockup centres it); the error prompt tops the column as the cards do.
+    const int promptH = bodyPrompt_->heightFor(colW);
+    if (signInPage_) y = std::max(y, (scroller_->getHeight() - promptH) / 2);
+    bodyPrompt_->setBounds(colX, y, colW, promptH);
     y += bodyPrompt_->getHeight();
   } else if (dots_.isVisible()) {
     dots_.setTopLeftPosition(colX + (colW - dots_.getWidth()) / 2, y + kDotsPadY);
@@ -400,6 +474,13 @@ void ToneBrowser::layoutContent() {
     }
     y = juce::roundToInt(rowY - kGridGap);
     if (gridBusy_) gridBusy_->setBounds(colX, gridTop, colW, y - gridTop);
+  }
+
+  // The preview's CTA under the list (its own padding parts it from the
+  // last row).
+  if (footerPrompt_) {
+    footerPrompt_->setBounds(colX, y, colW, footerPrompt_->heightFor(colW));
+    y += footerPrompt_->getHeight();
   }
 
   y += kContentPadBottom;
