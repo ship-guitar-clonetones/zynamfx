@@ -112,17 +112,61 @@ void Tone3000Client::exchangeCode(const juce::String& code, const juce::String& 
   });
 }
 
-void Tone3000Client::postTokenForm(const juce::StringPairArray& form, Reply<Tokens> reply) {
+std::optional<DeviceAuthorization> DeviceAuthorization::fromVar(const juce::var& v) {
+  if (!v.isObject()) return std::nullopt;
+  DeviceAuthorization d;
+  d.deviceCode = v["device_code"].toString();
+  d.userCode = v["user_code"].toString();
+  d.verificationUri = v["verification_uri"].toString();
+  d.verificationUriComplete = v["verification_uri_complete"].toString();
+  if (d.deviceCode.isEmpty() || d.userCode.isEmpty() || d.verificationUri.isEmpty()) return std::nullopt;
+  if (d.verificationUriComplete.isEmpty()) d.verificationUriComplete = d.verificationUri;
+  d.expiresInS = static_cast<int>(v.getProperty("expires_in", d.expiresInS));
+  d.intervalS = juce::jmax(1, static_cast<int>(v.getProperty("interval", d.intervalS)));
+  return d;
+}
+
+void Tone3000Client::requestDeviceAuthorization(Reply<DeviceAuthorization> reply) {
+  juce::StringPairArray form;
+  form.set("client_id", key_);
+  postForm("/api/v1/oauth/device_authorization", form, [cb = std::move(reply)](HttpResponse response) {
+    if (!response.ok()) {
+      const auto err = response.json()["error"].toString();
+      cb(Result<DeviceAuthorization>::fail(err.isNotEmpty() ? err : juce::String("device_authorization_failed")));
+      return;
+    }
+    if (auto d = DeviceAuthorization::fromVar(response.json())) cb(Result<DeviceAuthorization>::ok(*d));
+    else cb(Result<DeviceAuthorization>::fail("device_authorization_failed"));
+  });
+}
+
+void Tone3000Client::pollDeviceToken(const juce::String& deviceCode, Reply<Tokens> reply) {
+  juce::StringPairArray form;
+  form.set("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
+  form.set("device_code", deviceCode);
+  form.set("client_id", key_);
+  postTokenForm(form, std::move(reply));
+}
+
+void Tone3000Client::postForm(const juce::String& path, const juce::StringPairArray& form,
+                              std::function<void(HttpResponse)> onDone) {
   HttpRequest request;
-  request.url = juce::URL(origin_ + "/api/v1/oauth/token");
+  request.url = juce::URL(origin_ + path);
   request.method = "POST";
   request.contentType = "application/x-www-form-urlencoded";
   juce::StringArray pairs;
   for (const auto& key : form.getAllKeys())
     pairs.add(juce::URL::addEscapeChars(key, true) + "=" + juce::URL::addEscapeChars(form[key], true));
   request.body = pairs.joinIntoString("&");
-  http_.send(std::move(request), [self = juce::WeakReference<Tone3000Client>(this), cb = std::move(reply)](
+  http_.send(std::move(request), [self = juce::WeakReference<Tone3000Client>(this), fin = std::move(onDone)](
                                      HttpResponse response) {
+    if (self != nullptr) fin(std::move(response));
+  });
+}
+
+void Tone3000Client::postTokenForm(const juce::StringPairArray& form, Reply<Tokens> reply) {
+  postForm("/api/v1/oauth/token", form, [self = juce::WeakReference<Tone3000Client>(this), cb = std::move(reply)](
+                                            HttpResponse response) {
     if (self == nullptr) return;
     if (!response.ok()) {
       const auto err = response.json()["error"].toString();
@@ -255,6 +299,16 @@ void Tone3000Client::setFavorite(int toneId, bool favorite, Reply<bool> reply) {
 
 void Tone3000Client::listTones(const juce::String& path, Reply<juce::var> reply) {
   getJson(path, "listTones", std::move(reply));
+}
+
+void Tone3000Client::listTrending(const juce::String& gear, Reply<juce::var> reply) {
+  juce::String path = "/api/v1/tones/trending";
+  if (gear.isNotEmpty()) path << "?gear=" << juce::URL::addEscapeChars(gear, true);
+  fetchOptionalAuth(path, {}, [cb = std::move(reply)](Result<HttpResponse> r) {
+    if (!r) return cb(Result<juce::var>::fail(r.error));
+    if (!r->ok()) return cb(Result<juce::var>::fail("listTrending failed: " + juce::String(r->status)));
+    cb(Result<juce::var>::ok(r->json()));
+  });
 }
 
 void Tone3000Client::listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply) {

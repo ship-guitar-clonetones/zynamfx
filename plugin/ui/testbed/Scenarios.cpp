@@ -151,12 +151,62 @@ const std::map<juce::String, Drive>& drives() {
          unhover(root);
        }},
       {"load-update-notice", [](PluginRoot&, MockBackend&) { wait(300); }},
+      // Sign-in screen. The account menu's Login hands off to the (mock)
+      // browser; the phases after that come from the scenario's `api`.
       {"load-oauth-leaving",
        [](PluginRoot& root, MockBackend&) {
          clickByHelp(root, "Account:");
          wait(100);
          if (auto* login = buttonNamed(root, "Login")) click(root, *login);
          wait(300);
+         unhover(root);
+       }},
+      {"load-oauth-browser-failed",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Account:");
+         wait(100);
+         if (auto* login = buttonNamed(root, "Login")) click(root, *login);
+         wait(300);
+         unhover(root);
+       }},
+      {"load-oauth-copied",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Account:");
+         wait(100);
+         if (auto* login = buttonNamed(root, "Login")) click(root, *login);
+         wait(300);
+         if (auto* copy = buttonNamed(root, "Copy link")) click(root, *copy);
+         wait(200);
+         unhover(root);
+       }},
+      {"load-oauth-device-requesting",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Account:");
+         wait(100);
+         if (auto* login = buttonNamed(root, "Login")) click(root, *login);
+         wait(300);
+         if (auto* phone = buttonNamed(root, "Use your phone")) click(root, *phone);
+         wait(300);
+         unhover(root);
+       }},
+      {"load-oauth-device",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Account:");
+         wait(100);
+         if (auto* login = buttonNamed(root, "Login")) click(root, *login);
+         wait(300);
+         if (auto* phone = buttonNamed(root, "Use your phone")) click(root, *phone);
+         wait(400);
+         unhover(root);
+       }},
+      {"load-oauth-device-expired",
+       [](PluginRoot& root, MockBackend&) {
+         clickByHelp(root, "Account:");
+         wait(100);
+         if (auto* login = buttonNamed(root, "Login")) click(root, *login);
+         wait(300);
+         if (auto* phone = buttonNamed(root, "Use your phone")) click(root, *phone);
+         wait(400);
          unhover(root);
        }},
       // Tone browser. Chips carry their filter's help copy; menu rows are
@@ -193,6 +243,54 @@ const std::map<juce::String, Drive>& drives() {
        [](PluginRoot& root, MockBackend&) {
          clickByHelp(root, "Verified:");
          wait(400);
+       }},
+      // Signed out: the trending preview. The gear chips are the only
+      // filters; a card leads to the sign-in page; the CTA closes the list.
+      {"browser-signed-out-gear",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* chip = buttonNamed(root, "Pedal")) click(root, *chip);
+         wait(400);
+       }},
+      {"browser-signed-out-empty",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* chip = buttonNamed(root, "Spaces")) click(root, *chip);
+         wait(400);
+         unhover(root);
+       }},
+      {"browser-signed-out-footer",
+       [](PluginRoot& root, MockBackend&) {
+         // The browser's vertical DragScroller, run to its end.
+         auto* scroller = find(root, [](juce::Component& c) {
+           auto* v = dynamic_cast<DragScroller*>(&c);
+           return v != nullptr && v->getViewedComponent() != nullptr &&
+                  v->getViewedComponent()->getHeight() > v->getHeight();
+         });
+         if (auto* v = dynamic_cast<DragScroller*>(scroller)) v->setViewPosition(0, v->getViewedComponent()->getHeight());
+         wait(300);
+       }},
+      // The CTA signs in (the mock's login is instant) with browse intent:
+      // the same screen turns into the search, filter row and all.
+      {"browser-signed-out-signed-in",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* cta = buttonNamed(root, "Sign in or create free account")) click(root, *cta);
+         wait(500);
+         unhover(root);
+       }},
+      {"browser-signed-out-card",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* card = buttonNamed(root, "'02 Vox AC30/6 Top Boost")) click(root, *card);
+         wait(400);
+         unhover(root);
+       }},
+      // The card page's CTA with a browser that never comes back: the
+      // sign-in screen takes over the browser (← returns to it).
+      {"browser-signed-out-signing-in",
+       [](PluginRoot& root, MockBackend&) {
+         if (auto* card = buttonNamed(root, "'02 Vox AC30/6 Top Boost")) click(root, *card);
+         wait(300);
+         if (auto* cta = buttonNamed(root, "Sign in or create free account")) click(root, *cta);
+         wait(300);
+         unhover(root);
        }},
       {"browser-profile-menu",
        [](PluginRoot& root, MockBackend&) {

@@ -27,7 +27,9 @@ enum class Key {
   // Tone browser
   browserSearch, browserSearchProfile, browserMoreFilters, browserFewerFilters, browserVerified, browserProfile, browserGear,
   browserSort, browserFormat, browserTags, browserMakes, browserCreators, browserCalibrated,
-  browserClearFilter, browserProfileLocked, browserCalibratedIr,
+  browserClearFilter, browserProfileLocked, browserCalibratedIr, browserBackToTrending,
+  // Sign-in screen
+  signInBack, signInCopyLink, signInPhone, signInNewCode, signInRetry, signInDismiss,
   // Chain gallery
   addTile, closeToneBrowser, copyBlock, pasteBlock, loadFileTile, loadFolderTile, blockPower,
   retryLoad, swapTone, removeBlock, panLeft, panRight, panLink, monoSum, panMonoSum, soloLeft,

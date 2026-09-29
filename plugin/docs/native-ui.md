@@ -98,10 +98,11 @@ TONE3000Processor ──► ProcessorBackend : ui::Backend ◄── MockBackend
                  ├─ AppBanner (window grows first, then the strip appears)
                  ├─ middle: ChainView | ChainBlockView | TunerView
                  ├─ Faceplate (knobs, SpreadControls, AlignControls)
-                 │  (ToneBrowser takes over middle + Faceplate while open)
+                 │  (ToneBrowser takes over middle + Faceplate while open;
+                 │   SignInScreen takes the same slot while a sign-in runs)
                  ├─ HintBar
                  └─ OverlayLayer: Settings, ConnectionModal, UpdateNotice,
-                    OAuthOverlay, popovers (TileMenu, ImageDeckPanel, …), Toast
+                    popovers (TileMenu, ImageDeckPanel, …), Toast
 ```
 
 Ownership: `NativeEditor` owns `Services` then `PluginRoot`; components hold
@@ -254,10 +255,11 @@ components do) and dismisses on outside pointer-down or Escape through a
 root `MouseListener` (`useDismissable`). `ModalLayer` is the modal base
 (blurred scrim + centred content, every press swallowed); `ScrimMessage` is
 the card-less column (glyph or dots, copy, pill row) the connection modal
-and OAuth overlay share. `PluginRoot` owns one instance of each modal and
-rebuilds it from its store on the next message-loop turn (a store change
-usually arrives from inside the modal's own button handler), stacked update
-notice → OAuth overlay → connection modal as in `Plugin.tsx`.
+uses. `PluginRoot` owns one instance of each modal and rebuilds it from its
+store on the next message-loop turn (a store change usually arrives from
+inside the modal's own button handler), stacked update notice → connection
+modal as in `Plugin.tsx`. A sign-in in flight is not a modal but a page:
+`SignInScreen` takes the tone browser's slot (see the UI README, "Sign-in").
 
 ### 5.8 Scrolling
 `DragScroller` wraps `juce::Viewport` with scrollbars hidden, one axis, wheel →
@@ -520,7 +522,7 @@ build until Phase 11 flipped the default).
 | 7 | Block detail | `ChainBlockView`, `BlockInfoPanel`, `ModelSelect`, `BlockEqView`, `EqSliders`, `SpectrumBackdrop`, EQ math | `block-*`, `eq-*` scenarios |
 | 8 | Tuner + banners + toast + modals | `TunerView`, `AppBanner` choreography (window grows, then slides), `Toast`, `ModalLayer` + blur, `UpdateNotice`, `ConnectionModal`, `OAuthOverlay`, `ConnectionGate`, `UpdateCheck` | `main-tuner-*`, `banner-*`, `chrome-toast-*`, `load-offline-*`, `load-oauth-*`, `load-update-notice` scenarios; `--selftest` green |
 | 9 | Settings | `widgets/form/*`, `SettingsScreen`, `PluginSettingsPage`, `SystemSettingsPage`, `MidiMapSection`, `MidiInputsSection`, `InputChannelPicker`, `core/MidiCatalog`, subpixel form layout (§5.4) | `settings-*` scenarios at the ~1 % glyph floor |
-| 10 | TONE3000 | `Tone3000Client`, `Tone3000Session`, `ImageLoader`, PKCE `OAuth` + `LoopbackServer`, `OAuthOverlay` with Cancel, `ToneBrowser`, `Avatar`, tone load flow (`ToneLoadFlow`) incl. retry/cancel/network-error paths | `browser-*`, `oauth-*` scenarios; live login + select against tone3000.com |
+| 10 | TONE3000 | `Tone3000Client`, `Tone3000Session`, `ImageLoader`, PKCE `OAuth` + `LoopbackServer`, `SignInScreen` (copy link + device-flow fallbacks), `ToneBrowser`, `Avatar`, tone load flow (`ToneLoadFlow`) incl. retry/cancel/network-error paths | `browser-*`, `oauth-*` scenarios; live login + select against tone3000.com |
 | 11 | Switch-over | `T3K_NATIVE_UI` default ON, CI builds both, `README`/`ui/README` updated, `plugin/ui/README.md` written, dead webview-only UI helpers removed from the native path | full scenario suite green on macOS; Windows/Linux/iOS builds pass |
 
 Status: phases 0-11 are done, and so is §11. At switch-over the full

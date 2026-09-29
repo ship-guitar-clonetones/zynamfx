@@ -153,6 +153,15 @@ std::map<Key, String> buildTable() {
   t[Key::browserProfileLocked] =
       U("Unavailable while a profile filter is set: your own tones list by title and gear only. Clear the profile to use it.");
   t[Key::browserCalibratedIr] = U("Not for impulse responses: cabinets and spaces carry no calibration data.");
+  t[Key::browserBackToTrending] = U("Back: to the trending tones.");
+
+  // Sign-in screen
+  t[Key::signInBack] = U("Back: stop signing in and return.");
+  t[Key::signInCopyLink] = U("Copy link: copy the sign-in link to paste into any browser on this machine.");
+  t[Key::signInPhone] = U("Use your phone: sign in on another device with a code, no browser needed here.");
+  t[Key::signInNewCode] = U("New code: get a fresh code for your phone.");
+  t[Key::signInRetry] = U("Try again: start the sign-in over.");
+  t[Key::signInDismiss] = U("Dismiss: drop the error and return.");
 
   // Chain gallery
   t[Key::addTile] =

@@ -54,18 +54,37 @@ public:
     virtual void authFlowChanged() {}
   };
 
-  // Where an OAuth redirect stands (useT3kSelect's OAuthPhase). The overlay
-  // dims the whole plugin while one is in flight:
+  // Where a sign-in stands (useT3kSelect's OAuthPhase). The sign-in screen
+  // takes over the plugin while one is in flight:
   //   idle       nothing going on
-  //   leaving    the browser is being sent to tone3000.com
-  //   returning  back with an authorization code; tokens and the picked tone
-  //              are being resolved
+  //   leaving    the browser has been sent to tone3000.com and the loopback
+  //              listener is waiting for it (or a device code is pending)
+  //   returning  back with an authorization code; tokens are being resolved
   //   error      the flow failed; `error` is the user-facing reason, and
   //              retryFlow() restarts whichever flow it was
+  //
+  // While leaving, the screen offers the two ways round a browser that did
+  // not open: `authorizeUrl` to copy into any browser (the loopback listener
+  // takes the redirect from whichever browser completes it), and the device
+  // flow (RFC 8628: a code entered on another device) once
+  // startDeviceFlow() is called. `browserProblem` is set when the launcher
+  // itself refused to open the system browser, so the copy says so.
   struct AuthFlow {
     enum class Phase { idle, leaving, returning, error };
     Phase phase = Phase::idle;
     juce::String error;
+    juce::String authorizeUrl;
+    juce::String browserProblem;
+
+    struct Device {
+      enum class State { requesting, waiting, failed };
+      State state = State::requesting;
+      juce::String userCode;                // "BCDF-GHJK", as shown to the user
+      juce::String verificationUri;         // where to type it
+      juce::String verificationUriComplete;  // the QR code's target
+      juce::String error;                   // failed: why, for the user
+    };
+    std::optional<Device> device;
   };
 
   template <typename T>
@@ -108,6 +127,9 @@ public:
   // One page of the browser's results: GET /tones/search for the query, or
   // the profile filter's GET /tones/{downloaded|favorited|created}.
   virtual void searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) = 0;
+  // The signed-out preview's feed: GET /tones/trending, the homepage's top
+  // 10, narrowed to one gear type when `gear` is set. Needs no session.
+  virtual void listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) = 0;
   // The options a taxonomy filter offers: GET /tags, /makes or /users, the
   // most-used first, narrowed by `text` when given (up to one page).
   virtual void listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) = 0;
@@ -131,11 +153,16 @@ public:
   // Restart whichever flow last left for tone3000.com (the error overlay's
   // Try again).
   virtual void retryFlow() = 0;
-  // Give up waiting for the system browser to come back (the leaving
-  // overlay's Cancel): stop listening and return to idle.
+  // Give up waiting for the system browser to come back (the sign-in
+  // screen's ←): stop listening and return to idle.
   virtual void cancelFlow() = 0;
   // Drop the error without restarting.
   virtual void clearAuthError() = 0;
+  // While leaving: ask TONE3000 for a device code and poll for its
+  // approval alongside the browser (AuthFlow::device follows). Called again
+  // after a failure for a fresh code. Whichever of the two completes first
+  // signs in.
+  virtual void startDeviceFlow() = 0;
 
   // Reachability (useConnectionGate.ts)
   // Instant OS-level check: false means no network interface is up at all.
@@ -181,6 +208,9 @@ public:
   void searchTones(const ToneQuery&, int, int, Reply<TonePage> reply) override {
     reply(Result<TonePage>::fail(kNotSignedIn));
   }
+  void listTrending(const juce::String&, Reply<std::vector<Tone>> reply) override {
+    reply(Result<std::vector<Tone>>::fail(kNotSignedIn));
+  }
   void listTaxonomy(Taxonomy, const juce::String&, Reply<std::vector<TaxonomyEntry>> reply) override {
     reply(Result<std::vector<TaxonomyEntry>>::fail(kNotSignedIn));
   }
@@ -192,6 +222,7 @@ public:
   void retryFlow() override {}
   void cancelFlow() override {}
   void clearAuthError() override {}
+  void startDeviceFlow() override {}
   bool online() const override { return true; }
   void probeSecureConnection(std::function<void(Probe)> reply) override { reply(Probe::inconclusive); }
   void fetchPluginVersion(Reply<juce::var> reply) override { reply(Result<juce::var>::fail(kNotSignedIn)); }

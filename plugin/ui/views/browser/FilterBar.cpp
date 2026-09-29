@@ -121,10 +121,8 @@ void FilterBar::buildChips() {
     query_.profile = Profile::none;
     changed();
   };
-  if (const auto user = services_.session.user(); user && user->avatarUrl.isNotEmpty())
-    services_.images.load(user->avatarUrl, avatarRequest_,
-                          [this](const juce::Image& img) { profile_->leadingAvatar().setImage(img); });
   profile_->leadingAvatar();
+  loadAvatar();
 
   for (const auto& filter : labels::gearFilters()) {
     auto chip = std::make_unique<FilterChip>(filter.label);
@@ -139,7 +137,23 @@ void FilterBar::buildChips() {
   }
 }
 
+void FilterBar::loadAvatar() {
+  const auto user = services_.session.user();
+  if (!user || user->avatarUrl.isEmpty() || user->avatarUrl == avatarUrl_) return;
+  avatarUrl_ = user->avatarUrl;
+  services_.images.load(avatarUrl_, avatarRequest_,
+                        [this](const juce::Image& img) { profile_->leadingAvatar().setImage(img); });
+}
+
 // State
+void FilterBar::setGearOnly(bool gearOnly) {
+  if (gearOnly == gearOnly_) return;
+  gearOnly_ = gearOnly;
+  closeMenu();
+  refreshChips();
+  scroller_->setViewPosition(0, 0);
+}
+
 void FilterBar::changed() {
   closeMenu();
   refreshChips();
@@ -161,6 +175,17 @@ void FilterBar::setExpanded(bool expanded) {
 
 // Every chip's label / active state from the query, then the row.
 void FilterBar::refreshChips() {
+  const auto& gearFilters = labels::gearFilters();
+  for (size_t i = 0; i < gear_.size(); ++i) gear_[i]->setActive(query_.gear == gearFilters[i].id);
+  if (gearOnly_) {
+    // Signed out: nothing but the gear chips exists to the user.
+    for (auto* chip : {toggle_.get(), sort_.get(), format_.get(), tags_.get(), makes_.get(), creators_.get(),
+                       calibrated_.get(), verified_.get(), profile_.get()})
+      chip->setVisible(false);
+    layoutChips();
+    return;
+  }
+  loadAvatar();
   const bool expanded = state_.filtersExpanded;
   const bool locked = profileLocked();
 
@@ -198,24 +223,26 @@ void FilterBar::refreshChips() {
   lockFor(*verified_, locked, help::Key::browserVerified);
   // The avatar is the chip's name: no label until a profile is picked.
   showValue(*profile_, profileChipLabel(query_.profile), "", help::Key::browserProfile);
-  const auto& gearFilters = labels::gearFilters();
-  for (size_t i = 0; i < gear_.size(); ++i) gear_[i]->setActive(query_.gear == gearFilters[i].id);
 
   layoutChips();
 }
 
 // Layout
 void FilterBar::layoutChips() {
-  std::vector<FilterChip*> order = {toggle_.get()};
-  if (state_.filtersExpanded)
-    for (auto* chip : {sort_.get(), format_.get(), tags_.get(), makes_.get(), creators_.get(), calibrated_.get()})
-      order.push_back(chip);
-  order.insert(order.end(), {verified_.get(), profile_.get()});
+  std::vector<FilterChip*> order;
+  if (!gearOnly_) {
+    order.push_back(toggle_.get());
+    if (state_.filtersExpanded)
+      for (auto* chip : {sort_.get(), format_.get(), tags_.get(), makes_.get(), creators_.get(), calibrated_.get()})
+        order.push_back(chip);
+    order.insert(order.end(), {verified_.get(), profile_.get()});
+  }
   for (auto& chip : gear_) order.push_back(chip.get());
 
   // The divider parts the extra filters (or, folded, the button holding
-  // them) from the ones always on show.
-  auto* lastExtra = state_.filtersExpanded ? calibrated_.get() : toggle_.get();
+  // them) from the ones always on show; the gear-only row has none.
+  FilterChip* lastExtra = gearOnly_ ? nullptr : state_.filtersExpanded ? calibrated_.get() : toggle_.get();
+  divider_ = {};
   int x = kBleed;
   for (auto* chip : order) {
     chip->setVisible(true);

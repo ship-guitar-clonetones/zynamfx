@@ -9,8 +9,18 @@ namespace t3k::ui {
 namespace {
 constexpr const char* kNoKeyMessage =
     "TONE3000 publishable key not configured. Set T3K_PUBLISHABLE_KEY at build time.";
-constexpr const char* kBrowserFailed = "Could not open your browser to reach TONE3000.";
 constexpr const char* kLoopbackFailed = "Could not start the local sign-in listener. Try again.";
+// The launcher itself refused (AuthFlow::browserProblem; the screen adds
+// what to do instead). A browser that starts and then dies reports nothing
+// here: that is what the always-on fallbacks are for.
+constexpr const char* kBrowserFailed = "Your browser couldn't be opened.";
+// The device flow's outcomes (AuthFlow::Device::error).
+constexpr const char* kDeviceCodeFailed = "Couldn't get a code from TONE3000.";
+constexpr const char* kDeviceExpired = "That code expired.";
+constexpr const char* kDeviceDenied = "Sign-in was declined on the other device.";
+constexpr const char* kDeviceFailed = "TONE3000 stopped waiting for that code.";
+// RFC 8628 §3.5: slow_down adds 5 s to the poll interval.
+constexpr int kSlowDownMs = 5000;
 // Only the first model: native stores and loads the active model; the
 // detail card pages the full catalog separately.
 constexpr int kFirstModelOnly = 1;
@@ -121,6 +131,16 @@ void Tone3000Session::searchTones(const ToneQuery& query, int page, int pageSize
   });
 }
 
+void Tone3000Session::listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) {
+  client_.listTrending(gear, [cb = std::move(reply)](Result<juce::var> r) {
+    if (!r) return cb(Result<std::vector<Tone>>::fail(r.error));
+    std::vector<Tone> tones;
+    if (const auto* rows = (*r)["data"].getArray())
+      for (const auto& t : *rows) tones.push_back(Tone::parse(t));
+    cb(Result<std::vector<Tone>>::ok(std::move(tones)));
+  });
+}
+
 void Tone3000Session::listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) {
   // Tags and makes filter by name; creators by username (what the API
   // matches `creators` against), so that is the name offered.
@@ -186,12 +206,20 @@ void Tone3000Session::selectTone(int toneId, Done done) {
 }
 
 // Flows
+// A phase move keeps the leaving state's extras (URL, browser problem,
+// device code) only while it stays leaving.
 void Tone3000Session::setFlow(AuthFlow::Phase phase, juce::String error) {
-  flow_ = {phase, std::move(error)};
+  if (phase != AuthFlow::Phase::leaving) flow_ = {};
+  flow_.phase = phase;
+  flow_.error = std::move(error);
   notifyAuthFlowChanged();
 }
 
 void Tone3000Session::clearAuthError() { setFlow(AuthFlow::Phase::idle); }
+
+juce::String Tone3000Session::openBrowser(const juce::String& url) {
+  return juce::URL(url).launchInDefaultBrowser() ? juce::String() : juce::String(kBrowserFailed);
+}
 
 void Tone3000Session::login(LoginIntent intent) {
   if (config_.publishableKey.isEmpty()) {
@@ -199,7 +227,8 @@ void Tone3000Session::login(LoginIntent intent) {
     return;
   }
   lastIntent_ = intent;
-  // Dim the plugin at once; the browser takes a beat to come up.
+  stopDeviceFlow();
+  // The sign-in screen comes up at once; the browser takes a beat.
   setFlow(AuthFlow::Phase::leaving);
   if (!loopback_.start()) {
     setFlow(AuthFlow::Phase::error, kLoopbackFailed);
@@ -209,11 +238,12 @@ void Tone3000Session::login(LoginIntent intent) {
   redirectUri_ = loopback_.redirectUri();
   juce::StringPairArray extra;
   extra.set("menubar", "true");
-  const auto url = oauth::authorizeUrl(config_.apiOrigin, config_.publishableKey, redirectUri_, *pkce_, extra);
-  if (!juce::URL(url).launchInDefaultBrowser()) {
-    loopback_.stop();
-    setFlow(AuthFlow::Phase::error, kBrowserFailed);
-  }
+  flow_.authorizeUrl = oauth::authorizeUrl(config_.apiOrigin, config_.publishableKey, redirectUri_, *pkce_, extra);
+  // Best effort, whatever the platform: a browser that would not open is
+  // no dead end, since the listener is up for a pasted link and the screen
+  // offers the device flow either way.
+  flow_.browserProblem = openBrowser(flow_.authorizeUrl);
+  notifyAuthFlowChanged();
 }
 
 void Tone3000Session::retryFlow() { login(lastIntent_); }
@@ -221,6 +251,7 @@ void Tone3000Session::retryFlow() { login(lastIntent_); }
 void Tone3000Session::cancelFlow() {
   loopback_.stop();
   pkce_.reset();
+  stopDeviceFlow();
   if (flow_.phase == AuthFlow::Phase::leaving || flow_.phase == AuthFlow::Phase::returning)
     setFlow(AuthFlow::Phase::idle);
 }
@@ -231,7 +262,7 @@ void Tone3000Session::handleCallback(const juce::String& query) {
   const auto pkce = *pkce_;
   pkce_.reset();  // single use
   loopback_.stop();
-  const bool wantsBrowser = lastIntent_ == LoginIntent::browse;
+  stopDeviceFlow();  // the browser won the race
 
   const auto cb = oauth::Callback::parse(query, pkce.state);
   switch (cb.kind) {
@@ -245,18 +276,94 @@ void Tone3000Session::handleCallback(const juce::String& query) {
       break;
   }
   setFlow(AuthFlow::Phase::returning);
-  client_.exchangeCode(cb.code, pkce.verifier, redirectUri_, scope_.wrap([this, wantsBrowser](Result<Tokens> tokens) {
+  client_.exchangeCode(cb.code, pkce.verifier, redirectUri_, scope_.wrap([this](Result<Tokens> tokens) {
     if (flow_.phase != AuthFlow::Phase::returning) return;  // cancelled meanwhile
     if (!tokens) {
       setFlow(AuthFlow::Phase::error, tokens.error);
       return;
     }
-    client_.setTokens(*tokens);
-    notifySessionChanged();
-    refreshUser();
-    if (wantsBrowser && onAuthenticated) onAuthenticated();
-    setFlow(AuthFlow::Phase::idle);
+    finishSignIn(*tokens);
   }));
+}
+
+void Tone3000Session::finishSignIn(const Tokens& tokens) {
+  const bool wantsBrowser = lastIntent_ == LoginIntent::browse;
+  loopback_.stop();
+  pkce_.reset();
+  stopDeviceFlow();
+  client_.setTokens(tokens);
+  notifySessionChanged();
+  refreshUser();
+  if (wantsBrowser && onAuthenticated) onAuthenticated();
+  setFlow(AuthFlow::Phase::idle);
+}
+
+// Device flow
+void Tone3000Session::startDeviceFlow() {
+  if (flow_.phase != AuthFlow::Phase::leaving) return;
+  stopDeviceFlow();
+  flow_.device = AuthFlow::Device{};
+  notifyAuthFlowChanged();
+  client_.requestDeviceAuthorization(scope_.wrap([this](Result<DeviceAuthorization> r) {
+    if (flow_.phase != AuthFlow::Phase::leaving || !flow_.device ||
+        flow_.device->state != AuthFlow::Device::State::requesting)
+      return;  // cancelled, or superseded by a newer request
+    if (!r) {
+      failDevice(kDeviceCodeFailed);
+      return;
+    }
+    deviceCode_ = r->deviceCode;
+    devicePollMs_ = r->intervalS * 1000;
+    deviceDeadlineMs_ = juce::Time::currentTimeMillis() + static_cast<juce::int64>(r->expiresInS) * 1000;
+    auto& device = *flow_.device;
+    device.state = AuthFlow::Device::State::waiting;
+    device.userCode = r->userCode;
+    device.verificationUri = r->verificationUri;
+    device.verificationUriComplete = r->verificationUriComplete;
+    notifyAuthFlowChanged();
+    devicePoll_.start(devicePollMs_, [this] { pollDevice(); });
+  }));
+}
+
+void Tone3000Session::pollDevice() {
+  if (juce::Time::currentTimeMillis() >= deviceDeadlineMs_) {
+    failDevice(kDeviceExpired);
+    return;
+  }
+  client_.pollDeviceToken(deviceCode_, scope_.wrap([this](Result<Tokens> tokens) {
+    if (flow_.phase != AuthFlow::Phase::leaving || !flow_.device ||
+        flow_.device->state != AuthFlow::Device::State::waiting)
+      return;
+    if (tokens) {
+      finishSignIn(*tokens);
+      return;
+    }
+    if (tokens.error == "slow_down") devicePollMs_ += kSlowDownMs;
+    // Pending, slow_down and a transport hiccup all mean: ask again later.
+    if (tokens.error == "authorization_pending" || tokens.error == "slow_down" ||
+        tokens.error == "token_refresh_failed") {
+      devicePoll_.start(devicePollMs_, [this] { pollDevice(); });
+      return;
+    }
+    failDevice(tokens.error == "expired_token"  ? kDeviceExpired
+               : tokens.error == "access_denied" ? kDeviceDenied
+                                                 : kDeviceFailed);
+  }));
+}
+
+void Tone3000Session::failDevice(juce::String why) {
+  devicePoll_.cancel();
+  deviceCode_.clear();
+  if (!flow_.device) return;
+  flow_.device->state = AuthFlow::Device::State::failed;
+  flow_.device->error = std::move(why);
+  notifyAuthFlowChanged();
+}
+
+void Tone3000Session::stopDeviceFlow() {
+  devicePoll_.cancel();
+  deviceCode_.clear();
+  flow_.device.reset();
 }
 
 // Reachability

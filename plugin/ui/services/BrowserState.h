@@ -21,6 +21,10 @@ struct BrowserState {
   // The page last shown, rendered again at once on return; it only
   // refreshes on the user's next search, filter change or page turn.
   std::optional<TonePage> result;
+  // Whether `result` is the signed-out preview's trending feed (one page,
+  // narrowed by `query.gear` alone) rather than a page of the signed-in
+  // search: a return reuses it only while the session state still matches.
+  bool resultIsTrending = false;
   // Creator avatar URLs by name, from every Creators lookup so far. A
   // picked creator pins to the top of the menu whatever the search shows;
   // this keeps its avatar once the lookup no longer returns it.

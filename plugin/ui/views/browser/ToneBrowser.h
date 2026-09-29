@@ -13,11 +13,14 @@
 // column, the cards keep their 1x height, widen to fill two columns, and go
 // three-up once three fit at kMinCardWidth.
 //
-// The whole screen needs a TONE3000 session: signed out it shows only the
-// sign-in prompt, and a browse-intent login comes straight back here. Every
-// query goes to the TONE3000 API through the session; native is only
-// involved for the final load (selectTone), which the parent completes by
-// closing the browser.
+// Searching needs a TONE3000 session. Signed out, the screen is a preview
+// instead: the gear chips alone over TONE3000's trending feed (GET
+// /tones/trending, which takes no token), and under the cards a sign-in
+// call to action. A card leads to a sign-in page of its own (the ← alone,
+// the prompt centred); either CTA starts the browse-intent login, which
+// comes straight back here signed in. Signed in, every query goes to the
+// TONE3000 API through the session; native is only involved for the final
+// load (selectTone), which the parent completes by closing the browser.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -67,7 +70,7 @@ public:
 
   // ← back to the chain.
   std::function<void()> onClose;
-  // The sign-in gate: the browse-intent login that comes back here.
+  // The preview's sign-in CTAs: the browse-intent login that comes back here.
   std::function<void()> onSignIn;
 
   void paint(juce::Graphics& g) override;
@@ -89,7 +92,8 @@ private:
   void zoomChanged() override { resized(); }
 
   bool signedOut() const { return !services_.session.authenticated(); }
-  bool gated() const { return signedOut() && !authPending(); }
+  // The signed-out screen: the trending preview, or its sign-in page.
+  bool preview() const { return signedOut() && !authPending(); }
   float zoom() const { return static_cast<float>(services_.zoom.factor()); }
   // Pre-mounted while an OAuth return still resolves its code exchange.
   bool authPending() const { return services_.session.authPending(); }
@@ -97,10 +101,15 @@ private:
   void submit();
   void queryChanged();
   void setPage(int page);
+  // The search page for the query (signed in), or the trending feed for
+  // its gear (signed out).
   void fetch();
+  void fetchTrending();
   void pageLoaded(TonePage page);
   void pageFailed();
   void pick(const Tone& tone);
+  // The preview's card click: the sign-in page, and ← back to the cards.
+  void setSignInPageShown(bool shown);
   void rebuildCards();
   void rebuildBody();
   void layoutBody();
@@ -116,10 +125,12 @@ private:
   // This visit's state; the rest is in state_.
   bool loading_ = true;
   bool error_ = false;
+  bool signInPage_ = false;  // the preview's card-click page
   std::optional<int> pickingId_;
   juce::String pickError_;
 
-  BackLink back_;
+  BackLink back_;         // ← SELECT TONE: closes the browser
+  BackLink signInBack_;   // the sign-in page's bare ←: back to the cards
 
   // The 1x body: pinned search box and filter row, the scrolled column, the
   // paginator pinned under it.
@@ -130,7 +141,8 @@ private:
   std::unique_ptr<Content> content_;
   std::vector<std::unique_ptr<ToneCard>> cards_;
   std::unique_ptr<BusyOverlay> gridBusy_;
-  std::unique_ptr<BrowserPrompt> bodyPrompt_;  // the sign-in gate, or the fetch error
+  std::unique_ptr<BrowserPrompt> bodyPrompt_;    // the sign-in page, or the fetch error
+  std::unique_ptr<BrowserPrompt> footerPrompt_;  // the preview's CTA under the cards
   LoadingDots dots_;
   Paginator paginator_;
 };

@@ -4,6 +4,14 @@
 // access token. The webview's full-page redirect is gone, so the values the
 // web parked in sessionStorage across it (login intent, PKCE) are plain
 // fields here.
+//
+// Opening the browser is best effort: JUCE's launch reports success once
+// the launcher process forks, so a browser that refuses to start (Chromium
+// under root on Linux, say) would leave the user waiting on nothing. So
+// the sign-in screen always carries the authorize URL to copy into any
+// browser, and the device flow (RFC 8628) polls for a code entered on a
+// phone. All three paths feed the same loopback / token endpoints, so the
+// first to finish signs in and the others are dropped.
 #pragma once
 
 #include <juce_core/juce_core.h>
@@ -19,6 +27,7 @@
 #include "UiPrefs.h"
 #include "backend/Backend.h"
 #include "core/AsyncScope.h"
+#include "core/DelayedCall.h"
 
 namespace t3k::ui {
 
@@ -47,6 +56,7 @@ public:
   void listToneModels(int toneId, const juce::String& format, Reply<std::vector<Model>> reply) override;
   void setToneFavorite(int toneId, bool favorite, Done done) override;
   void searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) override;
+  void listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) override;
   void listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) override;
   void selectTone(int toneId, Done done) override;
   void ensureNativeAuth(Done done) override;
@@ -57,6 +67,7 @@ public:
   void retryFlow() override;
   void cancelFlow() override;
   void clearAuthError() override;
+  void startDeviceFlow() override;
 
   bool online() const override;
   void probeSecureConnection(std::function<void(Probe)> reply) override;
@@ -65,6 +76,13 @@ public:
 private:
   void setFlow(AuthFlow::Phase phase, juce::String error = {});
   void handleCallback(const juce::String& query);
+  // Tokens landed (from either path): adopt them and close the flow.
+  void finishSignIn(const Tokens& tokens);
+  // Send the system browser to `url`; "" on success, else why not.
+  static juce::String openBrowser(const juce::String& url);
+  void pollDevice();
+  void failDevice(juce::String why);
+  void stopDeviceFlow();
   // Tone + its first loadable model (what native loads).
   void fetchToneAndModels(int toneId, Reply<Tone> reply);
   void pushToken(const juce::String& token);
@@ -83,6 +101,14 @@ private:
   juce::String redirectUri_;
   // The intent of the flow in flight / last left for (retryFlow reruns it).
   LoginIntent lastIntent_ = LoginIntent::plain;
+
+  // The device flow in flight: its secret, the poll cadence and the code's
+  // own deadline (a poll that never reaches the server would otherwise wait
+  // on a code the server has long forgotten).
+  juce::String deviceCode_;
+  int devicePollMs_ = 0;
+  juce::int64 deviceDeadlineMs_ = 0;
+  DelayedCall devicePoll_;
 };
 
 }  // namespace t3k::ui

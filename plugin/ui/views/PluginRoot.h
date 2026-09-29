@@ -1,7 +1,7 @@
 // Top-level native UI (port of Plugin.tsx): header, meters + chain (or the
-// tuner takeover), faceplate (the tone browser takes over both), hint bar,
-// and the overlay layer for popovers, the toast, banners and modals. Laid
-// out in design space
+// tuner takeover), faceplate (the tone browser and the sign-in screen take
+// over both), hint bar, and the overlay layer for popovers, the toast,
+// banners and modals. Laid out in design space
 // (1024 x 578 + chrome strips); the shell scales the whole thing.
 //
 // The chrome strips grow the window instead of squishing the 578px core, so
@@ -38,12 +38,12 @@
 #include "HintBar.h"
 #include "MainScreen.h"
 #include "PluginHeader.h"
+#include "SignInScreen.h"
 #include "ToastView.h"
 #include "TunerView.h"
 #include "browser/ToneBrowser.h"
 #include "core/DelayedCall.h"
 #include "modals/ConnectionModal.h"
-#include "modals/OAuthOverlay.h"
 #include "modals/UpdateNotice.h"
 #include "settings/SettingsScreen.h"
 #include "services/Services.h"
@@ -83,6 +83,10 @@ public:
   // hides it until the tuner closes.
   void setBrowserShown(bool shown);
   bool browserShown() const { return browser_ != nullptr; }
+  // The sign-in screen takes the same slot for as long as a sign-in is in
+  // flight (it follows the session's AuthFlow), over the browser when that
+  // is what started it, so the browser is there again on return.
+  bool signInShown() const { return signIn_ != nullptr; }
 
   // The Settings takeover covers the whole window (chrome strips included)
   // under the overlay layer; mounted only while open. Banner actions and the
@@ -109,8 +113,7 @@ private:
   void authFlowChanged() override;
   void componentMovedOrResized(juce::Component& parent, bool moved, bool resized) override;
   // Modals stack in the overlay layer (Plugin.tsx z-order): update notice,
-  // then the OAuth overlay, then the connection modal on top, all above
-  // popovers and the toast.
+  // then the connection modal on top, all above popovers and the toast.
   template <typename Modal, typename... Args>
   std::unique_ptr<Modal> openModal(Args&&... args);
   void restackModals();
@@ -125,7 +128,8 @@ private:
   // Loading a preset / resetting replaces the chain: leave any takeover.
   void showChainThen(const std::function<void()>& fn);
   void logout();
-  // Which of main screen, faceplate and browser show under the takeovers.
+  // Which of main screen, faceplate, browser and sign-in screen show under
+  // the takeovers.
   void syncTakeovers();
 
   Services& services_;
@@ -133,6 +137,7 @@ private:
   HintBar hintBar_;
   MainScreen main_;  // meters + chain gallery
   std::unique_ptr<ToneBrowser> browser_;
+  std::unique_ptr<SignInScreen> signIn_;
   std::unique_ptr<TunerView> tuner_;
   std::unique_ptr<SettingsScreen> settings_;
   Faceplate faceplate_;
@@ -140,7 +145,6 @@ private:
   juce::Component overlay_;
   ToastView toast_;
   std::unique_ptr<UpdateNotice> updateNotice_;
-  std::unique_ptr<OAuthOverlay> oauthOverlay_;
   std::unique_ptr<ConnectionModal> connectionModal_;
   HintTracker hintTracker_;
   bool hintsVisible_ = true;

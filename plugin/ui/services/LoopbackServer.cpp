@@ -8,13 +8,35 @@ namespace {
 constexpr int kAcceptPollMs = 250;
 constexpr int kReadTimeoutMs = 3000;
 
-const char* kLandingPage =
-    "<!doctype html><html><head><meta charset=\"utf-8\"><title>TONE3000</title>"
-    "<style>body{margin:0;background:#000;color:#fff;font:16px Arial,sans-serif;display:flex;"
-    "align-items:center;justify-content:center;height:100vh;text-align:center}</style></head>"
-    "<body><div><p>You can return to the TONE3000 plugin.</p>"
-    "<p style=\"color:#a1a1aa;font-size:14px\">This window can be closed.</p></div>"
-    "<script>window.close()</script></body></html>";
+// The landing page (TONE3000 Web mockup 13301:49954): on black, a 320px
+// card with the theme's hairline border and 32px corners, a green check,
+// "You're signed in." and the close-this-window copy, 24px apart inside
+// 32px padding. The mockup's account pill (avatar + username) is left out:
+// the page goes out the instant the redirect lands, before the code is
+// exchanged, so nobody knows yet who signed in. A redirect without a code
+// (the user backed out, or the server named an error) gets the same card
+// with no check and copy to match.
+juce::String landingPage(bool signedIn) {
+  juce::String page;
+  page << "<!doctype html><html><head><meta charset=\"utf-8\"><title>TONE3000</title>"
+          "<style>"
+          "body{margin:0;min-height:100vh;background:#000;color:#fff;font:16px/1.4 Arial,sans-serif;"
+          "display:flex;align-items:center;justify-content:center;text-align:center}"
+          ".card{box-sizing:border-box;width:320px;padding:32px;border:1px solid rgba(84,84,88,.65);"
+          "border-radius:32px;display:flex;flex-direction:column;align-items:center;gap:24px;"
+          "transform:translateY(-91px)}"
+          "h1{margin:0;font:bold 20px/1.4 Arial,sans-serif}"
+          "p{margin:0}"
+          "</style></head><body><div class=\"card\">";
+  if (signedIn)
+    // Lucide `check`, 48px, Colors/Green.
+    page << "<svg width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00d13b\" stroke-width=\"2\""
+            " stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>";
+  page << "<h1>" << (signedIn ? "You\xe2\x80\x99re signed in." : "Sign-in didn\xe2\x80\x99t finish.") << "</h1>"
+       << "<p>You can close this window and return to the TONE3000 Plugin.</p>"
+          "</div><script>window.close()</script></body></html>";
+  return page;
+}
 
 juce::String httpResponse(int status, const char* reason, const juce::String& body) {
   juce::String head;
@@ -88,9 +110,12 @@ void LoopbackServer::serve(juce::StreamingSocket& client) {
     client.write(reply.toRawUTF8(), static_cast<int>(reply.getNumBytesAsUTF8()));
     return;
   }
-  const auto reply = httpResponse(200, "OK", kLandingPage);
-  client.write(reply.toRawUTF8(), static_cast<int>(reply.getNumBytesAsUTF8()));
   const auto query = target.fromFirstOccurrenceOf("?", false, false);
+  // A code means success as far as the page can tell (the state check and
+  // the exchange come after); the session judges the rest.
+  const bool signedIn = juce::URL("http://localhost/?" + query).getParameterNames().contains("code");
+  const auto reply = httpResponse(200, "OK", landingPage(signedIn));
+  client.write(reply.toRawUTF8(), static_cast<int>(reply.getNumBytesAsUTF8()));
   juce::MessageManager::callAsync([self = juce::WeakReference<LoopbackServer>(this), query] {
     if (self != nullptr && self->onCallback) self->onCallback(query);
   });

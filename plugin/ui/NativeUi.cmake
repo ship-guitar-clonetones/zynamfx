@@ -64,6 +64,9 @@ file(GLOB_RECURSE T3K_UI_SOURCES CONFIGURE_DEPENDS
     "${T3K_UI_DIR}/widgets/*.cpp" "${T3K_UI_DIR}/widgets/*.h"
     "${T3K_UI_DIR}/views/*.cpp"   "${T3K_UI_DIR}/views/*.h"
     "${T3K_UI_DIR}/views/*/*.cpp" "${T3K_UI_DIR}/views/*/*.h"
+    # Third-party code carried in-tree (each with its licence alongside):
+    # Nayuki's QR Code generator (MIT), for the sign-in screen's device code.
+    "${T3K_UI_DIR}/vendor/*/*.cpp" "${T3K_UI_DIR}/vendor/*/*.hpp"
 )
 
 function(t3k_add_native_ui target)
