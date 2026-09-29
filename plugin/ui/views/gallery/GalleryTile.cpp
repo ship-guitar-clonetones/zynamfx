@@ -1,7 +1,6 @@
 #include "GalleryTile.h"
 
 #include "GalleryGeometry.h"
-#include "core/Design.h"
 
 namespace t3k::ui {
 
@@ -84,11 +83,16 @@ void GalleryTile::mouseDown(const juce::MouseEvent& e) {
   // A press that just dismissed the sheet (outside-press) closes it only.
   if (now - menuDismissedMs_ < 100) suppressClickUntilMs_ = now + kSuppressClickMs;
 
-  // Coarse pointer: no contextmenu event, so a held touch opens the sheet
-  // itself, on the system's long-press delay, while the finger is down.
-  if (e.source.isTouch() && design::kCoarsePointer) {
+  // A held touch opens the sheet itself, on the system's long-press delay,
+  // while the finger is down. Any touch, not only coarse-pointer builds: a
+  // Windows tablet is a desktop build with a finger on it, and once the
+  // editor takes touch directly (NativeEditor::usesWindowsMultiTouch) the
+  // OS no longer synthesises a contextmenu press for us. Where a platform
+  // does still turn the hold into a right-click, that path opened the sheet
+  // first and this one leaves it alone.
+  if (e.source.isTouch()) {
     hold_.start(kLongPressMs, [this, at = e.getPosition()] {
-      openMenu(at.translated(0, kLongPressMenuDrop));
+      if (!menuOpen()) openMenu(at.translated(0, kLongPressMenuDrop));
     });
   }
 }
