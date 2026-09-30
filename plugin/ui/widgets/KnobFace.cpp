@@ -79,15 +79,12 @@ void drawFace(juce::Graphics& g, juce::Point<float> c, float s, KnobTone tone) {
 // paint: at 60 drag events a second that is most of a knob's paint time.
 // They are rasterised once per (device size, tone) and blitted; the arc
 // (which sits between them) and the pointer are drawn live. A handful of
-// knob sizes times the display scales in use keeps the cache tiny.
-struct StaticLayers {
-  int devicePx = 0;
-  KnobTone tone = KnobTone::primary;
-  juce::Image base, face;
-};
+// knob sizes times the display scales in use keeps the cache tiny. The
+// cache itself is editor-scoped, not a static (see KnobFaceCache).
+using StaticLayers = KnobFaceCache::Entry;
 
-const StaticLayers& staticLayers(float boxWidth, float pixelScale, KnobTone tone) {
-  static std::vector<StaticLayers> cache;
+const StaticLayers& staticLayers(std::vector<StaticLayers>& cache, float boxWidth, float pixelScale,
+                                 KnobTone tone) {
   static constexpr size_t kMaxEntries = 32;
   const int devicePx = juce::roundToInt(boxWidth * pixelScale * 64.0f);  // 1/64 device px
   for (const auto& e : cache)
@@ -123,7 +120,12 @@ void drawKnobFace(juce::Graphics& g, juce::Rectangle<float> box, float angleDeg,
   const auto c = box.getCentre();
   const auto R = [s](float r) { return r * s; };
   const float pixelScale = bitmap::pixelScale(g);
-  const auto& layers = staticLayers(box.getWidth(), pixelScale, tone);
+  // Pins the shared cache for this paint. Normally the editor's own hold
+  // keeps it alive between paints; with no editor holding it (nothing in
+  // the plugin, but a bare testbed call could) the layers are simply
+  // rebuilt each time: correct, just slow.
+  KnobFaceCacheHold cache;
+  const auto& layers = staticLayers(cache->entries, box.getWidth(), pixelScale, tone);
 
   blit(g, layers.base, box, pixelScale);
 

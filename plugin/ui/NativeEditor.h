@@ -14,10 +14,12 @@
 #include "DarkLookAndFeel.h"
 #include "backend/ProcessorBackend.h"
 #include "core/Design.h"
+#include "core/Fonts.h"
 #include "services/HttpClient.h"
 #include "services/Services.h"
 #include "services/Tone3000Session.h"
 #include "views/PluginRoot.h"
+#include "widgets/KnobFace.h"
 
 namespace t3k::ui {
 
@@ -84,9 +86,9 @@ private:
   struct Trace {
     explicit Trace(const TONE3000Processor& processor);
   } trace_;
-  // Forces the process-wide typefaces to resolve (Fonts.cpp caches them in
-  // statics) and logs it, before PluginRoot's text layout does the same
-  // silently. Declared right before the root.
+  // Forces the shared typefaces to resolve (into fontsHold_'s cache) and
+  // logs it, before PluginRoot's text layout does the same silently.
+  // Declared right before the root.
   struct FontsReady {
     FontsReady();
   };
@@ -96,6 +98,13 @@ private:
   bool loggedFirstPaint_ = false;
 
   TONE3000Processor& processor_;
+  // Keep the UI's rasterised resources alive for as long as any editor
+  // exists, and no longer: on Windows they are Direct2D/DirectWrite-backed
+  // and must be gone before the host unloads the module (see KnobFaceCache
+  // for the DllMain deadlock this prevents). Declared before every member
+  // that draws or lays out text.
+  Fonts::Hold fontsHold_;
+  KnobFaceCacheHold knobFacesHold_;
   // One shared dark theme for JUCE-drawn surfaces (standalone dialogs).
   juce::SharedResourcePointer<DarkLookAndFeel> darkLookAndFeel_;
   juce::SharedResourcePointer<PrefsFile> prefsFile_;

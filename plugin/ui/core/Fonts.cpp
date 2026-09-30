@@ -6,9 +6,15 @@ namespace t3k::ui {
 
 namespace {
 
-// Typefaces are heavyweight and immutable: build each once per process.
+// Typefaces are heavyweight and immutable: build each once per cache
+// lifetime (see Fonts::Cache for why that is not "per process").
 juce::Typeface::Ptr embedded(const char* data, int size) {
   return juce::Typeface::createSystemTypefaceFor(data, static_cast<size_t>(size));
+}
+
+juce::Typeface::Ptr& lazily(juce::Typeface::Ptr& slot, const char* data, int size) {
+  if (slot == nullptr) slot = embedded(data, size);
+  return slot;
 }
 
 // Arial is the web UI's body face and is installed on macOS, Windows and
@@ -23,34 +29,37 @@ bool haveArial() {
   return have;
 }
 
-juce::Typeface::Ptr arimo(bool bold, bool italic) {
-  static const juce::Typeface::Ptr faces[] = {
-      embedded(UiBinaryData::ArimoRegular_ttf, UiBinaryData::ArimoRegular_ttfSize),
-      embedded(UiBinaryData::ArimoBold_ttf, UiBinaryData::ArimoBold_ttfSize),
-      embedded(UiBinaryData::ArimoItalic_ttf, UiBinaryData::ArimoItalic_ttfSize),
-      embedded(UiBinaryData::ArimoBoldItalic_ttf, UiBinaryData::ArimoBoldItalic_ttfSize),
+juce::Typeface::Ptr arimo(Fonts::Cache& cache, bool bold, bool italic) {
+  struct Face { const char* data; int size; };
+  static const Face kFaces[] = {
+      {UiBinaryData::ArimoRegular_ttf, UiBinaryData::ArimoRegular_ttfSize},
+      {UiBinaryData::ArimoBold_ttf, UiBinaryData::ArimoBold_ttfSize},
+      {UiBinaryData::ArimoItalic_ttf, UiBinaryData::ArimoItalic_ttfSize},
+      {UiBinaryData::ArimoBoldItalic_ttf, UiBinaryData::ArimoBoldItalic_ttfSize},
   };
-  return faces[(bold ? 1 : 0) + (italic ? 2 : 0)];
+  const int i = (bold ? 1 : 0) + (italic ? 2 : 0);
+  return lazily(cache.arimo[i], kFaces[i].data, kFaces[i].size);
 }
 
-juce::Typeface::Ptr robotoMono(bool bold) {
-  static const juce::Typeface::Ptr regular =
-      embedded(UiBinaryData::RobotoMonoRegular_ttf, UiBinaryData::RobotoMonoRegular_ttfSize);
-  static const juce::Typeface::Ptr boldFace =
-      embedded(UiBinaryData::RobotoMonoBold_ttf, UiBinaryData::RobotoMonoBold_ttfSize);
-  return bold ? boldFace : regular;
+juce::Typeface::Ptr robotoMono(Fonts::Cache& cache, bool bold) {
+  return bold ? lazily(cache.robotoMono[1], UiBinaryData::RobotoMonoBold_ttf,
+                       UiBinaryData::RobotoMonoBold_ttfSize)
+              : lazily(cache.robotoMono[0], UiBinaryData::RobotoMonoRegular_ttf,
+                       UiBinaryData::RobotoMonoRegular_ttfSize);
 }
 
 }  // namespace
 
 juce::Font Fonts::sans(float px, bool bold, bool italic) {
   const int style = (bold ? juce::Font::bold : 0) | (italic ? juce::Font::italic : 0);
-  const auto options = haveArial() ? juce::FontOptions("Arial", px, style) : juce::FontOptions(arimo(bold, italic));
-  return juce::Font(options.withPointHeight(px));
+  if (haveArial()) return juce::Font(juce::FontOptions("Arial", px, style).withPointHeight(px));
+  Hold cache;
+  return juce::Font(juce::FontOptions(arimo(*cache, bold, italic)).withPointHeight(px));
 }
 
 juce::Font Fonts::mono(float px, bool bold) {
-  return juce::Font(juce::FontOptions(robotoMono(bold)).withPointHeight(px));
+  Hold cache;
+  return juce::Font(juce::FontOptions(robotoMono(*cache, bold)).withPointHeight(px));
 }
 
 juce::Font Fonts::tracked(const juce::Font& font, float em) {

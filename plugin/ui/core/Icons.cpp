@@ -34,6 +34,14 @@ const juce::Drawable* cached(const char* svg, juce::Colour colour, float strokeW
   // before the map exists so their counters always outlive it.
   static const bool countersFirst = (juce::DrawablePath{}, juce::DrawableComposite{}, true);
   juce::ignoreUnused(countersFirst);
+  // A process-lifetime static is only safe here because these Drawables are
+  // plain path data (DrawablePath / DrawableComposite), nothing GPU-backed.
+  // If this cache ever holds rasterised juce::Images, typefaces or anything
+  // else Direct2D/DirectWrite-backed, it must become an editor-scoped
+  // SharedResourcePointer resource like KnobFaceCache / Fonts::Cache: on
+  // Windows the CRT destroys statics inside DllMain when the host unloads
+  // the module, and releasing Direct2D resources there deadlocks the host
+  // (see KnobFace.h).
   static std::map<Key, std::unique_ptr<juce::Drawable>> cache;
   auto& slot = cache[{svg, colour.getARGB(), strokeWidth}];
   if (slot == nullptr) {
