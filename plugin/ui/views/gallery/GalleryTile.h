@@ -74,6 +74,9 @@ protected:
 private:
   static constexpr int kLongPressMs = 500;
   static constexpr int kLongPressSlop = 5;
+  // A touch that covers the drag distance within this is a swipe, not a
+  // sort (iOS).
+  static constexpr int kFlickMs = 150;
   // Real px the menu drops below the touch point (the release must land
   // outside it, and the sheet stays readable past the fingertip).
   static constexpr int kLongPressMenuDrop = 24;
