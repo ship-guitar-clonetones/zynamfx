@@ -22,6 +22,20 @@ bool isBluetoothRoute() {
   return false;
 }
 
+bool isBuiltInMicToSpeaker() {
+  AVAudioSessionRouteDescription* route = [AVAudioSession sharedInstance].currentRoute;
+  bool mic = false;
+  for (AVAudioSessionPortDescription* input in route.inputs)
+    if ([input.portType isEqualToString:AVAudioSessionPortBuiltInMic])
+      mic = true;
+  if (!mic)
+    return false;
+  for (AVAudioSessionPortDescription* output in route.outputs)
+    if ([output.portType isEqualToString:AVAudioSessionPortBuiltInSpeaker])
+      return true;
+  return false;
+}
+
 void configureSession() {
   AVAudioSession* session = [AVAudioSession sharedInstance];
 

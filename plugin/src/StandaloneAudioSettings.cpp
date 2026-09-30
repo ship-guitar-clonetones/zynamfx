@@ -61,9 +61,11 @@ juce::var toVar(const juce::StringArray& strings) {
   return arr;
 }
 
+#if !JUCE_IOS
 // Feedback-risk heuristic: a built-in microphone feeding speakers is the one
 // setup where unmuted monitoring squeals. Device names are the only signal
-// the OS gives us; interfaces and headphones never match both sides.
+// the OS gives us; interfaces and headphones never match both sides. (iOS
+// asks the audio route instead: see IosAudioRoute::isBuiltInMicToSpeaker.)
 bool looksLikeMicrophone(const juce::String& name) {
   const auto n = name.toLowerCase();
   return n.contains("microphone") || n.contains("mic array") || n.containsWholeWord("mic");
@@ -73,6 +75,7 @@ bool looksLikeSpeakers(const juce::String& name) {
   const auto n = name.toLowerCase();
   return n.contains("speaker") || n.contains("built-in output");
 }
+#endif
 
 // Stereo-pair label, e.g. "Output 1 + 2". Same common-prefix trimming as
 // JUCE's AudioDeviceSelectorComponent so labels match what users have seen.
@@ -446,8 +449,9 @@ juce::var StandaloneAudioSettings::setHearYourself(bool hear) {
   h->getMuteInputValue().setValue(!hear);
   // A manual toggle pins the choice for the current device: mark this pair as
   // already handled so the auto policy won't fight it. Switching to a
-  // different input/output pair re-evaluates from feedback risk.
-  lastMonitoringKey = currentSetupKey();
+  // different input/output pair re-evaluates from feedback risk (on iOS, so
+  // does a route change that flips the risk; see monitoringKey).
+  lastMonitoringKey = monitoringKey();
   return makeResult({});
 }
 
@@ -843,8 +847,9 @@ void StandaloneAudioSettings::applyMonitoringPolicy() {
   // a pair with no feedback risk (an interface, headphones, etc.) turns Hear
   // Yourself on so the user is heard immediately; a laptop mic + speakers pair
   // stays muted (with the UI banner explaining why). Within the same pair we
-  // don't touch it, so a manual toggle sticks until the user switches devices.
-  const auto key = currentSetupKey();
+  // don't touch it, so a manual toggle sticks until the user switches devices
+  // (on iOS, until the route's feedback risk changes).
+  const auto key = monitoringKey();
   if (key == lastMonitoringKey)
     return;
   lastMonitoringKey = key;
@@ -864,8 +869,12 @@ bool StandaloneAudioSettings::computeFeedbackRisk() const {
   if (device->getActiveInputChannels().isZero() || device->getActiveOutputChannels().isZero())
     return false;
 
+#if JUCE_IOS
+  return IosAudioRoute::isBuiltInMicToSpeaker();
+#else
   const auto setup = dm->getAudioDeviceSetup();
   return looksLikeMicrophone(setup.inputDeviceName) && looksLikeSpeakers(setup.outputDeviceName);
+#endif
 }
 
 juce::var StandaloneAudioSettings::finishApply(const juce::String& error) {
@@ -893,6 +902,18 @@ juce::String StandaloneAudioSettings::currentSetupKey() const {
   const auto setup = dm->getAudioDeviceSetup();
   return dm->getCurrentAudioDeviceType() + "|" + setup.inputDeviceName + "|" +
          setup.outputDeviceName;
+}
+
+juce::String StandaloneAudioSettings::monitoringKey() const {
+  auto key = currentSetupKey();
+#if JUCE_IOS
+  // The iOS device keeps one name ("iOS Audio") whatever is plugged in, so the
+  // pair never changes; key on the feedback risk too, so plugging in
+  // headphones or an interface re-runs the policy the way picking a new pair
+  // does.
+  key << (computeFeedbackRisk() ? "|risk" : "|safe");
+#endif
+  return key;
 }
 
 juce::var StandaloneAudioSettings::getRememberedSetups() const {
