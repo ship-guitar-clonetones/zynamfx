@@ -12,6 +12,19 @@
 namespace t3k::ui {
 
 struct Fonts {
+  // The embedded typefaces, built lazily and kept for reuse (parsing a TTF
+  // is heavyweight). Same lifetime rule as KnobFaceCache: on Windows a
+  // typeface holds DirectWrite/Direct2D factories, so this must not be a
+  // process-lifetime static that the CRT would destroy inside DllMain when
+  // the host unloads the module. It is a SharedResourcePointer resource
+  // that every editor holds instead; sans()/mono() take a short-lived hold
+  // of their own. Message thread only.
+  struct Cache {
+    juce::Typeface::Ptr arimo[4];      // [bold + 2 * italic]
+    juce::Typeface::Ptr robotoMono[2]; // [bold]
+  };
+  using Hold = juce::SharedResourcePointer<Cache>;
+
   // Arial where the OS has it, else the embedded Arimo (weights 600/700 →
   // Bold; Arial has no medium).
   static juce::Font sans(float px, bool bold = false, bool italic = false);

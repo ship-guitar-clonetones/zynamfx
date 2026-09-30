@@ -10,8 +10,10 @@
 #include "MockBackend.h"
 #include "MockSession.h"
 #include "Scenarios.h"
+#include "core/Fonts.h"
 #include "services/Services.h"
 #include "views/PluginRoot.h"
+#include "widgets/KnobFace.h"
 
 namespace t3k::ui::testbed {
 
@@ -30,6 +32,10 @@ public:
 
 private:
   const double zoom_;
+  // As in NativeEditor: pin the shared typefaces and knob layers for the
+  // host's lifetime so paints reuse them instead of rebuilding per call.
+  Fonts::Hold fontsHold_;
+  KnobFaceCacheHold knobFacesHold_;
   UiPrefs prefs;
   MockSession session;
   Services services;
