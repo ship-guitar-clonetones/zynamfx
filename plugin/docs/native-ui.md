@@ -279,7 +279,10 @@ on release, lets go of the pressed state as soon as the pan begins and does
 not click (`TouchScrollTests`, driven through the peer). Controls
 that drag for themselves (knobs, EQ dots and faders, gallery tiles) set
 `setViewportIgnoreDragFlag` so a drag on them never pans the page; the gaps
-around them do.
+around them do. Gallery tiles make one exception: a quick, mostly sideways
+touch swipe (the drag distance within `GalleryTile::kFlickMs`) clears the
+flag mid-gesture and the chain lane pans from the press with the viewport's
+own inertia; a slower drag sorts. Any touch source, on every platform.
 
 ### 5.8a Keyboard focus and accessibility
 Nothing is focused by default, as in a browser, and the host's transport

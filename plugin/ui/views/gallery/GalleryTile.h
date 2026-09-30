@@ -74,6 +74,11 @@ protected:
 private:
   static constexpr int kLongPressMs = 500;
   static constexpr int kLongPressSlop = 5;
+  // A touch that covers the drag distance within this is a swipe that pans
+  // the lane, not a sort. In practice a dwell threshold: 6 px in 150 ms is
+  // only 40 px/s, so what separates the two is whether the finger paused
+  // before it moved.
+  static constexpr int kFlickMs = 150;
   // Real px the menu drops below the touch point (the release must land
   // outside it, and the sheet stays readable past the fingertip).
   static constexpr int kLongPressMenuDrop = 24;
