@@ -1,20 +1,24 @@
-// Startup update check (useUpdateNotice.ts). Pings the version endpoint when
-// the editor opens, and again when the session appears or disappears (a
-// just-signed-in beta tester gets their payload; logout drops a beta-only
-// notice), surfacing an "update available" notice when the published
-// version is newer than the running build. Deliberately best-effort:
+// Update check (useUpdateNotice.ts). Pings the version endpoint when the
+// editor opens, every hour after that while it stays open, and whenever the
+// session appears or disappears (a just-signed-in beta tester gets their
+// payload; logout drops a beta-only notice), surfacing an "update available"
+// notice when the published version is newer than the running build.
+// Deliberately best-effort:
 //
 // - Off entirely unless the build sets T3K_UPDATE_NOTICE (forks skip it).
 // - Never blocks: the reply lands whenever the session gets it.
 // - Any failure (offline, 404, bad payload) is silently ignored.
 //
-// Dismissing the notice snoozes it for 1, 7 or 30 days (per machine). There
-// is no "skip this version": every snooze expires and the notice comes back
-// until the user updates. A snoozed update still shows in Settings
-// (`update()` ignores the snooze).
+// Dismissing the notice snoozes it for 1, 7 or 30 days (per machine). The
+// snooze is UI-only: the endpoint is still polled on the same cadence, and
+// only the modal is held back. There is no "skip this version": every snooze
+// expires and the notice comes back (on the next check) until the user
+// updates. A snoozed update still shows in Settings (`update()` ignores the
+// snooze).
 #pragma once
 
 #include <juce_core/juce_core.h>
+#include <juce_events/juce_events.h>
 
 #include <optional>
 
@@ -28,10 +32,18 @@ struct UpdateInfo {
   juce::String version;
   juce::String messageHtml;
   juce::String url;
+
+  bool operator==(const UpdateInfo& o) const {
+    return version == o.version && messageHtml == o.messageHtml && url == o.url;
+  }
+  bool operator!=(const UpdateInfo& o) const { return !(*this == o); }
 };
 
-class UpdateCheck : private ToneSession::Listener {
+class UpdateCheck : private ToneSession::Listener, private juce::Timer {
 public:
+  // Re-check cadence while the editor stays open.
+  static constexpr int kRecheckMs = 60 * 60 * 1000;
+
   struct Listener {
     virtual ~Listener() = default;
     virtual void updateNoticeChanged() = 0;
@@ -60,6 +72,7 @@ public:
 
 private:
   void sessionChanged() override { check(); }
+  void timerCallback() override { check(); }
   void check();
   juce::int64 snoozeUntil() const;
 

@@ -7,11 +7,16 @@ namespace t3k::ui {
 UpdateCheck::UpdateCheck(ToneSession& session, UiPrefs& prefs, const juce::String& localVersion, bool enabled)
     : session_(session), prefs_(prefs), localVersion_(localVersion), enabled_(enabled) {
   session_.addListener(this);
+  if (!enabled_ || localVersion_.isEmpty()) return;
   // Like the web's mount effect: after the editor has finished coming up.
   juce::MessageManager::callAsync(scope_.wrap([this] { check(); }));
+  startTimer(kRecheckMs);
 }
 
-UpdateCheck::~UpdateCheck() { session_.removeListener(this); }
+UpdateCheck::~UpdateCheck() {
+  stopTimer();
+  session_.removeListener(this);
+}
 
 int UpdateCheck::compareVersions(const juce::String& a, const juce::String& b) {
   const auto parse = [](const juce::String& v) {
@@ -52,8 +57,12 @@ void UpdateCheck::check() {
     auto info = parsePayload(*result);
     if (info && compareVersions(info->version, localVersion_) <= 0) info.reset();
     // A previous (likely beta-gated) payload may no longer be offered.
-    update_ = info;
-    notice_ = info && juce::Time::currentTimeMillis() >= snoozeUntil() ? info : std::nullopt;
+    auto notice = info && juce::Time::currentTimeMillis() >= snoozeUntil() ? info : std::nullopt;
+    // Hourly re-checks usually return the same payload; only a real change
+    // notifies, so an open notice is not torn down and reopened for nothing.
+    if (update_ == info && notice_ == notice) return;
+    update_ = std::move(info);
+    notice_ = std::move(notice);
     listeners_.call([](Listener& l) { l.updateNoticeChanged(); });
   }));
 }

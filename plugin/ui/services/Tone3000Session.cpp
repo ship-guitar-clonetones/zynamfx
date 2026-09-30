@@ -389,7 +389,7 @@ void Tone3000Session::probeSecureConnection(std::function<void(Probe)> reply) {
 }
 
 void Tone3000Session::fetchPluginVersion(Reply<juce::var> reply) {
-  client_.fetchPluginVersion(backend_.uniqueDeviceId(), std::move(reply));
+  client_.fetchPluginVersion(backend_.uniqueDeviceId(), backend_.pluginVersion(), std::move(reply));
 }
 
 }  // namespace t3k::ui

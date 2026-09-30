@@ -324,9 +324,11 @@ void Tone3000Client::listModels(int toneId, int pageSize, int architecture, Repl
   getJson(path, "listModels", std::move(reply));
 }
 
-void Tone3000Client::fetchPluginVersion(const juce::String& deviceId, Reply<juce::var> reply) {
+void Tone3000Client::fetchPluginVersion(const juce::String& deviceId, const juce::String& localVersion,
+                                        Reply<juce::var> reply) {
   juce::StringPairArray headers;
   if (deviceId.isNotEmpty()) headers.set("X-Device-Id", deviceId);
+  if (localVersion.isNotEmpty()) headers.set("X-Plugin-Version", localVersion);
   fetchOptionalAuth("/api/v1/plugin/version", headers, [cb = std::move(reply)](Result<HttpResponse> r) {
     if (!r) return cb(Result<juce::var>::fail(r.error));
     if (!r->ok()) return cb(Result<juce::var>::fail("version check failed: " + juce::String(r->status)));

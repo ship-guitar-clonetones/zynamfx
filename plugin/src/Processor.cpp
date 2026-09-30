@@ -174,6 +174,20 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
         juce::NormalisableRange<float>(0.0f, 1.0f, 0.0001f), defaultValue);
   };
 
+  // Host text for the log-mapped real-unit ranges below (gate release,
+  // transpose tonality). A NormalisableRange with skew lambdas has no
+  // interval, and JUCE's default stringFromValue then prints seven
+  // decimals; a float near 20 kHz only carries about four, so
+  // text -> value -> text drifted in the last digits and clap-validator's
+  // param-conversions test failed. Whole units, like the UI's own readouts
+  // (KnobScale.h), round-trip exactly. Parsing stays JUCE's default
+  // (getFloatValue), so a typed "12.5" still lands on 12.5.
+  const auto wholeUnitText = [](const char* label) {
+    return juce::AudioParameterFloatAttributes()
+        .withLabel(label)
+        .withStringFromValueFunction([](float v, int) { return juce::String(juce::roundToInt(v)); });
+  };
+
   layout.add(normParam("inputLevel", 1, 0.5f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"toneBass", 2}, "toneBass", 0.0f, 10.0f, 5.0f));
@@ -300,7 +314,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
           [](float start, float end, float ms) {
             return std::log(ms / start) / std::log(end / start);
           }),
-      50.0f));
+      50.0f, wholeUnitText("ms")));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"gateHold", 37}, "gateHold", 0.0f, 200.0f, 20.0f));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -333,7 +347,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
           [](float start, float end, float hz) {
             return std::log(hz / start) / std::log(end / start);
           }),
-      Transpose::kTonalityOffHz));
+      Transpose::kTonalityOffHz, wholeUnitText("Hz")));
   juce::StringArray windows;
   for (const int ms : Transpose::kWindowMs) windows.add(juce::String(ms) + " ms");
   layout.add(std::make_unique<juce::AudioParameterChoice>(

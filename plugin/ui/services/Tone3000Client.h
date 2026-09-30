@@ -115,7 +115,9 @@ public:
   void listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply);
   // /models?tone_id&page_size[&architecture]; architecture < 0 omits it.
   void listModels(int toneId, int pageSize, int architecture, Reply<juce::var> reply);
-  void fetchPluginVersion(const juce::String& deviceId, Reply<juce::var> reply);
+  // /plugin/version with X-Device-Id and X-Plugin-Version (the running
+  // build), each omitted when empty.
+  void fetchPluginVersion(const juce::String& deviceId, const juce::String& localVersion, Reply<juce::var> reply);
 
 private:
   bool fresh(const Tokens& t) const { return now() <= t.expiresAtMs - kRefreshLeadMs; }

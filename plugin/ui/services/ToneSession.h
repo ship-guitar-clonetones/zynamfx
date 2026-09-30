@@ -177,8 +177,9 @@ public:
   virtual void probeSecureConnection(std::function<void(Probe)> reply) = 0;
 
   // Update check (useUpdateNotice.ts)
-  // GET /plugin/version, with the Bearer when signed in (beta payloads) and
-  // X-Device-Id; the raw JSON body, validated by UpdateCheck.
+  // GET /plugin/version, with the Bearer when signed in (beta payloads),
+  // X-Device-Id and X-Plugin-Version (the running build); the raw JSON
+  // body, validated by UpdateCheck.
   virtual void fetchPluginVersion(Reply<juce::var> reply) = 0;
 
 protected:

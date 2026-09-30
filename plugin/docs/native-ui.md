@@ -579,7 +579,7 @@ From `useToneSession`, `useT3kSelect`, `useToneLoadFlow`, `useConnectionGate`,
   avatar/artwork 404 → fallback glyph.
 - Connection gate: probe cadence, exponential backoff, "Retry" affordance,
   standalone vs plugin differences.
-- Update check: opt-in flag, `X-Device-Id`, dismissed-version memory.
+- Update check: opt-in flag, `X-Device-Id`, `X-Plugin-Version`, dismissed-version memory.
 - Editor closed mid-request: no callbacks into destroyed components.
 
 ## 10. Risks and open questions
