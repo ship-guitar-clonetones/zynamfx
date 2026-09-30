@@ -16,25 +16,34 @@ constexpr int kBranchDot = theme::kIconBoxSize / 2;
 
 // Full-gap hover zone wrapping a branch dot: the whole 24px connector run is
 // the hit/hover area; the filled white disc stays hidden until then (always
-// shown on coarse pointers, which can't hover a 24px gap).
-class GalleryLane::BranchGap : public Clickable {
+// shown while the pointer is a finger, which can't hover a 24px gap).
+class GalleryLane::BranchGap : public Clickable, private Pointer::Listener {
 public:
-  BranchGap(help::Key helpKey, std::function<void()> action) : Clickable({}) {
+  BranchGap(Pointer& pointer, help::Key helpKey, std::function<void()> action)
+      : Clickable({}), pointer_(pointer) {
     setHelpText(help::text(helpKey));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
     onClick = std::move(action);
-    setAlpha(design::kCoarsePointer ? 1.0f : 0.0f);
+    pointer_.addListener(this);
+    pointerChanged();
   }
+  ~BranchGap() override { pointer_.removeListener(this); }
 
   void mouseEnter(const juce::MouseEvent&) override { setAlpha(1.0f); }
   void mouseExit(const juce::MouseEvent&) override {
-    if (!design::kCoarsePointer) setAlpha(0.0f);
+    if (!pointer_.coarse()) setAlpha(0.0f);
+  }
+  void pointerChanged() override {
+    if (!isMouseOver()) setAlpha(pointer_.coarse() ? 1.0f : 0.0f);
   }
 
   void paintButton(juce::Graphics& g, bool, bool) override {
     g.setColour(theme::kWhite);
     g.fillEllipse(getLocalBounds().toFloat().withSizeKeepingCentre(kBranchDot, kBranchDot));
   }
+
+private:
+  Pointer& pointer_;
 };
 
 GalleryLane::GalleryLane(Services& services, ChainSide side) : services_(services), side_(side) {
@@ -156,11 +165,12 @@ void GalleryLane::rebuildBranchGaps() {
     if (item.isInsert) continue;
     const bool tap = trunk && i == tapIndex;
     if (!tap && !branchInteractive_) continue;
-    auto gap = tap ? std::make_unique<BranchGap>(help::Key::branchJunction,
+    auto gap = tap ? std::make_unique<BranchGap>(services_.pointer, help::Key::branchJunction,
                                                  [this] { if (onClearBranch) onClearBranch(); })
-                   : std::make_unique<BranchGap>(help::Key::branchGap, [this, id = item.blockId] {
-                       if (onSetBranch) onSetBranch(id);
-                     });
+                   : std::make_unique<BranchGap>(services_.pointer, help::Key::branchGap,
+                                                 [this, id = item.blockId] {
+                                                   if (onSetBranch) onSetBranch(id);
+                                                 });
     gap->setBounds(design::snap(gallery::gapCentreX(i + 1, tile_) - gallery::kTileGap / 2.0f), 0,
                    gallery::kTileGap, tile_);
     addAndMakeVisible(*gap);

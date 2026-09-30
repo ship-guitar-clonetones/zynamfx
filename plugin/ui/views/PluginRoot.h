@@ -147,6 +147,7 @@ private:
   std::unique_ptr<UpdateNotice> updateNotice_;
   std::unique_ptr<ConnectionModal> connectionModal_;
   HintTracker hintTracker_;
+  PointerTracker pointerTracker_;
   bool hintsVisible_ = true;
 
   BannerPhase bannerPhase_ = BannerPhase::hidden;

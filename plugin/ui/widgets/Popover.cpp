@@ -34,6 +34,7 @@ void Popover::open(juce::Component& anchor, Align align, int gap, int inset, Pla
   }
   host->overlayLayer().addAndMakeVisible(this);
   reposition();
+  follow(anchor);
   watchOutsidePresses();
   if (isShowing()) grabKeyboardFocus();  // offscreen (testbed capture) has no peer
 }
@@ -44,17 +45,56 @@ void Popover::openAt(juce::Component& context, juce::Point<int> point) {
   if (host == nullptr) return;
 
   anchor_ = nullptr;
+  point_ = point;
   if (getTitle().isEmpty()) setTitle("Context menu");
-  auto& overlay = host->overlayLayer();
-  overlay.addAndMakeVisible(this);
-  // Positions are pre-transform: overlay px over the adopted scale.
-  const float k = adoptScaleOf(context);
-  const auto p = overlay.getLocalPoint(&context, point.toFloat()) / k;
-  const int maxX = std::max(0, juce::roundToInt(overlay.getWidth() / k) - getWidth());
-  const int maxY = std::max(0, juce::roundToInt(overlay.getHeight() / k) - getHeight());
-  setTopLeftPosition(juce::jlimit(0, maxX, juce::roundToInt(p.x)), juce::jlimit(0, maxY, juce::roundToInt(p.y)));
+  host->overlayLayer().addAndMakeVisible(this);
+  placeAt(context, point);
+  follow(context);
   watchOutsidePresses();
   if (isShowing()) grabKeyboardFocus();
+}
+
+void Popover::placeAt(juce::Component& context, juce::Point<int> point) {
+  auto* overlay = getParentComponent();
+  if (overlay == nullptr) return;
+  // Positions are pre-transform: overlay px over the adopted scale.
+  const float k = adoptScaleOf(context);
+  const auto p = overlay->getLocalPoint(&context, point.toFloat()) / k;
+  const int maxX = std::max(0, juce::roundToInt(overlay->getWidth() / k) - getWidth());
+  const int maxY = std::max(0, juce::roundToInt(overlay->getHeight() / k) - getHeight());
+  setTopLeftPosition(juce::jlimit(0, maxX, juce::roundToInt(p.x)), juce::jlimit(0, maxY, juce::roundToInt(p.y)));
+}
+
+void Popover::follow(juce::Component& target) { target_ = std::make_unique<TargetWatcher>(*this, target); }
+
+namespace {
+// The target has left a viewport it sits in: scrolled clean out of the
+// lane, the list or the page.
+bool scrolledAway(juce::Component& target, juce::Component& overlay) {
+  const auto box = overlay.getLocalArea(&target, target.getLocalBounds());
+  for (auto* v = target.findParentComponentOfClass<juce::Viewport>(); v != nullptr;
+       v = v->findParentComponentOfClass<juce::Viewport>())
+    if (!overlay.getLocalArea(v, v->getLocalBounds()).intersects(box)) return true;
+  return false;
+}
+}  // namespace
+
+void Popover::targetMoved() {
+  auto* target = target_ != nullptr ? target_->getComponent() : nullptr;
+  auto* overlay = getParentComponent();
+  if (target == nullptr || overlay == nullptr) return;
+  if (scrolledAway(*target, *overlay)) {
+    // Not from inside the watcher's own callback: dismissing deletes it.
+    juce::Component::SafePointer<Popover> self(this);
+    juce::MessageManager::callAsync([self] {
+      if (self != nullptr && self->isOpen()) self->dismiss();
+    });
+    return;
+  }
+  if (anchor_ != nullptr)
+    reposition();
+  else
+    placeAt(*target, point_);
 }
 
 void Popover::watchOutsidePresses() {
@@ -96,6 +136,7 @@ void Popover::close() {
   const bool toAnchor = keyboardOpened_ || (focused != nullptr && focused != this && isParentOf(focused));
   keyboardOpened_ = false;
   juce::Desktop::getInstance().removeGlobalMouseListener(&watcher_);
+  target_.reset();
   if (auto* parent = getParentComponent()) parent->removeChildComponent(this);
   if (toAnchor && anchor_ != nullptr && anchor_->isShowing() && anchor_->getWantsKeyboardFocus())
     anchor_->grabKeyboardFocus();

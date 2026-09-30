@@ -41,6 +41,7 @@ void ToneImage::setTone(const juce::String& imageUrl, const juce::String& gear, 
 void ToneImage::setCornerRadius(float radius) {
   corner_ = radius;
   setOpaque(radius <= 0.0f);
+  composited_ = {};  // the glow follows the corners
   repaint();
 }
 
@@ -50,16 +51,21 @@ void ToneImage::setGlow(const Glow& glow) {
   // so dirty just that: four strips as wide as the wider of the old and new
   // falloffs, rounded out a pixel. A meter tick then repaints ~1/3 of the
   // tile instead of all of it, and everything stacked under the tile gets
-  // the same smaller clip.
+  // the same smaller clip. The glow follows the rounded corners in past a
+  // narrow band, so the top and bottom strips are at least a corner deep:
+  // that covers the corner squares in the same four rects (every extra
+  // dirty rect is its own paint pass on macOS, and costs more than the
+  // pixels it saves).
   const int band = static_cast<int>(std::ceil(std::max(glow_.blur, glow.blur))) + 1;
+  const int cap = std::max(band, static_cast<int>(std::ceil(corner_)));
   glow_ = glow;
   auto box = getLocalBounds();
-  if (band * 2 >= std::min(box.getWidth(), box.getHeight())) {
+  if (cap * 2 >= std::min(box.getWidth(), box.getHeight())) {
     repaint();
     return;
   }
-  repaint(box.removeFromTop(band));
-  repaint(box.removeFromBottom(band));
+  repaint(box.removeFromTop(cap));
+  repaint(box.removeFromBottom(cap));
   repaint(box.removeFromLeft(band));
   repaint(box.removeFromRight(band));
 }
@@ -106,7 +112,7 @@ void ToneImage::paint(juce::Graphics& g) {
     if (composited_.getBounds() != base_.getBounds())
       composited_ = juce::Image(juce::Image::ARGB, base_.getWidth(), base_.getHeight(), false);
     bitmap::copyPixels(composited_, base_);
-    glow_.compositeInto(composited_, scale);
+    glow_.compositeInto(composited_, scale, corner_);
     compositedGlow_ = glow_;
   }
   bitmap::draw(g, composited_, getLocalBounds());

@@ -16,6 +16,7 @@
 #include "MeterStore.h"
 #include "MidiMapStore.h"
 #include "ModelLoads.h"
+#include "Pointer.h"
 #include "PresetStore.h"
 #include "Toast.h"
 #include "T3kConfig.h"
@@ -87,6 +88,7 @@ public:
   ToneLoadFlow loadFlow;
   UpdateCheck updates;
   Zoom zoom;
+  Pointer pointer;
 };
 
 }  // namespace t3k::ui

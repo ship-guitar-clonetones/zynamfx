@@ -14,6 +14,7 @@
 
 #include "Drive.h"
 #include "Host.h"
+#include "core/Design.h"
 #include "core/Fonts.h"
 #include "core/Help.h"
 #include "core/KnobScale.h"
@@ -27,6 +28,7 @@
 #include "services/ConnectionGate.h"
 #include "services/LoopbackServer.h"
 #include "services/OAuth.h"
+#include "services/Pointer.h"
 #include "services/Tone3000Client.h"
 #include "services/UiPrefs.h"
 #include "services/UpdateCheck.h"
@@ -38,6 +40,7 @@
 #include "widgets/Avatar.h"
 #include "widgets/ChromeTextButton.h"
 #include "widgets/DragScroller.h"
+#include "widgets/EnergyGlow.h"
 #include "widgets/FormatBadge.h"
 #include "widgets/IconButton.h"
 #include "widgets/Knob.h"
@@ -1098,6 +1101,187 @@ struct TouchScrollTests : juce::UnitTest {
   }
 };
 
+// A popover hangs off something in a viewport (a tile in the chain lane, a
+// dropdown on the settings page, a chip in the filter row): it must move
+// with its anchor as the viewport scrolls, and go once the anchor has
+// scrolled out of view.
+struct PopoverFollowTests : juce::UnitTest {
+  PopoverFollowTests() : juce::UnitTest("Popover follows its anchor", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  struct Root : juce::Component, OverlayHost {
+    Root() {
+      setSize(800, 600);
+      overlay.setBounds(getLocalBounds());
+      addAndMakeVisible(overlay);
+    }
+    juce::Component& overlayLayer() override { return overlay; }
+    juce::Component overlay;
+  };
+  struct Panel : Popover {
+    Panel() { setSize(100, 60); }
+  };
+
+  void runTest() override {
+    Root root;
+    juce::Viewport viewport;
+    viewport.setBounds(100, 100, 400, 300);
+    root.addAndMakeVisible(viewport);
+    juce::Component content;
+    content.setSize(400, 2000);
+    viewport.setViewedComponent(&content, false);
+    juce::Component anchor;
+    anchor.setBounds(50, 200, 120, 40);
+    content.addAndMakeVisible(anchor);
+    root.overlay.toFront(false);
+
+    beginTest("an anchored panel scrolls with its anchor");
+    Panel panel;
+    panel.open(anchor, Popover::Align::left, 4);
+    expect(panel.isOpen());
+    const auto before = panel.getPosition();
+    expectEquals(before.y, root.overlay.getLocalPoint(&anchor, juce::Point<int>()).y + anchor.getHeight() + 4);
+    viewport.setViewPosition(0, 120);
+    expectEquals(panel.getX(), before.x);
+    expectEquals(panel.getY(), before.y - 120);
+
+    beginTest("a panel placed at a point (a context menu) scrolls with its context");
+    Panel menu;
+    menu.openAt(anchor, {10, 10});
+    const auto menuBefore = menu.getPosition();
+    viewport.setViewPosition(0, 150);
+    expectEquals(menu.getY(), menuBefore.y - 30);
+    expectEquals(panel.getY(), before.y - 150);
+
+    beginTest("a partly visible anchor keeps its panel");
+    viewport.setViewPosition(0, 220);  // the anchor's 200..240 is half under the top edge
+    pump(50);
+    expect(panel.isOpen() && menu.isOpen());
+
+    beginTest("an anchor scrolled out of view dismisses");
+    int dismissed = 0;
+    panel.onDismiss = [&] { ++dismissed; };
+    viewport.setViewPosition(0, 600);
+    pump(50);
+    expect(!panel.isOpen() && !menu.isOpen());
+    expectEquals(dismissed, 1);
+  }
+};
+
+// Services::pointer: a desktop build follows the input, and the gallery's
+// hover-revealed chrome pins while that input is a finger.
+struct PointerTests : juce::UnitTest {
+  PointerTests() : juce::UnitTest("Pointer", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  struct Counter : Pointer::Listener {
+    int changes = 0;
+    void pointerChanged() override { ++changes; }
+  };
+
+  // Each tone tile's action strip: the parent of its power button.
+  static void collectStrips(juce::Component& c, std::vector<juce::Component*>& out) {
+    if (c.getHelpText() == help::text(help::Key::blockPower) && c.findParentComponentOfClass<GalleryTile>() != nullptr)
+      out.push_back(c.getParentComponent());
+    for (auto* child : c.getChildren()) collectStrips(*child, out);
+  }
+
+  void runTest() override {
+    Pointer pointer;
+    Counter counter;
+    pointer.addListener(&counter);
+    if (design::kCoarsePointer) {
+      beginTest("a touch platform is touch throughout");
+      expect(pointer.coarse());
+      pointer.sawInput(false);
+      expect(pointer.coarse());
+      expectEquals(counter.changes, 0);
+      pointer.removeListener(&counter);
+      return;
+    }
+    beginTest("a desktop build follows the last press or move");
+    pointer.sawInput(true);
+    expect(pointer.coarse());
+    expectEquals(counter.changes, 1);
+    pointer.sawInput(true);
+    expectEquals(counter.changes, 1);  // no change, no call
+    pointer.sawInput(false);
+    expect(!pointer.coarse());
+    expectEquals(counter.changes, 2);
+    pointer.removeListener(&counter);
+
+    beginTest("the tile chrome shows on every tile while the pointer is a finger");
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("main-stereo");
+    if (scenario == nullptr) {
+      expect(false, "main-stereo scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    ScaledHost host(backend, *scenario, fixtures.root);  // offscreen: no real pointer can hover it
+    pump(300);
+    auto& root = host.pluginRoot();
+    std::vector<juce::Component*> strips;
+    collectStrips(root, strips);
+    expect(strips.size() >= 2, "expected the stereo lanes' tone tiles");
+    auto allAt = [&](float alpha) {
+      for (auto* s : strips)
+        if (!juce::approximatelyEqual(s->getAlpha(), alpha)) return false;
+      return true;
+    };
+    expect(allAt(0.0f), "hidden until hovered on a mouse");
+    root.services().pointer.sawInput(true);
+    expect(allAt(1.0f), "shown on touch");
+    root.services().pointer.sawInput(false);
+    expect(allAt(0.0f), "hidden again once a mouse moves");
+  }
+};
+
+// Glow::compositeInto follows the rounded clip: a pixel in a corner square
+// measures its distance to the arc, so it lights like a pixel that close to
+// a straight edge; with no corner the straight-edge distance stands.
+struct GlowCornerTests : juce::UnitTest {
+  GlowCornerTests() : juce::UnitTest("Glow corners", "ui") {}
+
+  static int red(const juce::Image& image, int x, int y) { return image.getPixelAt(x, y).getRed(); }
+
+  void runTest() override {
+    const Glow glow{juce::Colours::red, 8.0f, 0.75f};
+    auto composite = [&](float corner) {
+      juce::Image image(juce::Image::ARGB, 64, 64, true);
+      image.clear(image.getBounds(), juce::Colours::black);
+      glow.compositeInto(image, 1.0f, corner);
+      return image;
+    };
+
+    beginTest("a square glow measures to the straight edges");
+    const auto square = composite(0.0f);
+    expect(red(square, 0, 32) > red(square, 2, 32) && red(square, 2, 32) > red(square, 6, 32), "fades inward");
+    expectEquals(red(square, 6, 6), red(square, 6, 32));  // the corner is no closer than the edges
+    expectEquals(red(square, 32, 32), 0);
+
+    beginTest("a rounded glow hugs the arc");
+    // Radius 16: (6, 6) is 6 px from either straight edge but only ~2.6 px
+    // inside the arc, so it lights like the 2 px band.
+    const auto rounded = composite(16.0f);
+    expectEquals(red(rounded, 6, 6), red(rounded, 2, 32));
+    expect(red(rounded, 6, 6) > red(square, 6, 6));
+    // The straight runs and the interior are as before.
+    expectEquals(red(rounded, 6, 32), red(square, 6, 32));
+    expectEquals(red(rounded, 32, 6), red(square, 32, 6));
+    expectEquals(red(rounded, 32, 32), 0);
+    // The other three corners mirror.
+    expectEquals(red(rounded, 57, 6), red(rounded, 6, 6));
+    expectEquals(red(rounded, 6, 57), red(rounded, 6, 6));
+    expectEquals(red(rounded, 57, 57), red(rounded, 6, 6));
+    // Past the arc's reach the corner square is untouched: (14, 14) is
+    // ~13.9 px inside the arc, beyond the 8 px blur.
+    expectEquals(red(rounded, 14, 14), 0);
+  }
+};
+
 // Drag-reordering a preset in the browser, through the peer. The drop
 // rebuilds the row list (destroying the dragged Row) and then asks the store
 // to move the preset: the move must carry the real id, not whatever is left
@@ -1566,6 +1750,9 @@ RichFlowTests richFlowTests;
 AccessibilityTests accessibilityTests;
 FocusPolicyTests focusPolicyTests;
 TouchScrollTests touchScrollTests;
+PopoverFollowTests popoverFollowTests;
+PointerTests pointerTests;
+GlowCornerTests glowCornerTests;
 PresetReorderTests presetReorderTests;
 ChainCrossLaneDragTests chainCrossLaneDragTests;
 BlockSizeToggleTests blockSizeToggleTests;

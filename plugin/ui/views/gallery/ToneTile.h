@@ -18,7 +18,7 @@
 
 namespace t3k::ui {
 
-class ToneTile : public GalleryTile {
+class ToneTile : public GalleryTile, private Pointer::Listener {
 public:
   static constexpr int kChromeHeight = 32;
   static constexpr int kChromePad = 4;
@@ -49,7 +49,8 @@ protected:
 
 private:
   // Reveals the action strip while the pointer is anywhere over the tile
-  // (CSS :hover on the face; pinned while travelling and on coarse pointers).
+  // (CSS :hover on the face; pinned while travelling, and whenever the
+  // pointer is a finger, which can't hover: Services::pointer).
   // Hover is read off the events themselves, not the OS pointer, so the
   // children's enter/exit (which JUCE reports as an exit from the tile) and
   // the testbed's synthesized pointer both resolve the same way.
@@ -66,6 +67,7 @@ private:
 
   void pointerMoved(const juce::MouseEvent& e, bool leaving);
   void setHovered(bool hovered);
+  void pointerChanged() override { setHovered(hovered_); }
   void syncState();
   void togglePower();
 

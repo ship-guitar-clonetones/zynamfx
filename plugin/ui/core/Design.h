@@ -28,9 +28,11 @@ inline constexpr int kPlateHeight = 108;   // Faceplate.tsx
 // Editor window scale range (aspect-locked corner drags).
 inline constexpr double kMaxScale = 2.0;
 
-// Platform flags, known at compile time; the testbed overrides the pointer
-// one per scenario via T3K_UI_COARSE_POINTER so touch layouts can be
-// captured on a desktop.
+// Platform flags, known at compile time. kCoarsePointer is a touch
+// platform (no hover, ever); it fixes the hint copy and seeds
+// Services::pointer, which on a desktop build follows the input that
+// arrives instead (a Windows or Linux tablet). T3K_UI_COARSE_POINTER
+// overrides it for a touch build on a desktop.
 #if JUCE_IOS
 inline constexpr bool kIos = true;
 #else
