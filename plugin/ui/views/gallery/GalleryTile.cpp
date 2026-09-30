@@ -8,8 +8,8 @@ GalleryTile::GalleryTile(Services& services, std::string blockId, int size)
     : services_(services), blockId_(std::move(blockId)), size_(size) {
   setSize(size, size);
   setMouseCursor(juce::MouseCursor::PointingHandCursor);
-  // A touch drag on a tile sorts it; only the gaps around the tiles pan the
-  // chain view.
+  // A drag on a tile sorts it; the gaps around the tiles pan the chain view.
+  // A quick touch swipe clears this to hand the gesture over (mouseDrag).
   setViewportIgnoreDragFlag(true);
   // Sortable tiles are focusable (keyboard sorting) but draw no focus ring,
   // as the web didn't.
@@ -72,9 +72,7 @@ void GalleryTile::closeMenu() {
 void GalleryTile::mouseDown(const juce::MouseEvent& e) {
   const auto now = juce::Time::currentTimeMillis();
   dragging_ = false;
-#if JUCE_IOS
   setViewportIgnoreDragFlag(true);  // re-arm after a pan whose release never came
-#endif
   pressAt_ = e.getPosition();
 
   // Right-click / ctrl-click: the action sheet, and the click that follows
@@ -105,28 +103,25 @@ void GalleryTile::mouseDrag(const juce::MouseEvent& e) {
     if (auto* h = host()) h->tileDragMove(e);
     return;
   }
-#if JUCE_IOS
   if (!getViewportIgnoreDragFlag()) return;  // a swipe: the chain view's viewport has it
-#endif
   const auto travel = e.getPosition() - pressAt_;
   if (hold_.pending() &&
       (std::abs(travel.x) > kLongPressSlop || std::abs(travel.y) > kLongPressSlop))
     hold_.cancel();
   if (!e.mods.isLeftButtonDown() && !e.source.isTouch()) return;
   if (e.getDistanceFromDragStart() < gallery::kDragDistance) return;
-#if JUCE_IOS
-  // A quick, mostly sideways swipe pans the chain view, as WKWebView's
-  // scroll did; a slower drag still sorts, and the hold still opens the
-  // sheet. Clearing the flag hands over: the viewport's drag listener checks
-  // it on every move, this one included, and pans from the press with its
-  // own inertia.
+  // A quick, mostly sideways touch swipe pans the chain view, as the web
+  // view's scroll did; a slower drag still sorts, and the hold still opens
+  // the sheet. Clearing the flag hands over: the viewport's drag listener
+  // checks it on every move, this one included, and pans from the press with
+  // its own inertia. Any touch source: iOS, and a finger on a Windows or
+  // Linux tablet, which JUCE reports the same way. A mouse never gets here.
   if (e.source.isTouch() && (e.eventTime - e.mouseDownTime).inMilliseconds() < kFlickMs &&
       std::abs(travel.x) > std::abs(travel.y)) {
     hold_.cancel();
     setViewportIgnoreDragFlag(false);
     return;
   }
-#endif
   // Past the activation distance the press is a drag; a sheet the hold
   // already opened yields to it.
   closeMenu();
@@ -137,12 +132,10 @@ void GalleryTile::mouseDrag(const juce::MouseEvent& e) {
 
 void GalleryTile::mouseUp(const juce::MouseEvent& e) {
   hold_.cancel();
-#if JUCE_IOS
-  if (!getViewportIgnoreDragFlag()) {
+  if (!getViewportIgnoreDragFlag()) {  // the press became a pan: no click, no sort end
     setViewportIgnoreDragFlag(true);
     return;
   }
-#endif
   if (dragging_) {
     dragging_ = false;
     if (auto* h = host()) h->tileDragEnd(e);
