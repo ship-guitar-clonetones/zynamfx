@@ -2,6 +2,9 @@
 // tile menus…). Lives in the root's overlay layer so it paints above
 // everything, is positioned relative to an anchor component, and dismisses
 // on a press outside itself/its anchor or on Escape (useDismissable.ts).
+// It stays with the anchor while that moves under it (the lane, list or
+// page it sits in scrolling), as a panel nested in the anchor's DOM would
+// have, and goes when the anchor scrolls out of its viewport altogether.
 // The panel takes its anchor's scale: one opened from a counter-scaled
 // subtree (the tone browser's body, at 1x under the window zoom) is 1x too.
 // Keyboard: the panel takes focus when it opens and is its own focus
@@ -14,6 +17,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <functional>
+#include <memory>
 
 namespace t3k::ui {
 
@@ -71,6 +75,27 @@ protected:
 private:
   // Adopt `source`'s scale relative to the overlay; returns it.
   float adoptScaleOf(const juce::Component& source);
+  // Place the top-left at `point` (in `context`'s space), kept inside the
+  // overlay.
+  void placeAt(juce::Component& context, juce::Point<int> point);
+  // Start following `target` (the anchor, or a point's context): every move
+  // of it or an ancestor re-places the panel.
+  void follow(juce::Component& target);
+  void targetMoved();
+
+  // ComponentMovementWatcher tracks the whole parent chain, so a scroll of
+  // any container the target sits in reports as a move of the target.
+  class TargetWatcher : public juce::ComponentMovementWatcher {
+  public:
+    TargetWatcher(Popover& owner, juce::Component& target)
+        : juce::ComponentMovementWatcher(&target), owner_(owner) {}
+    void componentMovedOrResized(bool, bool) override { owner_.targetMoved(); }
+    void componentPeerChanged() override {}
+    void componentVisibilityChanged() override {}
+
+  private:
+    Popover& owner_;
+  };
 
   // Global mouse listener: a press anywhere outside the panel and its
   // anchor dismisses. Separate object because Component is itself a
@@ -90,12 +115,15 @@ private:
   void focusRow(bool next);
 
   OutsidePressWatcher watcher_{*this};
+  std::unique_ptr<TargetWatcher> target_;
   juce::Time openingPress_;  // mouseDownTime of the press that opened the panel
   bool keyboardOpened_ = false;  // the anchor had focus at open(): focus returns to it
   juce::Component::SafePointer<juce::Component> anchor_;
   Align align_ = Align::left;
   Placement placement_ = Placement::below;
   int gap_ = 0, inset_ = 0;
+  // openAt: the point, in the context's space, to re-place from.
+  juce::Point<int> point_;
 };
 
 }  // namespace t3k::ui

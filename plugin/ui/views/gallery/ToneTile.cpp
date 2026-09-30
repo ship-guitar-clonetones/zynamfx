@@ -1,7 +1,6 @@
 #include "ToneTile.h"
 
 #include "GalleryGeometry.h"
-#include "core/Design.h"
 #include "core/Help.h"
 #include "core/Icons.h"
 #include "core/Paint.h"
@@ -47,14 +46,17 @@ ToneTile::ToneTile(Services& services, const ChainItem& block, int size)
   ledSlot_.addChildComponent(led_);
   ledSlot_.setSize(BlockLed::kSize, BlockLed::kSize);
   addMouseListener(&hover_, true);
+  services.pointer.addListener(this);
 
   setBlock(block);
-  chrome_.setAlpha(design::kCoarsePointer ? 1.0f : 0.0f);
-  chrome_.setInterceptsMouseClicks(false, design::kCoarsePointer);
+  setHovered(false);
   resized();  // the base set the size before these children existed
 }
 
-ToneTile::~ToneTile() { removeMouseListener(&hover_); }
+ToneTile::~ToneTile() {
+  services().pointer.removeListener(this);
+  removeMouseListener(&hover_);
+}
 
 void ToneTile::setBlock(const ChainItem& block) {
   block_ = block;
@@ -112,7 +114,7 @@ void ToneTile::pointerMoved(const juce::MouseEvent& e, bool leaving) {
 
 void ToneTile::setHovered(bool hovered) {
   hovered_ = hovered;
-  const bool shown = design::kCoarsePointer || hovered_ || travelling();
+  const bool shown = services().pointer.coarse() || hovered_ || travelling();
   chrome_.setAlpha(shown ? 1.0f : 0.0f);
   chrome_.setInterceptsMouseClicks(false, shown);
 }

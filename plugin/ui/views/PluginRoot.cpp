@@ -19,7 +19,8 @@ PluginRoot::PluginRoot(Services& services)
       main_(services),
       faceplate_(services),
       toast_(services.toast),
-      hintTracker_(services.hints, *this) {
+      hintTracker_(services.hints, *this),
+      pointerTracker_(services.pointer, *this) {
   setOpaque(true);
   setFocusContainerType(FocusContainerType::keyboardFocusContainer);
 

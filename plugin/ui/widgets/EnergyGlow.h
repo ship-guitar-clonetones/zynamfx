@@ -29,8 +29,10 @@ struct Glow {
   // `pixelScale` device pixels per logical px): result = base + (1 - base)
   // · colour · falloff(d), where d is the distance to the nearest edge and
   // the falloff is the blurred edge of an inset shadow (half strength at
-  // the edge, none `blur` logical px in).
-  void compositeInto(juce::Image& image, float pixelScale) const;
+  // the edge, none `blur` logical px in). The edge is the rounded rectangle
+  // of `cornerRadius` logical px the image is clipped to, so the glow turns
+  // the corners with it (the web's box-shadow followed border-radius).
+  void compositeInto(juce::Image& image, float pixelScale, float cornerRadius = 0.0f) const;
 };
 
 class EnergyGlow : private MeterStore::Listener {

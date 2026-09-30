@@ -90,6 +90,7 @@ TONE3000Processor ──► ProcessorBackend : ui::Backend ◄── MockBackend
                        │  ConnectionGate     │   online/offline probing
                        │  UpdateNotice       │
                        │  HintBus            │   help-text + pin, toast
+                       │  Pointer            │   touch or mouse, from the input that arrives
                        │  UiPrefs            │   PropertiesFile (was localStorage)
                        └──────────┬──────────┘
                                   │
@@ -252,7 +253,14 @@ gallery's branch dots appear and disappear in one frame.
 `PluginRoot::overlays()` returns the top layer. `Popover` positions itself
 relative to an anchor rectangle (with the same edge clamps the React
 components do) and dismisses on outside pointer-down or Escape through a
-root `MouseListener` (`useDismissable`). `ModalLayer` is the modal base
+root `MouseListener` (`useDismissable`). The web's menus were children of
+the element that opened them, so they scrolled with it; the overlay layer
+is not, so a `Popover` watches its anchor (or the component a context
+menu's point was given in) with a `ComponentMovementWatcher` and re-places
+itself on every move of it or an ancestor: a wheel or drag on the chain
+lane, the settings page or the filter row carries the open panel along,
+and once the anchor has left its viewport altogether the panel dismisses
+(`PopoverFollowTests`). `ModalLayer` is the modal base
 (blurred scrim + centred content, every press swallowed); `ScrimMessage` is
 the card-less column (glyph or dots, copy, pill row) the connection modal
 uses. `PluginRoot` owns one instance of each modal and rebuilds it from its
@@ -283,6 +291,21 @@ around them do. Gallery tiles make one exception: a quick, mostly sideways
 touch swipe (the drag distance within `GalleryTile::kFlickMs`) clears the
 flag mid-gesture and the chain lane pans from the press with the viewport's
 own inertia; a slower drag sorts. Any touch source, on every platform.
+
+What a mouse reveals on hover (the tile's power / swap / trash strip, the
+branch dots in the stereo gaps) has to stay up for a finger, which can't
+hover. The web read that off `pointer: coarse`; here it is
+`Services::pointer`, decided at run time rather than per build, because a
+Windows or Linux tablet runs the desktop build and a convertible is both
+in one session. iOS and Android are touch throughout. A desktop build
+seeds from the hardware where the OS can say (Windows: an integrated touch
+digitizer and slate mode) and then follows the last press or move
+(`PointerTracker`, a root mouse listener beside `HintTracker`): the first
+touch turns the affordances on everywhere, the next mouse move turns them
+off again. Views that carry such an affordance listen (`ToneTile`,
+`GalleryLane::BranchGap`). The hint copy stays compile-time
+(`design::kCoarsePointer`): its touch wording is more than a word swap in
+places, so a desktop build with a finger on it reads the desktop copy.
 
 ### 5.8a Keyboard focus and accessibility
 Nothing is focused by default, as in a browser, and the host's transport

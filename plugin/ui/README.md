@@ -114,7 +114,8 @@ plugin/ui/
                       MidiMapStore, UiPrefs, HintBus, Toast, Banners,
                       ParamBinding, AutoMeasure, SpectrumFeed, TunerFeed,
                       ModelLoads, LocalFiles, ImageLoader, ConnectionGate,
-                      UpdateCheck, ToneLoadFlow; the TONE3000 stack:
+                      UpdateCheck, ToneLoadFlow, Zoom, Pointer (touch or
+                      mouse, read off the input at run time); the TONE3000 stack:
                       HttpClient, OAuth (PKCE), LoopbackServer,
                       Tone3000Client, ToneSession / Tone3000Session
   widgets/            reusable controls that know nothing about services
