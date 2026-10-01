@@ -144,6 +144,46 @@ TEST(LocalLoadTest, IrMixDefaultsFollowKernelLength) {
   }
 }
 
+// The tile's glyph: a local tone carries the catalog `gear` id when native
+// could infer one from the file, and no `gear` at all otherwise (the UI then
+// keeps its generic file icon). Folders take the first file's answer.
+TEST(LocalLoadTest, GearIsInferredFromNamMetadataAndIrLength) {
+  const auto gearOf = [](const juce::String& title, const juce::Array<juce::var>& files) {
+    TONE3000Processor proc;
+    const juce::var res = proc.loadLocalTone(title, filesOf(files));
+    EXPECT_TRUE(res["error"].isVoid()) << res["error"].toString().toStdString();
+    EXPECT_TRUE(waitForChainLoaded(proc));
+    return firstToneBlock(proc)["tone"]["gear"];
+  };
+
+  // metadata.gear_type spellings map onto the catalog ids.
+  EXPECT_EQ(gearOf("amp", {testFileEntry("a2-am-test-2.nam")}).toString(), juce::String("amp"));
+  EXPECT_EQ(gearOf("amp cab", {testFileEntry("a2-amp-cab-test.nam")}).toString(),
+            juce::String("amp-cab"));
+  // No metadata: no gear (not an amp by default).
+  EXPECT_TRUE(gearOf("plain", {testFileEntry("a2-amp-test.nam")}).isVoid());
+
+  // Unknown free text stays unknown: the real A2 file with a made-up type.
+  juce::var odd = juce::JSON::parse(testFile("a2-amp-test.nam"));
+  juce::DynamicObject::Ptr metadata = new juce::DynamicObject();
+  metadata->setProperty("gear_type", "synth");
+  odd.getDynamicObject()->setProperty("metadata", juce::var(metadata.get()));
+  const juce::String oddJson = juce::JSON::toString(odd);
+  EXPECT_TRUE(gearOf("odd", {fileEntry("odd.nam", juce::Base64::toBase64(
+                                                       oddJson.toRawUTF8(),
+                                                       oddJson.getNumBytesAsUTF8()))})
+                  .isVoid());
+
+  // IRs: cab-length kernels are cabs, reverbs stay generic.
+  EXPECT_EQ(gearOf("cab", {testFileEntry("cab-ir-test.wav")}).toString(), juce::String("cab"));
+  EXPECT_TRUE(gearOf("verb", {testFileEntry("reverb-ir-mono-test.wav")}).isVoid());
+
+  // Folder: the first file decides.
+  EXPECT_EQ(gearOf("pack", {testFileEntry("a2-amp-cab-test.nam"), testFileEntry("a2-am-test-2.nam")})
+                .toString(),
+            juce::String("amp-cab"));
+}
+
 TEST(LocalLoadTest, RejectsBadFilesAndSkipsThemInFolders) {
   TONE3000Processor proc;
 

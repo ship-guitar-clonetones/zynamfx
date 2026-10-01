@@ -39,6 +39,16 @@ stash copy with a `file://` URL. From there `loadTone` takes over, and
 `fetchModelFromUrl` resolves `file://` URLs from disk instead of the
 network.
 
+While a file is open for validation, its gear is inferred best-effort so a
+lane of local tiles isn't a row of identical file glyphs: a `.nam`'s
+`metadata.gear_type` (free text written by the trainer; only the common
+spellings map, e.g. `amp` / `pedal_amp` / `preamp` → `amp`, `amp_cab` →
+`amp-cab`, `studio` → `outboard`) and, for an IR, cab length (at or under
+the short/long cutoff → `cab`). The result is the same catalog `gear` id a
+TONE3000 tone carries, set on the tone from its first file; when nothing
+matches, `gear` is simply absent and the tile keeps the generic file glyph
+(`ToneImage`).
+
 The picker isn't sugar: it covers users who never think to drag-drop, works
 signed out, and is the only route on iOS (the Files app has no drag into
 the plugin). Drops work on every desktop platform, Linux included; the old

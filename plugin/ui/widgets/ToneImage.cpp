@@ -88,7 +88,10 @@ void ToneImage::rebuildBase(float scale) {
   g.fillRect(box);
   const float size = glyphSize_ > 0 ? static_cast<float>(glyphSize_)
                                     : static_cast<float>(juce::roundToInt(box.getWidth() * 0.4f));
-  Icons::draw(g, local_ ? gear::kFileIcon : gear::svgFor(gear_),
+  // Local files carry a gear only when native could infer one from the file
+  // (see finishLocalToneLoad); otherwise the generic file glyph, never
+  // svgFor's catalog default of an amp.
+  Icons::draw(g, local_ && gear_.isEmpty() ? gear::kFileIcon : gear::svgFor(gear_),
               box.withSizeKeepingCentre(size, size), theme::kGray);
 }
 
