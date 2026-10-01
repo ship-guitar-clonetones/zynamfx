@@ -16,6 +16,14 @@ threads. Two sections fork:
   one native-rate model per core instead of eight on one. This fork nests
   inside a lane fork when both apply, and unlike the lane fork it doesn't
   need stereo: a mono chain's oversampled NAM blocks fork too.
+- **Dual-mono voices.** In Dual Mono input mode a mono chain's `NamEngine`
+  holds two voices (one per input channel), each with its own full set of
+  phase instances. The engine forks the flat voice × phase set as one group
+  (at most 2 × 8 = 16 jobs, the pool's `kMaxJobs`), so a dual-mono 8x
+  model still costs about one native-rate model per core. The voices are
+  as independent as the phases (separate models, separate buffers), and
+  `MultiCoreTest.DualMonoParallelMatchesSerialBitExact` pins the output as
+  bit-identical to the serial loop at every factor.
 
 Implementation is `plugin/include/RtWorkerPool.h` (header-only). The
 contract is pinned by `test/src/worker_pool_tests.cpp` (the scheduling

@@ -877,10 +877,15 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
 
       // Oversampling: phase-safe architectures get one native-rate instance
       // per phase (see NamEngine.h); anything else runs a single instance
-      // time-scaled at the full chain rate.
+      // time-scaled at the full chain rate. Dual mono doubles the set: one
+      // independent voice per channel (voice-major layout). Both counts are
+      // read once here and baked into the engine; the apply path re-queues
+      // the build if either requirement moved while it was in flight.
       const int oversampleFactor = chainOversampleFactor.load();
+      const int voices = wantedNamVoices();
       const bool phaseSafe = oversampleFactor > 1 && namConfigIsPhaseSafe(config);
-      const int instanceCount = phaseSafe ? oversampleFactor : 1;
+      const int phaseCount = phaseSafe ? oversampleFactor : 1;
+      const int instanceCount = phaseCount * voices;
       if (oversampleFactor > 1 && !phaseSafe) {
         juce::Logger::writeToLog(
             "[ModelLoader] NAM architecture '" +
@@ -908,7 +913,7 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
         instances.push_back(std::move(rawDsp));
       }
 
-      auto engine = std::make_unique<NamEngine>(std::move(instances), oversampleFactor);
+      auto engine = std::make_unique<NamEngine>(std::move(instances), oversampleFactor, voices);
 
       // The chain domain runs everything at the chain rate. A2 models are
       // all trained at 48k; anything else is rare enough that we just run it
@@ -929,7 +934,8 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
       juce::Logger::writeToLog(
           "[ModelLoader] NAM model prepared, model sample rate: " +
           juce::String(out.namEngine->getModelSampleRate()) +
-          (phaseSafe ? " (" + juce::String(instanceCount) + " phase instances)" : ""));
+          (phaseSafe ? " (" + juce::String(phaseCount) + " phase instances)" : "") +
+          (voices > 1 ? " (" + juce::String(voices) + " voices)" : ""));
 
       out.success = true;
     } else {
@@ -1264,19 +1270,26 @@ void TONE3000Processor::applyPreparedModelToChainBlock(ChainBlock& block, ChainB
     return;
   }
 
-  // An oversampling change can race an in-flight load: the engine was built
-  // with the old factor's phase count and can't be re-prepared into the new
-  // one. Drop it and re-queue; the rebuild reads the settled factor and
-  // reuses the block's in-memory model cache (no network).
-  if (newType == ChainBlockType::NAM && prepared.namEngine != nullptr &&
-      prepared.namEngine->getOversampleFactor() != chainOversampleFactor.load()) {
-    juce::Logger::writeToLog("[ModelLoader] Oversampling factor changed during prepare (×" +
-                             juce::String(prepared.namEngine->getOversampleFactor()) + " -> ×" +
-                             juce::String(chainOversampleFactor.load()) + "); re-queuing block " +
-                             juce::String(block.id));
-    block.modelLoading = true;
-    queueActiveModelLoad(block);
-    return;
+  // An oversampling or input-mode change can race an in-flight load: the
+  // engine was built with the old factor's phase count or the old mode's
+  // voice count, and neither can be re-prepared into the new one. Drop it
+  // and re-queue; the rebuild reads the settled requirements and reuses the
+  // block's in-memory model cache (no network).
+  if (newType == ChainBlockType::NAM && prepared.namEngine != nullptr) {
+    const int liveFactor = chainOversampleFactor.load();
+    const int liveVoices = wantedNamVoices();
+    if (prepared.namEngine->getOversampleFactor() != liveFactor ||
+        prepared.namEngine->getVoiceCount() != liveVoices) {
+      juce::Logger::writeToLog(
+          "[ModelLoader] Chain requirements changed during prepare (×" +
+          juce::String(prepared.namEngine->getOversampleFactor()) + " -> ×" +
+          juce::String(liveFactor) + ", " + juce::String(prepared.namEngine->getVoiceCount()) +
+          " -> " + juce::String(liveVoices) + " voices); re-queuing block " +
+          juce::String(block.id));
+      block.modelLoading = true;
+      queueActiveModelLoad(block);
+      return;
+    }
   }
 
   // A restore-time prepare can race prepareToPlay: the engine may have been

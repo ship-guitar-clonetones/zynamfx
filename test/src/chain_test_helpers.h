@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -17,9 +18,14 @@
 // exactly like getStateInformation does (T3KB magic + binary ValueTree
 // stream), so restoring through it pins the real state format.
 struct ChainTestProcessor : TONE3000Processor {
-  void restoreFromTree(const juce::ValueTree& snapshot) {
+  // `inputMode` is the session-level string the real state carries next to
+  // the snapshot ("stereo" / "dual" / "left" / "right"); empty leaves it
+  // out, which restores the default (Stereo), as an older project would.
+  void restoreFromTree(const juce::ValueTree& snapshot, const juce::String& inputMode = {}) {
     juce::ValueTree state("TONE3000State");
     state.setProperty("schemaVersion", 1, nullptr);
+    if (inputMode.isNotEmpty())
+      state.setProperty("inputMode", inputMode, nullptr);
     state.appendChild(snapshot.createCopy(), nullptr);
 
     juce::MemoryBlock data;
@@ -147,17 +153,20 @@ inline bool waitForChainLoaded(TONE3000Processor& proc, int timeoutMs = 20000) {
 // wait, keeping the tests deterministic and fast.
 inline void letAudioGoIdle() { juce::Thread::sleep(200); }
 
-// Drives the processor like a host with identical audio on both channels;
-// returns both output channels.
+// Drives the processor like a host with distinct audio on the two channels
+// (a real stereo source: two takes, or one jack of a stereo pair with the
+// other silent); returns both output channels. Inputs must be equal length.
 inline std::pair<std::vector<float>, std::vector<float>>
-processStereo(TONE3000Processor& proc, const std::vector<float>& in, int blockSize = 512) {
-  const int total = static_cast<int>(in.size());
-  std::vector<float> outL(in.size(), 0.0f), outR(in.size(), 0.0f);
+processStereoLR(TONE3000Processor& proc, const std::vector<float>& inL,
+                const std::vector<float>& inR, int blockSize = 512) {
+  EXPECT_EQ(inL.size(), inR.size());
+  const int total = static_cast<int>(std::min(inL.size(), inR.size()));
+  std::vector<float> outL(inL.size(), 0.0f), outR(inL.size(), 0.0f);
   juce::AudioBuffer<float> buffer(2, blockSize);
   juce::MidiBuffer midi;
   for (int off = 0; off + blockSize <= total; off += blockSize) {
-    buffer.copyFrom(0, 0, in.data() + off, blockSize);
-    buffer.copyFrom(1, 0, in.data() + off, blockSize);
+    buffer.copyFrom(0, 0, inL.data() + off, blockSize);
+    buffer.copyFrom(1, 0, inR.data() + off, blockSize);
     proc.processBlock(buffer, midi);
     std::copy(buffer.getReadPointer(0), buffer.getReadPointer(0) + blockSize,
               outL.begin() + off);
@@ -165,6 +174,13 @@ processStereo(TONE3000Processor& proc, const std::vector<float>& in, int blockSi
               outR.begin() + off);
   }
   return {std::move(outL), std::move(outR)};
+}
+
+// Drives the processor like a host with identical audio on both channels;
+// returns both output channels.
+inline std::pair<std::vector<float>, std::vector<float>>
+processStereo(TONE3000Processor& proc, const std::vector<float>& in, int blockSize = 512) {
+  return processStereoLR(proc, in, in, blockSize);
 }
 
 // Largest |L - R| over the settled region (skips the first second: block

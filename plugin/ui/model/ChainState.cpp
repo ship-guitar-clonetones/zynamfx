@@ -15,6 +15,7 @@ juce::String toString(InputMode mode) {
   switch (mode) {
     case InputMode::left: return "left";
     case InputMode::right: return "right";
+    case InputMode::dualMono: return "dual";
     case InputMode::stereo: break;
   }
   return "stereo";
@@ -22,6 +23,7 @@ juce::String toString(InputMode mode) {
 InputMode inputModeFromString(const juce::String& s) {
   if (s == "left") return InputMode::left;
   if (s == "right") return InputMode::right;
+  if (s == "dual") return InputMode::dualMono;
   return InputMode::stereo;
 }
 
@@ -159,6 +161,7 @@ ChainState ChainState::parse(const juce::var& v) {
   s.stereoOutput = boolean(v, "stereoOutput", true);
   s.standalone = boolean(v, "standalone");
   s.inputMode = inputModeFromString(str(v, "inputMode", "stereo"));
+  s.dualMonoActive = boolean(v, "dualMonoActive");
   s.namSlimSizeDefault = num(v, "namSlimSizeDefault", 0);
   s.multiCore = boolean(v, "multiCore", true);
   s.sampleRate = num(v, "sampleRate", 48000);
