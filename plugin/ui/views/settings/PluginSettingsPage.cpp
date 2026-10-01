@@ -88,7 +88,9 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
       infoBar_("Show Info Bar",
                "Shows help text on hover explaining what elements do, plus keyboard shortcuts and a CPU meter."),
       showGate_("Show Gate", "Reduces unwanted noise like hum and hiss while you're playing."),
-      showTranspose_("Show Transpose", "Shifts the pitch of your instrument up or down. Handy for alternate tunings."),
+      showPitch_("Show Pitch Shift",
+                 "Transpose your instrument up or down without retuning or use a MIDI expression pedal for "
+                 "whammy-style effects."),
       namSize_("NAM A2 Size",
                "Default size for new NAM blocks. Existing blocks keep their own, so presets load as saved."),
       lite_("A2-Lite", "Sounds great and uses less CPU"),
@@ -146,11 +148,11 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
   infoBar_.onChange = [this](bool on) { services_.hints.setEnabled(on); };
   add(infoBar_);
 
-  // Gate / transpose: view settings the faceplate reads from the same keys.
+  // Gate / pitch: view settings the faceplate reads from the same keys.
   showGate_.onChange = [this](bool on) { services_.prefs.setBool(UiPrefs::kShowGateControl, on); };
-  showTranspose_.onChange = [this](bool on) { services_.prefs.setBool(UiPrefs::kShowTransposeControl, on); };
+  showPitch_.onChange = [this](bool on) { services_.prefs.setBool(UiPrefs::kShowPitchControl, on); };
   add(showGate_);
-  add(showTranspose_);
+  add(showPitch_);
 
   // NAM A2 Size.
   namSize_.setInlineLabel();
@@ -249,7 +251,7 @@ PluginSettingsPage::~PluginSettingsPage() {
 }
 
 void PluginSettingsPage::prefChanged(const juce::String& key) {
-  if (key == UiPrefs::kShowHints || key == UiPrefs::kShowGateControl || key == UiPrefs::kShowTransposeControl ||
+  if (key == UiPrefs::kShowHints || key == UiPrefs::kShowGateControl || key == UiPrefs::kShowPitchControl ||
       key == UiPrefs::kShowBlockSizeControl || key == UiPrefs::kShowBlockNormalizeControl)
     syncPrefs();
 }
@@ -257,7 +259,7 @@ void PluginSettingsPage::prefChanged(const juce::String& key) {
 void PluginSettingsPage::syncPrefs() {
   infoBar_.setValue(services_.hints.enabled());
   showGate_.setValue(services_.prefs.getBool(UiPrefs::kShowGateControl, true));
-  showTranspose_.setValue(services_.prefs.getBool(UiPrefs::kShowTransposeControl, false));
+  showPitch_.setValue(services_.prefs.getBool(UiPrefs::kShowPitchControl, false));
   const bool size = services_.prefs.getBool(UiPrefs::kShowBlockSizeControl, false);
   blockSize_.setValue(size);
   blockSize_.setExpanded(size);

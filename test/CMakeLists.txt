@@ -33,13 +33,13 @@ target_sources(DspTests PRIVATE
     src/multicore_tests.cpp
     src/outgain_tests.cpp
     src/padless_wav_tests.cpp
+    src/pitch_shift_tests.cpp
     src/preset_tests.cpp
     src/processor_tests.cpp
     src/spread_tests.cpp
     src/state_cache_tests.cpp
     src/swap_fade_tests.cpp
     src/tone_refresh_tests.cpp
-    src/transpose_tests.cpp
     src/tuner_tests.cpp
     src/worker_pool_tests.cpp
     # Compiled straight from the plugin tree so the tests exercise the real
@@ -48,6 +48,7 @@ target_sources(DspTests PRIVATE
     ../plugin/src/AutoOffset.cpp
     ../plugin/src/BlockEq.cpp
     ../plugin/src/BlockSpectrum.cpp
+    ../plugin/src/LegacyParamIds.cpp
     ../plugin/src/MidiMapper.cpp
     ../plugin/src/NamEngine.cpp
     ../plugin/src/PresetFile.cpp
@@ -64,8 +65,8 @@ target_sources(DspTests PRIVATE
     # is iOS-standalone-only and this suite never runs there (the stub is
     # also what the plugin itself compiles to everywhere but iOS).
     ../plugin/src/StandaloneStateAutosave.cpp
+    ../plugin/src/PitchShift.cpp
     ../plugin/src/StereoOffset.cpp
-    ../plugin/src/Transpose.cpp
     ../plugin/src/TunerDetector.cpp
 )
 

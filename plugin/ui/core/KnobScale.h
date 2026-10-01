@@ -89,7 +89,7 @@ inline const KnobScale& gateRangeDb() {
   return s;
 }
 
-// Transpose: bipolar semitones, centre = 0, ±24. The parameter is
+// Pitch shift: bipolar semitones, centre = 0, ±24. The parameter is
 // continuous; with the deck's STEP on the knob detents to whole semitones
 // and the readout shows them whole ("+3 st"), with STEP off it sweeps and
 // reads to a tenth ("+2.5 st"). The sign is spelled out so "+3 st" and
@@ -114,9 +114,9 @@ inline const KnobScale& semitones() {
   return s;
 }
 
-// Transpose deck. The tonality limit rides a log map whose top end reads
+// Pitch deck. The tonality limit rides a log map whose top end reads
 // "Off" (a pure shift; the processor treats the end value the same way);
-// the buffer is the four detents in Transpose.h (20 / 30 / 40 / 60 ms),
+// the buffer is the four detents in PitchShift.h (20 / 30 / 40 / 60 ms),
 // read out as the buffer size itself. (The latency each reports to the
 // host, 11 / 16 / 21 / 31 ms, is the help text's business.)
 inline const KnobScale& tonalityHz() {

@@ -3,6 +3,8 @@
 #include <atomic>
 #include <cstring>
 
+#include "LegacyParamIds.h"
+
 // #############################
 // STATE PERSISTENCE
 // #############################
@@ -332,7 +334,16 @@ void TONE3000Processor::setStateInformation(const void* data, int sizeInBytes) {
       juce::String(snapshot.getChildWithName("RightChainBlocks").getNumChildren()) +
       " right blocks)");
 
+  // Parameter ids an older build wrote are renamed in place before anything
+  // reads them (the tree is this call's own copy); the next save writes the
+  // current ids.
   juce::ValueTree parameterState = state.getChildWithName("PARAMETERS");
+  juce::ValueTree midiState = state.getChildWithName("MidiMappings");
+  if (const int renamed = t3k::legacy_ids::migrateParamIds(parameterState, "id") +
+                          t3k::legacy_ids::migrateParamIds(midiState, "targetId");
+      renamed > 0)
+    juce::Logger::writeToLog("[Restore] Renamed " + juce::String(renamed) + " legacy parameter ids");
+
   if (parameterState.isValid()) {
     parameters.replaceState(parameterState);
     DBG("Parameters restored from state");
@@ -349,7 +360,7 @@ void TONE3000Processor::setStateInformation(const void* data, int sizeInBytes) {
 
   // A missing child clears the map; a project without mappings must not
   // inherit the previous session's.
-  midiMapper.restoreFromValueTree(state.getChildWithName("MidiMappings"));
+  midiMapper.restoreFromValueTree(midiState);
 
   // A project load is a reconciling restore: matching blocks keep their
   // loaded engines, everything else decodes its embedded model bytes and

@@ -78,14 +78,14 @@ std::map<Key, String> buildTable() {
       knobDesktop("Release", "how fast the gate closes, 5-500 ms. Short: tight · long: natural tails.");
   t[Key::gateHold] = knobDesktop("Hold", "time the gate stays open after the signal drops, 0-200 ms.");
   t[Key::gateRange] = knobDesktop("Range", "how deep the gate closes, 20-80 dB. 80: mute · 20: tame.");
-  t[Key::transpose] =
-      knobDesktop("Transpose", "pitch-shift the input, ±24 semitones. Right-click: advanced.");
-  t[Key::transposePower] = kTouch ? U("Transpose Power: pitch shift on/off. On adds latency.")
-                                  : U("Transpose Power: pitch shift on/off. On adds latency. Right-click: advanced.");
-  t[Key::transposeStep] = U("STEP: snap the shift to whole semitones. Off: smooth sweep, like a whammy.");
-  t[Key::transposeTonality] =
+  t[Key::pitch] = knobDesktop("Pitch Shift",
+                              "transpose the input ±24 semitones. STEP off: whammy sweep. Right-click: advanced.");
+  t[Key::pitchPower] = kTouch ? U("Pitch Power: pitch shift on/off. On adds latency.")
+                              : U("Pitch Power: pitch shift on/off. On adds latency. Right-click: advanced.");
+  t[Key::pitchStep] = U("STEP: snap the shift to whole semitones (transpose). Off: smooth sweep, like a whammy.");
+  t[Key::pitchTonality] =
       knobDesktop("Tonality", "highs above this stay put, 1-20 kHz. Keeps pick attack bright; Off: pure shift.");
-  t[Key::transposeWindow] = knobDesktop(
+  t[Key::pitchWindow] = knobDesktop(
       "Buffer", "shifter delay buffer, 20-60 ms. Short: less latency · long: cleaner, more latency.");
   t[Key::toneBass] = knobDesktop("Bass", "tone stack lows, 0-10: ±20 dB shelf at 150 Hz.");
   t[Key::toneMiddle] = knobDesktop("Middle", "tone stack mids, 0-10: ±15 dB bell at 425 Hz.");

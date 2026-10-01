@@ -23388,7 +23388,7 @@
    "id": "settings-plugin",
    "section": "settings",
    "title": "Plugin Settings (in a DAW)",
-   "description": "Hosted builds get a single page: Show Info Bar, Show Gate and Show Transpose view toggles (gate on, transpose off by default; a powered effect shows regardless), MIDI Mapping and Advanced entry points, the update row when a newer version exists, and the running version in the footer.",
+   "description": "Hosted builds get a single page: Show Info Bar, Show Gate and Show Pitch Shift view toggles (gate on, pitch off by default; a powered effect shows regardless), MIDI Mapping and Advanced entry points, the update row when a newer version exists, and the running version in the footer.",
    "chain": {
     "revision": 1,
     "canUndo": true,
@@ -28971,10 +28971,10 @@
    "hasDrive": true
   },
   {
-   "id": "chrome-transpose-deck",
+   "id": "chrome-pitch-deck",
    "section": "chrome",
-   "title": "Transpose advanced deck",
-   "description": "Right-clicking the Transpose group (knob or power) opens the transpose deck above the plate, anchored to the knob: the STEP toggle (armed: whole semitones), Tonality and Buffer knobs, no power switches. The group is powered so the knob reads lit; every deck control sits at its default (STEP on, Off, 30 ms), so a stock rig reads unchanged.",
+   "title": "Pitch advanced deck",
+   "description": "Right-clicking the Pitch group (knob or power) opens the pitch deck above the plate, anchored to the knob: the STEP toggle (armed: whole semitones), Tonality and Buffer knobs, no power switches. The group is powered so the knob reads lit; every deck control sits at its default (STEP on, Off, 30 ms), so a stock rig reads unchanged.",
    "chain": {
     "revision": 1,
     "canUndo": true,
@@ -29247,7 +29247,7 @@
      "name": "Crunch Rhythm"
     }
    },
-   "toggles": { "transposeEnabled": true },
+   "toggles": { "pitchEnabled": true },
    "meters": {
     "input": [
      -18,

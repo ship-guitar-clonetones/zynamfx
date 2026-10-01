@@ -1,4 +1,4 @@
-#include "Transpose.h"
+#include "PitchShift.h"
 
 #include <juce_dsp/juce_dsp.h>
 
@@ -8,7 +8,7 @@
 #include <vector>
 
 // Tuning, all in ms so every rate behaves the same. The values are the ones
-// the bench in plugin/docs/transpose.md settled on; none is exposed.
+// the bench in plugin/docs/pitch-shift.md settled on; none is exposed.
 namespace {
 // A drift splice crossfades over kFadeMs when its lag matches well and
 // stretches toward kFadeMaxMs as the match worsens (ncc from kFadeNccHi
@@ -49,7 +49,7 @@ constexpr double kSearchLeadMs = 4.0;
 // kept for it; where the fades and the lead don't fit beside that (above
 // +8 on the 20 ms buffer, +11 on 30 ms) they shrink to make room. Smaller
 // shares keep longer fades but leave notes whose period the range misses
-// off-pitch (plugin/docs/transpose.md, Two octaves).
+// off-pitch (plugin/docs/pitch-shift.md, Two octaves).
 constexpr double kUpshiftLandShare = 0.5;
 // A pitch change smaller than this (in ratio; ~1.7 st around unity) keeps a
 // pending search: the landing moves by at most the change times the lead,
@@ -60,7 +60,7 @@ constexpr double kSearchKeepRatio = 0.1;
 constexpr double kBlendSeconds = 0.025;
 }  // namespace
 
-struct Transpose::Impl {
+struct PitchShift::Impl {
   // Power-of-two ring indexed by absolute sample number; sample i lives at
   // buf[i & mask]. Reads are 4-point Hermite so a fractional tap is smooth.
   struct Ring {
@@ -385,10 +385,10 @@ struct Transpose::Impl {
   }
 };
 
-Transpose::Transpose() : impl_(std::make_unique<Impl>()) {}
-Transpose::~Transpose() = default;
+PitchShift::PitchShift() : impl_(std::make_unique<Impl>()) {}
+PitchShift::~PitchShift() = default;
 
-void Transpose::prepare(double sampleRate, int maxBlockSamples) {
+void PitchShift::prepare(double sampleRate, int maxBlockSamples) {
   auto& s = *impl_;
   s.sampleRate = sampleRate;
   s.fadeLen = std::max(8, static_cast<int>(sampleRate * kFadeMs * 0.001));
@@ -428,7 +428,7 @@ void Transpose::prepare(double sampleRate, int maxBlockSamples) {
   s.reset();
 }
 
-void Transpose::setEnabled(bool on) {
+void PitchShift::setEnabled(bool on) {
   auto& s = *impl_;
   if (on == s.enabled) return;
   s.enabled = on;
@@ -446,9 +446,9 @@ void Transpose::setEnabled(bool on) {
   }
 }
 
-bool Transpose::isRunning() const { return impl_->running; }
+bool PitchShift::isRunning() const { return impl_->running; }
 
-void Transpose::setParams(const Params& p) {
+void PitchShift::setParams(const Params& p) {
   auto& s = *impl_;
   if (p.window != s.params.window) {
     // The rings are sized for the largest window and stay valid; a tap now
@@ -483,7 +483,7 @@ void Transpose::setParams(const Params& p) {
   }
 }
 
-void Transpose::process(juce::AudioBuffer<float>& buffer) {
+void PitchShift::process(juce::AudioBuffer<float>& buffer) {
   auto& s = *impl_;
   const int numChannels = juce::jmin(buffer.getNumChannels(), kMaxChannels);
   const int numSamples = buffer.getNumSamples();
@@ -604,4 +604,4 @@ void Transpose::process(juce::AudioBuffer<float>& buffer) {
   if (!s.enabled && !s.wetMix.isSmoothing()) s.running = false;
 }
 
-int Transpose::latencySamples() const { return (impl_->dMin + impl_->dMax) / 2; }
+int PitchShift::latencySamples() const { return (impl_->dMin + impl_->dMax) / 2; }

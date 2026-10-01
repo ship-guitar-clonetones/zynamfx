@@ -19,11 +19,9 @@ namespace {
 constexpr int kPadX = 30, kPadY = 16;
 constexpr int kGroupGap = 10;  // knob ↔ companion within a group
 constexpr int kToneGap = 24;   // between the three tone knobs
-// Gate ↔ Transpose inside the effects cluster: the tone stack's knob
-// spacing, measured from Gate's power box to the Transpose face (its label
-// column overflows the face on both sides), so the two read as one group
-// against the wider peer gap.
-constexpr int kEffectsGap = kToneGap - TransposeGroup::kFaceInset;
+// Gate ↔ Pitch inside the effects cluster: the tone stack's knob spacing,
+// so the two read as one group against the wider peer gap.
+constexpr int kEffectsGap = kToneGap;
 // Chrome boxes in a bottom-aligned row sit on the secondary-knob centreline.
 constexpr int kChromeLift = theme::faceplateChromeLift(theme::kKnobSizeSecondary);
 
@@ -224,9 +222,9 @@ Faceplate::Faceplate(Services& services)
              primaryKnob("Input", scales::gainDb(), 0.5f, help::Key::inputLevel)),
       inputMode_(std::make_unique<InputModeButton>(services)),
       gate_(services),
-      transpose_(services),
+      pitch_(services),
       gateEnabled_(services.backend, "gateEnabled"),
-      transposeEnabled_(services.backend, "transposeEnabled"),
+      pitchEnabled_(services.backend, "pitchEnabled"),
       bass_(services.backend, "toneBass",
             primaryKnob("Bass", scales::tone(), 0.5f, help::Key::toneBass)),
       middle_(services.backend, "toneMid",
@@ -250,7 +248,7 @@ Faceplate::Faceplate(Services& services)
   // The effects start hidden; syncFlags shows what the view settings and
   // the power switches ask for.
   addChildComponent(gate_);
-  addChildComponent(transpose_);
+  addChildComponent(pitch_);
 
   // Powered-off section: knobs + labels dim and go inert; the power button
   // stays outside the dimmed wrapper, bright and clickable.
@@ -270,7 +268,7 @@ Faceplate::Faceplate(Services& services)
   addChildComponent(balance_);
   addAndMakeVisible(output_);
 
-  for (auto* p : {&spreadEnabled_, &gateEnabled_, &transposeEnabled_}) p->onChange = [this] { syncFlags(); };
+  for (auto* p : {&spreadEnabled_, &gateEnabled_, &pitchEnabled_}) p->onChange = [this] { syncFlags(); };
   services_.prefs.addListener(this);
   services_.chain.addListener(this);
   services_.autoBalance.addListener(this);
@@ -286,7 +284,7 @@ Faceplate::~Faceplate() {
 void Faceplate::autoMeasureChanged() { autoBalance_.setOn(services_.autoBalance.listening()); }
 
 void Faceplate::prefChanged(const juce::String& key) {
-  if (key == UiPrefs::kShowGateControl || key == UiPrefs::kShowTransposeControl) syncFlags();
+  if (key == UiPrefs::kShowGateControl || key == UiPrefs::kShowPitchControl) syncFlags();
 }
 
 void Faceplate::showEffect(juce::Component& group, bool show) {
@@ -298,13 +296,12 @@ void Faceplate::showEffect(juce::Component& group, bool show) {
 void Faceplate::syncFlags() {
   const auto& chain = services_.chain.state();
 
-  // Effects: the view setting decides (gate on, transpose off by default),
+  // Effects: the view setting decides (gate on, pitch off by default),
   // except that a powered effect always shows. A preset or host state that
   // switches one on brings its group out; switching it off again lets the
   // setting hide it.
   showEffect(gate_, services_.prefs.getBool(UiPrefs::kShowGateControl, true) || gateEnabled_.boolValue());
-  showEffect(transpose_,
-             services_.prefs.getBool(UiPrefs::kShowTransposeControl, false) || transposeEnabled_.boolValue());
+  showEffect(pitch_, services_.prefs.getBool(UiPrefs::kShowPitchControl, false) || pitchEnabled_.boolValue());
 
   // The rig can drive two distinct output channels at all (stereo host bus /
   // 2+ channel output device). False dims the Spread group and makes it
@@ -356,12 +353,12 @@ void Faceplate::resized() {
 
   // The peers share the plate width (space-between). Their footprints are
   // fixed; the input group grows when the input-mode button shows, and the
-  // effects cluster holds whichever of gate / transpose is showing (none:
-  // the cluster leaves the row and four peers spread).
+  // effects cluster holds whichever of gate / pitch is showing (none: the
+  // cluster leaves the row and four peers spread).
   const int inputW = primary + (inputMode_->isVisible() ? kGroupGap + inputMode_->getWidth() : 0);
-  const bool gate = gate_.isVisible(), transpose = transpose_.isVisible();
-  const int effectsW = (gate ? GateGroup::kWidth : 0) + (gate && transpose ? kEffectsGap : 0) +
-                       (transpose ? TransposeGroup::kWidth : 0);
+  const bool gate = gate_.isVisible(), pitch = pitch_.isVisible();
+  const int effectsW =
+      (gate ? GateGroup::kWidth : 0) + (gate && pitch ? kEffectsGap : 0) + (pitch ? PitchGroup::kWidth : 0);
   const int toneW = 3 * primary + 2 * kToneGap + kGroupGap + box;
   const int imageW = StereoImageGroup::kWidth;
   const int outputW = box + kGroupGap + secondary + kGroupGap + primary;
@@ -377,14 +374,14 @@ void Faceplate::resized() {
   inputMode_->setTopLeftPosition(at(x) + primary + kGroupGap, chromeY);
   x += inputW + gap;
 
-  // Effects: Gate + power (+ deck), Transpose + power (+ deck)
+  // Effects: Gate + power (+ deck), Pitch + power (+ deck)
   if (gate) {
     gate_.setTopLeftPosition(at(x), knobY(secondary));
-    x += GateGroup::kWidth + (transpose ? kEffectsGap : 0);
+    x += GateGroup::kWidth + (pitch ? kEffectsGap : 0);
   }
-  if (transpose) {
-    transpose_.setTopLeftPosition(at(x), knobY(secondary));
-    x += TransposeGroup::kWidth;
+  if (pitch) {
+    pitch_.setTopLeftPosition(at(x), knobY(secondary));
+    x += PitchGroup::kWidth;
   }
   if (effectsW > 0) x += gap;
 

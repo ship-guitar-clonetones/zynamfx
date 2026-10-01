@@ -707,7 +707,7 @@ struct ReadoutTests : juce::UnitTest {
     expectEquals(scales::gateRangeDb().format(1.0), juce::String("80 dB"));
     expectEquals(scales::gateRangeDb().format(0.0), juce::String("20 dB"));
 
-    beginTest("transpose readouts mirror the processor's ranges");
+    beginTest("pitch readouts mirror the processor's ranges");
     // Semitones, signed, ±24; the centre is 0 (the MockBackend seed). Whole
     // values (STEP on) read whole, anything else to a tenth.
     expectEquals(scales::semitones().format(0.5), juce::String("0 st"));
@@ -1660,7 +1660,7 @@ struct KnobReadoutTests : juce::UnitTest {
   }
 };
 
-// The faceplate's effects cluster: gate shows and transpose hides by
+// The faceplate's effects cluster: gate shows and pitch hides by
 // default, the Effects view settings flip either, a powered effect shows
 // regardless, and the plate re-spreads around whatever is showing.
 struct FaceplateEffectsTests : juce::UnitTest {
@@ -1700,37 +1700,37 @@ struct FaceplateEffectsTests : juce::UnitTest {
       pump(30);
     };
 
-    beginTest("gate shows and transpose hides by default");
+    beginTest("gate shows and pitch hides by default");
     expect(knob(root, "Gate") != nullptr);
-    expect(knob(root, "Transpose") == nullptr);
+    expect(knob(root, "Pitch") == nullptr);
     const int gateOnly = toneX(root);
 
-    beginTest("the Transpose view setting brings its group out and the plate re-spreads");
-    prefs.setBool(UiPrefs::kShowTransposeControl, true);
+    beginTest("the Pitch Shift view setting brings its group out and the plate re-spreads");
+    prefs.setBool(UiPrefs::kShowPitchControl, true);
     pump(30);
-    auto* transpose = knob(root, "Transpose");
+    auto* pitch = knob(root, "Pitch");
     auto* gate = knob(root, "Gate");
-    expect(transpose != nullptr && gate != nullptr);
+    expect(pitch != nullptr && gate != nullptr);
     const int both = toneX(root);
     expect(both > gateOnly, "the tone stack moves over for the wider cluster");
-    if (transpose != nullptr && gate != nullptr) {
+    if (pitch != nullptr && gate != nullptr) {
       // Grouped: the pair sits closer together than the cluster does to the
       // tone stack.
       const auto g = root.getLocalArea(gate, gate->getLocalBounds());
-      const auto t = root.getLocalArea(transpose, transpose->getLocalBounds());
+      const auto t = root.getLocalArea(pitch, pitch->getLocalBounds());
       const int between = t.getX() - g.getRight();
-      expect(between > 0 && between < both - t.getRight(), "gate and transpose read as one cluster");
+      expect(between > 0 && between < both - t.getRight(), "gate and pitch read as one cluster");
     }
 
     beginTest("off again hides it, unless the effect is powered");
-    prefs.setBool(UiPrefs::kShowTransposeControl, false);
+    prefs.setBool(UiPrefs::kShowPitchControl, false);
     pump(30);
-    expect(knob(root, "Transpose") == nullptr);
-    power("transposeEnabled", true);
-    expect(knob(root, "Transpose") != nullptr, "a powered effect shows regardless of the view setting");
+    expect(knob(root, "Pitch") == nullptr);
+    power("pitchEnabled", true);
+    expect(knob(root, "Pitch") != nullptr, "a powered effect shows regardless of the view setting");
     expectEquals(toneX(root), both);
-    power("transposeEnabled", false);
-    expect(knob(root, "Transpose") == nullptr, "switching it off lets the setting hide it again");
+    power("pitchEnabled", false);
+    expect(knob(root, "Pitch") == nullptr, "switching it off lets the setting hide it again");
     expectEquals(toneX(root), gateOnly);
 
     beginTest("with no effects showing, four peers spread");

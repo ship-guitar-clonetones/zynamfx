@@ -24,7 +24,7 @@
 #include "RtWorkerPool.h"
 #include "MidiMapper.h"
 #include "NoiseGate.h"
-#include "Transpose.h"
+#include "PitchShift.h"
 #include "Spread.h"
 #include "StereoOffset.h"
 #include "PresetManager.h"
@@ -978,8 +978,8 @@ private:
   // Boundary latency in host samples (0 at a 48k host). Constant per host
   // rate; chain edits never change reported latency.
   int chainBoundaryLatency = 0;
-  // Reports boundary + transpose latency to the host. Message thread:
-  // prepareToPlay, and the transpose power / window parameter changes (the
+  // Reports boundary + pitch shift latency to the host. Message thread:
+  // prepareToPlay, and the pitch power / window parameter changes (the
   // only runtime latency edges).
   void updateLatency();
   // Second channel handed to the boundary when the host buffer is mono (the
@@ -1059,12 +1059,12 @@ private:
   NoiseGate inputGate;
   bool gateWasEnabled = true;
 
-  // Input-stage pitch shifter (post gate, host rate; see Transpose.h). Runs
+  // Input-stage pitch shifter (post gate, host rate; see PitchShift.h). Runs
   // while powered and through its power-off blend, then not at all, so a
   // powered-off plugin stays bit-exact and zero-latency. The latency it
   // adds is reported from the message thread (see updateLatency), never
   // from processBlock.
-  Transpose transpose;
+  PitchShift pitchShift;
 
   // Raw APVTS parameter atomics, resolved once in the constructor. The audio
   // thread reads these every block; getRawParameterValue is a string-keyed
@@ -1107,11 +1107,11 @@ private:
     std::atomic<float>* inputCalibrationLevel = nullptr;
     std::atomic<float>* osEnabled = nullptr;
     std::atomic<float>* osFactor = nullptr;
-    std::atomic<float>* transposeEnabled = nullptr;
-    std::atomic<float>* transposeSemitones = nullptr;
-    std::atomic<float>* transposeStep = nullptr;
-    std::atomic<float>* transposeTonality = nullptr;
-    std::atomic<float>* transposeWindow = nullptr;
+    std::atomic<float>* pitchEnabled = nullptr;
+    std::atomic<float>* pitchSemitones = nullptr;
+    std::atomic<float>* pitchStep = nullptr;
+    std::atomic<float>* pitchTonality = nullptr;
+    std::atomic<float>* pitchWindow = nullptr;
   } paramRefs;
   void resolveParamRefs();
 
@@ -1188,8 +1188,8 @@ private:
   float cacheTargetLoudness = -18.0f;
   bool cacheCalibrateInput = false;
   float cacheInputCalibrationLevel = 12.0f;
-  bool cacheTransposeEnabled = false;
-  Transpose::Params cacheTranspose;
+  bool cachePitchEnabled = false;
+  PitchShift::Params cachePitch;
 
   void updateEqCoefficients();
   void updateCachedParameters();

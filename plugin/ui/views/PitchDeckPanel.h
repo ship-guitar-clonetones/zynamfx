@@ -1,9 +1,9 @@
-// The transpose group's advanced panel (right-click the group; touch-and-hold
+// The pitch group's advanced panel (right-click the group; touch-and-hold
 // the knob): the settings behind the semitone knob.
 //  - STEP: on (the default), the knob detents to whole semitones and the
-//    processor rounds the shift, so automation snaps too; off, the knob
-//    sweeps smoothly (Shift-drag for fine control) like a whammy pedal.
-//    Same chrome as the EQ card's PRE toggle.
+//    processor rounds the shift, so automation snaps too (a transpose);
+//    off, the knob sweeps smoothly (Shift-drag for fine control) like a
+//    whammy pedal. Same chrome as the EQ card's PRE toggle.
 //  - Tonality: the frequency above which the input bypasses the shifter
 //    (1-20 kHz, log), so pick attack and fret noise keep their brightness
 //    while the notes move. Off (the top) is a pure shift.
@@ -23,17 +23,17 @@
 
 namespace t3k::ui {
 
-class TransposeDeckPanel : public Popover {
+class PitchDeckPanel : public Popover {
 public:
   static constexpr int kWidth = 262;
   static constexpr int kHeight = 85;
   // Gap between the panel's bottom edge and its anchor's top.
   static constexpr int kGap = 6;
 
-  explicit TransposeDeckPanel(Services& services);
+  explicit PitchDeckPanel(Services& services);
 
   // Restores the whole deck to its defaults (Alt/Option-click on the
-  // Transpose knob resets the effect, not just the semitones).
+  // Pitch knob resets the effect, not just the semitones).
   static void resetDeck(Backend& backend);
 
   void paint(juce::Graphics& g) override;

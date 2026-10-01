@@ -1,9 +1,9 @@
-// Transpose tests
+// Pitch shift tests
 //
-// The mechanical guarantees of the input-stage pitch shifter (Transpose.h)
+// The mechanical guarantees of the input-stage pitch shifter (PitchShift.h)
 // and of the processor wiring around it:
 //
-//   TransposeTest   the latency figure the processor reports from the
+//   PitchShiftTest  the latency figure the processor reports from the
 //                   parameters matches the engine at every window and rate;
 //                   at a 1.0 ratio the output is a pure delay at the floor
 //                   and unity gain; the shift lands on the expected frequency
@@ -22,13 +22,17 @@
 //                   powering on reports boundary + window latency from the
 //                   message thread; STEP rounds the shift for the engine;
 //                   the parameters round-trip through state and presets; a
-//                   state or preset saved before Transpose existed lands it
-//                   on the defaults (off).
+//                   state or preset saved before the pitch shifter existed
+//                   lands it on the defaults (off); state, MIDI maps and
+//                   presets from the beta builds that called it Transpose
+//                   load under the current ids (LegacyParamIds.h).
 //
 // Splice quality (sidebands, warble, onset timing on real DIs) is the
-// bench's job, see plugin/docs/transpose.md.
+// bench's job, see plugin/docs/pitch-shift.md.
+#include "LegacyParamIds.h"
+#include "PitchShift.h"
+#include "PresetFile.h"
 #include "Processor.h"
-#include "Transpose.h"
 #include "test_helpers.h"
 
 #include <gtest/gtest.h>
@@ -36,6 +40,7 @@
 #include <juce_events/juce_events.h>
 
 #include <cmath>
+#include <map>
 #include <vector>
 
 namespace {
@@ -44,10 +49,10 @@ constexpr int kBlock = 512;
 
 // Streams mono `in` through a shifter in kBlock blocks (the tail as a short
 // one), optionally switching to `p2` at sample `switchAt`.
-std::vector<float> runTranspose(const std::vector<float>& in, const Transpose::Params& p,
-                                double fs = kFs, const Transpose::Params* p2 = nullptr,
+std::vector<float> runPitchShift(const std::vector<float>& in, const PitchShift::Params& p,
+                                double fs = kFs, const PitchShift::Params* p2 = nullptr,
                                 int switchAt = -1) {
-  Transpose t;
+  PitchShift t;
   t.prepare(fs, kBlock);
   t.setEnabled(true);
   t.setParams(p);
@@ -94,80 +99,80 @@ void expectShiftedTo(const std::vector<float>& out, double original, double expe
 
 }  // namespace
 
-TEST(TransposeTest, LatencyFigureMatchesTheEngineAtAnyRate) {
+TEST(PitchShiftTest, LatencyFigureMatchesTheEngineAtAnyRate) {
   // The processor reports latency from the parameters via the static
   // figure, before the audio thread has switched windows; the engine the
   // audio thread runs must agree with it, at every window and host rate.
   for (const double fs : {44100.0, 48000.0, 96000.0}) {
-    Transpose t;
+    PitchShift t;
     t.prepare(fs, kBlock);
     t.setEnabled(true);
-    for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
-      const auto window = Transpose::windowFromIndex(w);
-      Transpose::Params p;
+    for (int w = 0; w < static_cast<int>(PitchShift::kWindowMs.size()); ++w) {
+      const auto window = PitchShift::windowFromIndex(w);
+      PitchShift::Params p;
       p.window = window;
       t.setParams(p);
-      EXPECT_EQ(t.latencySamples(), Transpose::latencySamples(window, fs)) << fs << " Hz, window " << w;
+      EXPECT_EQ(t.latencySamples(), PitchShift::latencySamples(window, fs)) << fs << " Hz, window " << w;
       // The tap's mean delay: halfway between the floor and the buffer.
-      const int floor = static_cast<int>(fs * Transpose::kMinDelayMs / 1000);
-      const int buffer = static_cast<int>(fs * Transpose::windowMs(window) / 1000);
+      const int floor = static_cast<int>(fs * PitchShift::kMinDelayMs / 1000);
+      const int buffer = static_cast<int>(fs * PitchShift::windowMs(window) / 1000);
       EXPECT_EQ(t.latencySamples(), (floor + buffer) / 2);
     }
   }
-  EXPECT_EQ(Transpose::latencySamples(Transpose::Window::ms30, kFs), 768);  // (2 + 30) / 2 ms
-  EXPECT_DOUBLE_EQ(Transpose::latencyMs(Transpose::Window::ms30), 16.0);
+  EXPECT_EQ(PitchShift::latencySamples(PitchShift::Window::ms30, kFs), 768);  // (2 + 30) / 2 ms
+  EXPECT_DOUBLE_EQ(PitchShift::latencyMs(PitchShift::Window::ms30), 16.0);
 }
 
-TEST(TransposeTest, UnityRatioIsAPureDelayAtTheFloor) {
+TEST(PitchShiftTest, UnityRatioIsAPureDelayAtTheFloor) {
   // Powered on at 0 st the tap does not drift, so the output is the input
   // delayed by the floor (where attacks are re-synced to) at unity gain.
   // Sweeping the knob through 0 therefore never jumps the timing.
-  Transpose::Params p;
-  const int floor = Transpose::minDelaySamples(kFs);
+  PitchShift::Params p;
+  const int floor = PitchShift::minDelaySamples(kFs);
   const auto noise = makeNoise(2 * 48000, 3, 0.4f);
-  const auto out = runTranspose(noise, p);
+  const auto out = runPitchShift(noise, p);
   EXPECT_EQ(bestCorrelationLag(out, noise, 48000, 8192, floor + 256), floor);
   for (int i = 48000; i < 48000 + 8192; ++i)
     ASSERT_NEAR(out[static_cast<size_t>(i)], noise[static_cast<size_t>(i - floor)], 1e-5f) << i;
   const auto tone = makeSine(3 * 48000, 440.0, 0.5f);
-  const auto toneOut = runTranspose(tone, p);
+  const auto toneOut = runPitchShift(tone, p);
   const double gain = db(goertzelPower(toneOut.data() + 96000, 16384, 440.0)) -
                       db(goertzelPower(tone.data() + 96000, 16384, 440.0));
   EXPECT_NEAR(gain, 0.0, 0.05);
 }
 
-TEST(TransposeTest, OctavesUpAndDownLandOnTheFrequency) {
+TEST(PitchShiftTest, OctavesUpAndDownLandOnTheFrequency) {
   // Every buffer: two octaves up on the short ones is where the upshift
   // geometry has to shrink its fades to keep a landing range (a splice
   // with nowhere to choose from is not period-matched and drags the pitch).
   const auto in = makeSine(3 * 48000, 440.0, 0.5f);
   for (const int semis : {12, -12, 24, -24})
-    for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
-      Transpose::Params p;
+    for (int w = 0; w < static_cast<int>(PitchShift::kWindowMs.size()); ++w) {
+      PitchShift::Params p;
       p.semitones = static_cast<float>(semis);
-      p.window = Transpose::windowFromIndex(w);
-      expectShiftedTo(runTranspose(in, p), 440.0, 440.0 * std::pow(2.0, semis / 12.0));
+      p.window = PitchShift::windowFromIndex(w);
+      expectShiftedTo(runPitchShift(in, p), 440.0, 440.0 * std::pow(2.0, semis / 12.0));
     }
 }
 
-TEST(TransposeTest, FractionalShiftsAreContinuous) {
+TEST(PitchShiftTest, FractionalShiftsAreContinuous) {
   // The parameter is continuous (STEP is the processor's business): -1.5 st
   // is a ratio of 2^(-1.5/12), not -1 or -2.
   const auto in = makeSine(3 * 48000, 440.0, 0.5f);
-  Transpose::Params p;
+  PitchShift::Params p;
   p.semitones = -1.5f;
-  expectShiftedTo(runTranspose(in, p), 440.0, 440.0 * std::pow(2.0, -1.5 / 12.0));
+  expectShiftedTo(runPitchShift(in, p), 440.0, 440.0 * std::pow(2.0, -1.5 / 12.0));
 }
 
-TEST(TransposeTest, ShiftedToneKeepsUnityGainAtEveryWindow) {
+TEST(PitchShiftTest, ShiftedToneKeepsUnityGainAtEveryWindow) {
   // Splices land on whole periods of a steady tone, so the crossfades add
   // nothing and take nothing away, at any buffer size.
   const auto in = makeSine(3 * 48000, 220.0, 0.5f);
-  for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
-    Transpose::Params p;
+  for (int w = 0; w < static_cast<int>(PitchShift::kWindowMs.size()); ++w) {
+    PitchShift::Params p;
     p.semitones = -2;
-    p.window = Transpose::windowFromIndex(w);
-    const auto out = runTranspose(in, p);
+    p.window = PitchShift::windowFromIndex(w);
+    const auto out = runPitchShift(in, p);
     const double expected = 220.0 * std::pow(2.0, -2.0 / 12.0);
     const double gain = db(goertzelPower(out.data() + 48000, 65536, expected)) -
                         db(goertzelPower(in.data() + 48000, 65536, 220.0));
@@ -175,16 +180,16 @@ TEST(TransposeTest, ShiftedToneKeepsUnityGainAtEveryWindow) {
   }
 }
 
-TEST(TransposeTest, SpliceBetweenUncorrelatedTapsHoldsTheLevel) {
+TEST(PitchShiftTest, SpliceBetweenUncorrelatedTapsHoldsTheLevel) {
   // On noise no lag matches, so every drift splice crossfades two
   // uncorrelated signals over the longest fade (120 ms). A plain
   // complementary fade would dip 3 dB in the middle of each one; the gains
   // are normalised by the taps' correlation so the level holds. 20 ms RMS
   // windows of the shifted noise stay within 1 dB of their median.
   const auto in = makeNoise(4 * 48000, 21, 0.4f);
-  Transpose::Params p;
+  PitchShift::Params p;
   p.semitones = -2;
-  const auto out = runTranspose(in, p);
+  const auto out = runPitchShift(in, p);
   constexpr int kWin = 960;
   std::vector<double> rms;
   for (int end = 48000 + kWin; end <= static_cast<int>(out.size()); end += kWin) {
@@ -198,26 +203,26 @@ TEST(TransposeTest, SpliceBetweenUncorrelatedTapsHoldsTheLevel) {
   for (size_t k = 0; k < rms.size(); ++k) EXPECT_NEAR(rms[k], median, 1.0) << "window " << k;
 }
 
-TEST(TransposeTest, TonalityLimitPassesTheHighsUnshifted) {
+TEST(PitchShiftTest, TonalityLimitPassesTheHighsUnshifted) {
   // Above the limit the input bypasses the shifter: an octave up moves a
   // 6 kHz partial to 12 kHz with the limit off, and leaves it at 6 kHz with
   // a 2 kHz limit.
   const auto in = makeSine(3 * 48000, 6000.0, 0.5f);
-  Transpose::Params p;
+  PitchShift::Params p;
   p.semitones = 12;
-  expectShiftedTo(runTranspose(in, p), 6000.0, 12000.0);
+  expectShiftedTo(runPitchShift(in, p), 6000.0, 12000.0);
   p.tonalityHz = 2000.0f;
-  expectShiftedTo(runTranspose(in, p), 12000.0, 6000.0);
+  expectShiftedTo(runPitchShift(in, p), 12000.0, 6000.0);
   // ... while a partial below the limit still shifts.
   const auto low = makeSine(3 * 48000, 440.0, 0.5f);
-  expectShiftedTo(runTranspose(low, p), 440.0, 880.0);
+  expectShiftedTo(runPitchShift(low, p), 440.0, 880.0);
 }
 
-TEST(TransposeTest, PickAttackReSyncsTheTapToTheFloor) {
+TEST(PitchShiftTest, PickAttackReSyncsTheTapToTheFloor) {
   // On a sustained note the tap drifts across the buffer; a pick attack
   // must not wait for it. The burst has to appear in the output within the
   // floor plus the re-sync span, wherever the tap was.
-  const int floor = Transpose::minDelaySamples(kFs);
+  const int floor = PitchShift::minDelaySamples(kFs);
   const int span = static_cast<int>(kFs * 0.004);
   const int fade = static_cast<int>(kFs * 0.002);
   // 1 ms RMS of `x` ending at `end`.
@@ -233,9 +238,9 @@ TEST(TransposeTest, PickAttackReSyncsTheTapToTheFloor) {
     auto in = makeSine(hold + 24000, 110.0, 0.1f);
     const auto burst = makeNoise(24000, 11, 0.9f);
     for (int i = 0; i < 24000; ++i) in[static_cast<size_t>(hold + i)] = burst[static_cast<size_t>(i)];
-    Transpose::Params p;
+    PitchShift::Params p;
     p.semitones = -2;
-    const auto out = runTranspose(in, p);
+    const auto out = runPitchShift(in, p);
     // Arrival: the first 1 ms window past the step's midpoint level (the
     // tone's RMS is 0.07, the burst's 0.52).
     int arrival = -1;
@@ -249,14 +254,14 @@ TEST(TransposeTest, PickAttackReSyncsTheTapToTheFloor) {
   }
 }
 
-TEST(TransposeTest, StereoChannelsShareOneTap) {
+TEST(PitchShiftTest, StereoChannelsShareOneTap) {
   // The lag search and the detector run on the channel mean and both
   // channels read the same tap, so a right channel that is half the left
   // stays exactly half through every splice: the image never smears.
-  Transpose t;
+  PitchShift t;
   t.prepare(kFs, kBlock);
   t.setEnabled(true);
-  Transpose::Params p;
+  PitchShift::Params p;
   p.semitones = -3;
   t.setParams(p);
   juce::AudioBuffer<float> buf(2, kBlock);
@@ -272,14 +277,14 @@ TEST(TransposeTest, StereoChannelsShareOneTap) {
   }
 }
 
-TEST(TransposeTest, MonoBufferAgainstTheStereoEngineIsSafe) {
+TEST(PitchShiftTest, MonoBufferAgainstTheStereoEngineIsSafe) {
   // A genuinely mono host buffer (see
   // ProcessorTest.StereoChainsFoldToMonoWithoutAStereoOutput) feeds the
   // engine from its one channel; nothing may read or write past it.
-  Transpose t;
+  PitchShift t;
   t.prepare(kFs, kBlock);
   t.setEnabled(true);
-  Transpose::Params p;
+  PitchShift::Params p;
   p.semitones = 7;
   t.setParams(p);
   juce::AudioBuffer<float> mono(1, kBlock);
@@ -291,9 +296,9 @@ TEST(TransposeTest, MonoBufferAgainstTheStereoEngineIsSafe) {
   expectFinite(mono);
 }
 
-TEST(TransposeTest, SurvivesRateBlockAndWindowChanges) {
-  Transpose t;
-  Transpose::Params p;
+TEST(PitchShiftTest, SurvivesRateBlockAndWindowChanges) {
+  PitchShift t;
+  PitchShift::Params p;
   p.semitones = 5;
   auto run = [&](int block, unsigned seed) {
     juce::AudioBuffer<float> buf(2, block);
@@ -313,8 +318,8 @@ TEST(TransposeTest, SurvivesRateBlockAndWindowChanges) {
   // A block bigger than the prepared size (an offline bounce).
   run(4096, 3);
   // Every window, switched live, at both shift directions.
-  for (int w = 0; w < static_cast<int>(Transpose::kWindowMs.size()); ++w) {
-    p.window = Transpose::windowFromIndex(w);
+  for (int w = 0; w < static_cast<int>(PitchShift::kWindowMs.size()); ++w) {
+    p.window = PitchShift::windowFromIndex(w);
     for (const int semis : {24, -24}) {
       p.semitones = static_cast<float>(semis);
       t.setParams(p);
@@ -323,11 +328,11 @@ TEST(TransposeTest, SurvivesRateBlockAndWindowChanges) {
   }
 }
 
-TEST(TransposeTest, ExtremeShiftsStayBounded) {
+TEST(PitchShiftTest, ExtremeShiftsStayBounded) {
   for (const int semis : {-24, 24}) {
-    Transpose::Params p;
+    PitchShift::Params p;
     p.semitones = static_cast<float>(semis);
-    const auto out = runTranspose(makeNoise(static_cast<int>(kFs), 555u + static_cast<unsigned>(semis), 0.5f), p);
+    const auto out = runPitchShift(makeNoise(static_cast<int>(kFs), 555u + static_cast<unsigned>(semis), 0.5f), p);
     for (const float s : out) {
       ASSERT_TRUE(std::isfinite(s)) << semis;
       ASSERT_LT(std::abs(s), 10.0f) << semis;
@@ -335,13 +340,13 @@ TEST(TransposeTest, ExtremeShiftsStayBounded) {
   }
 }
 
-TEST(TransposeTest, SmoothSweepNeverBreaksTheTone) {
+TEST(PitchShiftTest, SmoothSweepNeverBreaksTheTone) {
   // STEP off, the knob sweeps: the shift changes a little every block, the
   // whole ±24 both ways in 4 s. A pending lag search must survive the small
   // changes (a tap arriving at the buffer end without a plan would run off
   // the ring), so the tone stays continuous: no sample step past a 220 Hz
   // tone's own (~0.014 at 0.5), no hole, everything finite.
-  Transpose t;
+  PitchShift t;
   t.prepare(kFs, kBlock);
   t.setEnabled(true);
   constexpr int kBlocks = 4 * 48000 / kBlock;
@@ -352,7 +357,7 @@ TEST(TransposeTest, SmoothSweepNeverBreaksTheTone) {
     // A triangle: 0 -> +24 -> -24 -> 0.
     const double phase = static_cast<double>(b) / kBlocks;
     const double semis = phase < 0.25 ? 96.0 * phase : phase < 0.75 ? 24.0 - 96.0 * (phase - 0.25) : -24.0 + 96.0 * (phase - 0.75);
-    Transpose::Params p;
+    PitchShift::Params p;
     p.semitones = static_cast<float>(semis);
     t.setParams(p);
     buf.copyFrom(0, 0, in.data() + b * kBlock, kBlock);
@@ -370,30 +375,30 @@ TEST(TransposeTest, SmoothSweepNeverBreaksTheTone) {
   }
 }
 
-TEST(TransposeTest, WindowChangeKeepsTheShift) {
+TEST(PitchShiftTest, WindowChangeKeepsTheShift) {
   // Switching buffers mid-stream: the ratio must carry over and the tap
   // must find its way into the new range.
   const auto in = makeSine(4 * 48000, 440.0, 0.5f);
-  Transpose::Params a, b;
+  PitchShift::Params a, b;
   a.semitones = b.semitones = 12;
-  a.window = Transpose::Window::ms20;
-  b.window = Transpose::Window::ms60;
-  const auto out = runTranspose(in, a, kFs, &b, 94 * kBlock);  // on a block edge, or never applied
+  a.window = PitchShift::Window::ms20;
+  b.window = PitchShift::Window::ms60;
+  const auto out = runPitchShift(in, a, kFs, &b, 94 * kBlock);  // on a block edge, or never applied
   expectShiftedTo(out, 440.0, 880.0);
 }
 
-TEST(TransposeTest, WindowChangeIsSeamless) {
+TEST(PitchShiftTest, WindowChangeIsSeamless) {
   // Shrinking the buffer from 60 to 20 ms while the tap sits deep in it:
   // the rings keep their audio, so there is no hole, and the tap splices
   // back into range through a crossfade, so there is no step. A 220 Hz
   // tone's own largest step is ~0.014 per sample at 0.5 amplitude.
   const auto in = makeSine(3 * 48000, 220.0, 0.5f);
-  Transpose::Params a, b;
+  PitchShift::Params a, b;
   a.semitones = b.semitones = -2;
-  a.window = Transpose::Window::ms60;
-  b.window = Transpose::Window::ms20;
+  a.window = PitchShift::Window::ms60;
+  b.window = PitchShift::Window::ms20;
   const int switchAt = 96 * kBlock;
-  const auto out = runTranspose(in, a, kFs, &b, switchAt);
+  const auto out = runPitchShift(in, a, kFs, &b, switchAt);
   EXPECT_LT(maxStep(out, switchAt - 4800, switchAt + 4800), 0.03f);
   for (int end = switchAt + 240; end <= switchAt + 4800; end += 240) {
     double acc = 0.0;
@@ -402,15 +407,15 @@ TEST(TransposeTest, WindowChangeIsSeamless) {
   }
 }
 
-TEST(TransposeTest, PowerBlendsInsteadOfStepping) {
+TEST(PitchShiftTest, PowerBlendsInsteadOfStepping) {
   // Power on and off mid-tone: the dry and the shifted signal crossfade
   // over 25 ms; neither edge may step, and after the fade-out lands the
   // engine reports itself stopped so the processor can bypass it. An
   // off/on tap inside the fade-out (one block apart) must turn the blend
   // around, not restart the engine at a nonzero mix.
-  Transpose t;
+  PitchShift t;
   t.prepare(kFs, kBlock);
-  Transpose::Params p;
+  PitchShift::Params p;
   p.semitones = -5;
   constexpr int kLength = 288 * kBlock;  // ~3 s
   const auto in = makeSine(kLength, 220.0, 0.5f);
@@ -443,25 +448,25 @@ TEST(TransposeTest, PowerBlendsInsteadOfStepping) {
             db(goertzelPower(out.data() + 60 * kBlock, 32768, 220.0)) + 20.0);
 }
 
-TEST(TransposeTest, TonalityBlendsInsteadOfStepping) {
+TEST(PitchShiftTest, TonalityBlendsInsteadOfStepping) {
   const auto in = makeSine(3 * 48000, 220.0, 0.5f);
-  Transpose::Params a, b;
+  PitchShift::Params a, b;
   a.semitones = b.semitones = -2;
   b.tonalityHz = 3000.0f;
   const int switchAt = 96 * kBlock;
-  const auto out = runTranspose(in, a, kFs, &b, switchAt);
+  const auto out = runPitchShift(in, a, kFs, &b, switchAt);
   EXPECT_LT(maxStep(out, switchAt - 4800, switchAt + 4800), 0.03f);
 }
 
-TEST(TransposeTest, UpshiftOnTheSmallestBufferStaysOnPitch) {
+TEST(PitchShiftTest, UpshiftOnTheSmallestBufferStaysOnPitch) {
   // +12 on 20 ms is the tightest case: the tap covers the buffer in ~12 ms
   // and the guard, fade and search lead eat most of it. Splices must still
   // find whole-period jumps.
   const auto in = makeSine(3 * 48000, 440.0, 0.5f);
-  Transpose::Params p;
+  PitchShift::Params p;
   p.semitones = 12;
-  p.window = Transpose::Window::ms20;
-  const auto out = runTranspose(in, p);
+  p.window = PitchShift::Window::ms20;
+  const auto out = runPitchShift(in, p);
   // Peak of a 1.36 s spectrum within 3 cents of 880.
   double best = 0.0, bestF = 0.0;
   for (double f = 870.0; f <= 890.0; f += 0.25) {
@@ -504,33 +509,33 @@ std::vector<float> processThrough(TONE3000Processor& proc, const std::vector<flo
 
 }  // namespace
 
-TEST(ProcessorTest, TransposeDefaultsAreOffAndMatchTheDsp) {
+TEST(ProcessorTest, PitchDefaultsAreOffAndMatchTheDsp) {
   TONE3000Processor proc;
-  const Transpose::Params p;
-  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 0.0f);
-  EXPECT_NEAR(denormalised(proc, "transposeSemitones"), p.semitones, 1e-4f);
-  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeStep")->load(), 1.0f);  // whole semitones
-  EXPECT_FLOAT_EQ(denormalised(proc, "transposeTonality"), Transpose::kTonalityOffHz);  // off
-  EXPECT_FLOAT_EQ(denormalised(proc, "transposeWindow"), static_cast<float>(p.window));
+  const PitchShift::Params p;
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchEnabled")->load(), 0.0f);
+  EXPECT_NEAR(denormalised(proc, "pitchSemitones"), p.semitones, 1e-4f);
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchStep")->load(), 1.0f);  // whole semitones
+  EXPECT_FLOAT_EQ(denormalised(proc, "pitchTonality"), PitchShift::kTonalityOffHz);  // off
+  EXPECT_FLOAT_EQ(denormalised(proc, "pitchWindow"), static_cast<float>(p.window));
   // The knob's ends and centre: ±24, 0 at noon; the range is continuous.
-  auto* semis = proc.parameters.getParameter("transposeSemitones");
+  auto* semis = proc.parameters.getParameter("pitchSemitones");
   EXPECT_FLOAT_EQ(semis->convertFrom0to1(0.0f), -24.0f);
   EXPECT_NEAR(semis->convertFrom0to1(0.5f), 0.0f, 1e-4f);  // a float range: noon is 0 to the ulp
   EXPECT_FLOAT_EQ(semis->convertFrom0to1(1.0f), 24.0f);
   EXPECT_NEAR(semis->convertFrom0to1(semis->convertTo0to1(-1.5f)), -1.5f, 1e-4f);
   // The tonality log map round-trips its ends.
-  auto* tonality = proc.parameters.getParameter("transposeTonality");
-  EXPECT_NEAR(tonality->convertFrom0to1(0.0f), Transpose::kTonalityMinHz, 0.5f);
-  EXPECT_NEAR(tonality->convertFrom0to1(1.0f), Transpose::kTonalityOffHz, 0.5f);
+  auto* tonality = proc.parameters.getParameter("pitchTonality");
+  EXPECT_NEAR(tonality->convertFrom0to1(0.0f), PitchShift::kTonalityMinHz, 0.5f);
+  EXPECT_NEAR(tonality->convertFrom0to1(1.0f), PitchShift::kTonalityOffHz, 0.5f);
 }
 
-TEST(ProcessorTest, TransposeOffIsBitExactAndZeroLatencyEvenWithAShiftDialled) {
+TEST(ProcessorTest, PitchOffIsBitExactAndZeroLatencyEvenWithAShiftDialled) {
   // Off is the default, and a dialled-in shift with the power off must not
   // leak: the group's knob is a setting, the power is the effect.
   TONE3000Processor proc;
   proc.setPlayConfigDetails(2, 2, kFs, kBlock);
   proc.prepareToPlay(kFs, kBlock);
-  setDenormalised(proc, "transposeSemitones", -4.0f);
+  setDenormalised(proc, "pitchSemitones", -4.0f);
   pumpMessages();
   EXPECT_EQ(proc.getLatencySamples(), 0);
   const auto in = makeNoise(64 * kBlock, 7, 0.4f);
@@ -541,69 +546,70 @@ TEST(ProcessorTest, TransposeOffIsBitExactAndZeroLatencyEvenWithAShiftDialled) {
   EXPECT_EQ(bestCorrelationLag(out, in, 16384, 4096, 64), 0);
 }
 
-TEST(ProcessorTest, TransposePowerReportsWindowLatencyFromTheMessageThread) {
+TEST(ProcessorTest, PitchPowerReportsWindowLatencyFromTheMessageThread) {
   TONE3000Processor proc;
   proc.setPlayConfigDetails(2, 2, kFs, kBlock);
   proc.prepareToPlay(kFs, kBlock);
   ASSERT_EQ(proc.getLatencySamples(), 0);
 
-  proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
+  proc.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
   pumpMessages();
-  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::kDefaultWindow, kFs));
+  EXPECT_EQ(proc.getLatencySamples(), PitchShift::latencySamples(PitchShift::kDefaultWindow, kFs));
 
-  setDenormalised(proc, "transposeWindow", static_cast<float>(Transpose::Window::ms60));
+  setDenormalised(proc, "pitchWindow", static_cast<float>(PitchShift::Window::ms60));
   pumpMessages();
-  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::Window::ms60, kFs));
+  EXPECT_EQ(proc.getLatencySamples(), PitchShift::latencySamples(PitchShift::Window::ms60, kFs));
 
   // The knob itself never moves the latency: the engine runs at 0 st too.
-  setDenormalised(proc, "transposeSemitones", 0.0f);
-  setDenormalised(proc, "transposeSemitones", -12.0f);
+  setDenormalised(proc, "pitchSemitones", 0.0f);
+  setDenormalised(proc, "pitchSemitones", -12.0f);
   pumpMessages();
-  EXPECT_EQ(proc.getLatencySamples(), Transpose::latencySamples(Transpose::Window::ms60, kFs));
+  EXPECT_EQ(proc.getLatencySamples(), PitchShift::latencySamples(PitchShift::Window::ms60, kFs));
 
-  proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(0.0f);
+  proc.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(0.0f);
   pumpMessages();
   EXPECT_EQ(proc.getLatencySamples(), 0);
 }
 
-TEST(ProcessorTest, TransposeShiftsThePluginOutput) {
+TEST(ProcessorTest, PitchShiftsThePluginOutput) {
   // End to end at the default window: a powered -12 lands the octave below
   // in the output, delayed by the reported latency.
   TONE3000Processor proc;
   proc.setPlayConfigDetails(2, 2, kFs, kBlock);
   proc.prepareToPlay(kFs, kBlock);
-  proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
-  setDenormalised(proc, "transposeSemitones", -12.0f);
+  proc.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
+  setDenormalised(proc, "pitchSemitones", -12.0f);
   pumpMessages();
   const auto in = makeSine(4 * 48000, 440.0, 0.5f);
   const auto out = processThrough(proc, in);
   expectShiftedTo(out, 440.0, 220.0);
 }
 
-TEST(ProcessorTest, TransposeSurvivesStateRoundTrip) {
+TEST(ProcessorTest, PitchSurvivesStateRoundTrip) {
   juce::MemoryBlock state;
   {
     TONE3000Processor a;
-    a.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
-    setDenormalised(a, "transposeSemitones", -3.25f);
-    a.parameters.getParameter("transposeStep")->setValueNotifyingHost(0.0f);
-    setDenormalised(a, "transposeTonality", 4000.0f);
-    setDenormalised(a, "transposeWindow", 2.0f);
+    a.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
+    setDenormalised(a, "pitchSemitones", -3.25f);
+    a.parameters.getParameter("pitchStep")->setValueNotifyingHost(0.0f);
+    setDenormalised(a, "pitchTonality", 4000.0f);
+    setDenormalised(a, "pitchWindow", 2.0f);
     a.getStateInformation(state);
   }
   TONE3000Processor b;
   b.setStateInformation(state.getData(), static_cast<int>(state.getSize()));
-  EXPECT_FLOAT_EQ(b.parameters.getRawParameterValue("transposeEnabled")->load(), 1.0f);
-  EXPECT_NEAR(denormalised(b, "transposeSemitones"), -3.25f, 1e-4f);
-  EXPECT_FLOAT_EQ(b.parameters.getRawParameterValue("transposeStep")->load(), 0.0f);
-  EXPECT_NEAR(denormalised(b, "transposeTonality"), 4000.0f, 1.0f);
-  EXPECT_FLOAT_EQ(denormalised(b, "transposeWindow"), 2.0f);
+  EXPECT_FLOAT_EQ(b.parameters.getRawParameterValue("pitchEnabled")->load(), 1.0f);
+  EXPECT_NEAR(denormalised(b, "pitchSemitones"), -3.25f, 1e-4f);
+  EXPECT_FLOAT_EQ(b.parameters.getRawParameterValue("pitchStep")->load(), 0.0f);
+  EXPECT_NEAR(denormalised(b, "pitchTonality"), 4000.0f, 1.0f);
+  EXPECT_FLOAT_EQ(denormalised(b, "pitchWindow"), 2.0f);
 }
 
-TEST(ProcessorTest, StateFromBeforeTransposeLandsOnItsDefaults) {
-  // A session saved before Transpose existed carries none of its entries.
-  // Restoring it must land the group off at its defaults, never leave a
-  // live shift running (a silent latency and pitch change on project load).
+TEST(ProcessorTest, StateFromBeforePitchShiftLandsOnItsDefaults) {
+  // A session saved before the pitch shifter existed carries none of its
+  // entries. Restoring it must land the group off at its defaults, never
+  // leave a live shift running (a silent latency and pitch change on
+  // project load).
   juce::MemoryBlock saved;
   {
     TONE3000Processor old;
@@ -615,8 +621,8 @@ TEST(ProcessorTest, StateFromBeforeTransposeLandsOnItsDefaults) {
   ASSERT_TRUE(tree.isValid());
   juce::ValueTree params = tree.getChildWithName("PARAMETERS");
   ASSERT_TRUE(params.isValid());
-  for (const auto* id : {"transposeEnabled", "transposeSemitones", "transposeStep", "transposeTonality",
-                         "transposeWindow"}) {
+  for (const auto* id : {"pitchEnabled", "pitchSemitones", "pitchStep", "pitchTonality",
+                         "pitchWindow"}) {
     const auto child = params.getChildWithProperty("id", id);
     ASSERT_TRUE(child.isValid()) << id;
     params.removeChild(child, nullptr);
@@ -629,26 +635,26 @@ TEST(ProcessorTest, StateFromBeforeTransposeLandsOnItsDefaults) {
   }
 
   TONE3000Processor proc;
-  proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
-  setDenormalised(proc, "transposeSemitones", -5.0f);
+  proc.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
+  setDenormalised(proc, "pitchSemitones", -5.0f);
   proc.setStateInformation(reframed.getData(), static_cast<int>(reframed.getSize()));
   EXPECT_NEAR(proc.parameters.getRawParameterValue("gateThreshold")->load(), -40.0f, 0.01f)
       << "the old state's own parameters must still restore";
-  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 0.0f);
-  EXPECT_NEAR(denormalised(proc, "transposeSemitones"), 0.0f, 1e-4f);
-  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeStep")->load(), 1.0f);
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchEnabled")->load(), 0.0f);
+  EXPECT_NEAR(denormalised(proc, "pitchSemitones"), 0.0f, 1e-4f);
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchStep")->load(), 1.0f);
 }
 
-TEST(ProcessorTest, TransposeStepRoundsTheShiftForTheEngine) {
+TEST(ProcessorTest, PitchStepRoundsTheShiftForTheEngine) {
   // The knob left at -1.6 st: with STEP on the engine plays -2 (whole
   // semitones, whatever the host automates), with STEP off it plays -1.6.
   for (const bool step : {true, false}) {
     TONE3000Processor proc;
     proc.setPlayConfigDetails(2, 2, kFs, kBlock);
     proc.prepareToPlay(kFs, kBlock);
-    proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
-    proc.parameters.getParameter("transposeStep")->setValueNotifyingHost(step ? 1.0f : 0.0f);
-    setDenormalised(proc, "transposeSemitones", -1.6f);
+    proc.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
+    proc.parameters.getParameter("pitchStep")->setValueNotifyingHost(step ? 1.0f : 0.0f);
+    setDenormalised(proc, "pitchSemitones", -1.6f);
     pumpMessages();
     const auto out = processThrough(proc, makeSine(4 * 48000, 440.0, 0.5f));
     const double played = 440.0 * std::pow(2.0, (step ? -2.0 : -1.6) / 12.0);
@@ -658,33 +664,208 @@ TEST(ProcessorTest, TransposeStepRoundsTheShiftForTheEngine) {
   }
 }
 
-TEST(ProcessorTest, PresetsCarryTranspose) {
+TEST(ProcessorTest, PresetsCarryPitchShift) {
   const juce::File tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
-                             .getChildFile("t3k-transpose-tests-" + juce::Uuid().toString());
+                             .getChildFile("t3k-pitch-shift-tests-" + juce::Uuid().toString());
   tmp.createDirectory();
   {
     TONE3000Processor proc;
     proc.setPresetStoreForTesting(tmp);
-    // A stock preset loads with the group off (a preset from a pre-Transpose
-    // build has no entries at all and takes the same default path, see
-    // loadPreset's missing-id fallback).
+    // A stock preset loads with the group off (a preset from a build before
+    // the pitch shifter has no entries at all and takes the same default
+    // path, see loadPreset's missing-id fallback).
     const juce::var stock = proc.savePreset("Stock");
     ASSERT_TRUE(stock.isObject());
 
-    proc.parameters.getParameter("transposeEnabled")->setValueNotifyingHost(1.0f);
-    setDenormalised(proc, "transposeSemitones", -2.0f);
-    proc.parameters.getParameter("transposeStep")->setValueNotifyingHost(0.0f);
+    proc.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
+    setDenormalised(proc, "pitchSemitones", -2.0f);
+    proc.parameters.getParameter("pitchStep")->setValueNotifyingHost(0.0f);
     const juce::var dropD = proc.savePreset("Drop D");
     ASSERT_TRUE(dropD.isObject());
 
     ASSERT_TRUE(proc.loadPreset(stock["id"].toString()));
-    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 0.0f);
-    EXPECT_NEAR(denormalised(proc, "transposeSemitones"), 0.0f, 1e-4f);
+    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchEnabled")->load(), 0.0f);
+    EXPECT_NEAR(denormalised(proc, "pitchSemitones"), 0.0f, 1e-4f);
 
     ASSERT_TRUE(proc.loadPreset(dropD["id"].toString()));
-    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeEnabled")->load(), 1.0f);
-    EXPECT_NEAR(denormalised(proc, "transposeSemitones"), -2.0f, 1e-4f);
-    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("transposeStep")->load(), 0.0f);
+    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchEnabled")->load(), 1.0f);
+    EXPECT_NEAR(denormalised(proc, "pitchSemitones"), -2.0f, 1e-4f);
+    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchStep")->load(), 0.0f);
+  }
+  tmp.deleteRecursively();
+}
+
+// Legacy ids: the beta builds stored the pitch shifter as transpose*.
+
+namespace {
+
+// The ids the beta builds wrote, by current id.
+const std::map<juce::String, juce::String>& legacyIds() {
+  static const std::map<juce::String, juce::String> ids = {
+      {"pitchEnabled", "transposeEnabled"},   {"pitchSemitones", "transposeSemitones"},
+      {"pitchStep", "transposeStep"},         {"pitchTonality", "transposeTonality"},
+      {"pitchWindow", "transposeWindow"},
+  };
+  return ids;
+}
+
+// Rewrites `property` of every child from the current id to the beta one,
+// the inverse of the migration under test.
+void writeLegacyIds(juce::ValueTree tree, const juce::Identifier& property) {
+  for (auto child : tree)
+    if (const auto it = legacyIds().find(child.getProperty(property).toString()); it != legacyIds().end())
+      child.setProperty(property, it->second, nullptr);
+}
+
+juce::MemoryBlock framed(const juce::ValueTree& tree) {
+  juce::MemoryBlock block;
+  juce::MemoryOutputStream out(block, false);
+  out.write("T3KB", 4);
+  tree.writeToStream(out);
+  return block;
+}
+
+}  // namespace
+
+TEST(LegacyParamIdsTest, RenamesTheBetaIdsAndKeepsEverythingElse) {
+  for (const auto& [current, legacy] : legacyIds()) EXPECT_EQ(t3k::legacy_ids::currentParamId(legacy), current);
+  EXPECT_EQ(t3k::legacy_ids::currentParamId("gateThreshold"), "gateThreshold");
+  EXPECT_EQ(t3k::legacy_ids::currentParamId(""), "");
+
+  juce::ValueTree tree("PARAMETERS");
+  const auto add = [&](const char* id, float value) {
+    juce::ValueTree p("PARAM");
+    p.setProperty("id", id, nullptr);
+    p.setProperty("value", value, nullptr);
+    tree.appendChild(p, nullptr);
+  };
+  add("gateThreshold", -40.0f);
+  add("transposeSemitones", -2.0f);
+  add("transposeStep", 0.0f);
+  EXPECT_EQ(t3k::legacy_ids::migrateParamIds(tree, "id"), 2);
+  ASSERT_EQ(tree.getNumChildren(), 3);
+  EXPECT_EQ(tree.getChild(0).getProperty("id").toString(), "gateThreshold");
+  EXPECT_EQ(tree.getChild(1).getProperty("id").toString(), "pitchSemitones");
+  EXPECT_FLOAT_EQ(static_cast<float>(tree.getChild(1).getProperty("value")), -2.0f);
+  EXPECT_EQ(tree.getChild(2).getProperty("id").toString(), "pitchStep");
+  // Already current: nothing to do, nothing touched.
+  EXPECT_EQ(t3k::legacy_ids::migrateParamIds(tree, "id"), 0);
+  EXPECT_EQ(t3k::legacy_ids::migrateParamIds(juce::ValueTree(), "id"), 0);
+}
+
+TEST(LegacyParamIdsTest, ALegacyEntryReplacesAStaleCurrentOne) {
+  // A state the new build saved, then a beta build loaded and saved again,
+  // holds both: the beta build kept the id it didn't know and wrote its own
+  // beside it. The beta entry is the one the user last edited, whichever
+  // side of the stale one it landed on.
+  for (const bool legacyFirst : {true, false}) {
+    juce::ValueTree tree("PARAMETERS");
+    const auto add = [&](const char* id, float value) {
+      juce::ValueTree p("PARAM");
+      p.setProperty("id", id, nullptr);
+      p.setProperty("value", value, nullptr);
+      tree.appendChild(p, nullptr);
+    };
+    if (legacyFirst) add("transposeEnabled", 1.0f);
+    add("pitchEnabled", 0.0f);
+    add("gateThreshold", -40.0f);
+    if (!legacyFirst) add("transposeEnabled", 1.0f);
+    EXPECT_EQ(t3k::legacy_ids::migrateParamIds(tree, "id"), 1);
+    ASSERT_EQ(tree.getNumChildren(), 2) << legacyFirst;
+    const auto enabled = tree.getChildWithProperty("id", "pitchEnabled");
+    ASSERT_TRUE(enabled.isValid());
+    EXPECT_FLOAT_EQ(static_cast<float>(enabled.getProperty("value")), 1.0f) << legacyFirst;
+    EXPECT_TRUE(tree.getChildWithProperty("id", "gateThreshold").isValid());
+  }
+}
+
+TEST(ProcessorTest, StateFromABetaBuildRestoresThePitchShiftAndItsMidiMap) {
+  // A beta session: the parameters and a MIDI mapping (an expression pedal
+  // on the semitones) stored under the transpose* ids. The restore must land
+  // every value and keep the mapping, which an unknown target id would drop.
+  juce::MemoryBlock saved;
+  {
+    TONE3000Processor beta;
+    beta.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
+    setDenormalised(beta, "pitchSemitones", -3.25f);
+    beta.parameters.getParameter("pitchStep")->setValueNotifyingHost(0.0f);
+    setDenormalised(beta, "pitchTonality", 4000.0f);
+    setDenormalised(beta, "pitchWindow", 2.0f);
+    ASSERT_TRUE(beta.midiMapper.setCcMapping("pitchSemitones", 11));
+    ASSERT_TRUE(beta.midiMapper.setCcMapping("gateEnabled", 20));
+    beta.getStateInformation(saved);
+  }
+  juce::ValueTree tree = juce::ValueTree::readFromData(
+      static_cast<const char*>(saved.getData()) + 4, saved.getSize() - 4);
+  ASSERT_TRUE(tree.isValid());
+  writeLegacyIds(tree.getChildWithName("PARAMETERS"), "id");
+  writeLegacyIds(tree.getChildWithName("MidiMappings"), "targetId");
+  ASSERT_TRUE(tree.getChildWithName("PARAMETERS").getChildWithProperty("id", "transposeSemitones").isValid());
+  const auto reframed = framed(tree);
+
+  TONE3000Processor proc;
+  proc.setStateInformation(reframed.getData(), static_cast<int>(reframed.getSize()));
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchEnabled")->load(), 1.0f);
+  EXPECT_NEAR(denormalised(proc, "pitchSemitones"), -3.25f, 1e-4f);
+  EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchStep")->load(), 0.0f);
+  EXPECT_NEAR(denormalised(proc, "pitchTonality"), 4000.0f, 1.0f);
+  EXPECT_FLOAT_EQ(denormalised(proc, "pitchWindow"), 2.0f);
+
+  const juce::var midi = proc.midiMapper.getState();
+  const auto* mappings = midi["mappings"].getArray();
+  ASSERT_NE(mappings, nullptr);
+  ASSERT_EQ(mappings->size(), 2);
+  bool semitonesMapped = false;
+  for (const auto& m : *mappings)
+    if (m["targetId"].toString() == "pitchSemitones" && static_cast<int>(m["number"]) == 11) semitonesMapped = true;
+  EXPECT_TRUE(semitonesMapped);
+
+  // The next save writes the current ids, so the migration runs once.
+  juce::MemoryBlock resaved;
+  proc.getStateInformation(resaved);
+  const juce::ValueTree after = juce::ValueTree::readFromData(
+      static_cast<const char*>(resaved.getData()) + 4, resaved.getSize() - 4);
+  for (const auto& [current, legacy] : legacyIds()) {
+    EXPECT_TRUE(after.getChildWithName("PARAMETERS").getChildWithProperty("id", current).isValid()) << current;
+    EXPECT_FALSE(after.getChildWithName("PARAMETERS").getChildWithProperty("id", legacy).isValid()) << legacy;
+  }
+  EXPECT_FALSE(after.getChildWithName("MidiMappings").getChildWithProperty("targetId", "transposeSemitones").isValid());
+}
+
+TEST(ProcessorTest, PresetFromABetaBuildLoadsThePitchShift) {
+  const juce::File tmp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("t3k-pitch-shift-tests-" + juce::Uuid().toString());
+  tmp.createDirectory();
+  {
+    TONE3000Processor proc;
+    proc.setPresetStoreForTesting(tmp);
+    proc.parameters.getParameter("pitchEnabled")->setValueNotifyingHost(1.0f);
+    setDenormalised(proc, "pitchSemitones", -2.0f);
+    proc.parameters.getParameter("pitchStep")->setValueNotifyingHost(0.0f);
+    const juce::var dropD = proc.savePreset("Drop D");
+    ASSERT_TRUE(dropD.isObject());
+
+    // Rewrite the file the way a beta build would have saved it.
+    const auto files = tmp.findChildFiles(juce::File::findFiles, false, "*.t3kpreset");
+    ASSERT_EQ(files.size(), 1);
+    juce::ValueTree preset = t3k::presetfile::read(files[0]);
+    ASSERT_TRUE(preset.isValid());
+    writeLegacyIds(preset.getChildWithName("Params"), "id");
+    ASSERT_TRUE(t3k::presetfile::write(files[0], preset));
+
+    ASSERT_TRUE(proc.resetToDefault());
+    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchEnabled")->load(), 0.0f);
+
+    ASSERT_TRUE(proc.loadPreset(dropD["id"].toString()));
+    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchEnabled")->load(), 1.0f);
+    EXPECT_NEAR(denormalised(proc, "pitchSemitones"), -2.0f, 1e-4f);
+    EXPECT_FLOAT_EQ(proc.parameters.getRawParameterValue("pitchStep")->load(), 0.0f);
+
+    // Saving over it writes the current ids.
+    ASSERT_TRUE(proc.savePreset("Drop D").isObject());
+    const juce::ValueTree resaved = t3k::presetfile::read(files[0]);
+    EXPECT_TRUE(resaved.getChildWithName("Params").getChildWithProperty("id", "pitchSemitones").isValid());
+    EXPECT_FALSE(resaved.getChildWithName("Params").getChildWithProperty("id", "transposeSemitones").isValid());
   }
   tmp.deleteRecursively();
 }

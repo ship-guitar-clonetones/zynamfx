@@ -1,4 +1,4 @@
-#include "TransposeDeckPanel.h"
+#include "PitchDeckPanel.h"
 
 #include "core/Paint.h"
 #include "core/Theme.h"
@@ -33,23 +33,23 @@ Knob::Options deckKnob(const char* label, const KnobScale& scale, float def, hel
 
 }  // namespace
 
-TransposeDeckPanel::TransposeDeckPanel(Services& services)
-    : step_(services.backend, "transposeStep", "STEP", help::Key::transposeStep),
-      tonality_(services.backend, "transposeTonality",
-                deckKnob("Tonality", scales::tonalityHz(), kTonalityDefault, help::Key::transposeTonality)),
-      window_(services.backend, "transposeWindow",
-              deckKnob("Buffer", scales::bufferMs(), kWindowDefault, help::Key::transposeWindow, 4)) {
+PitchDeckPanel::PitchDeckPanel(Services& services)
+    : step_(services.backend, "pitchStep", "STEP", help::Key::pitchStep),
+      tonality_(services.backend, "pitchTonality",
+                deckKnob("Tonality", scales::tonalityHz(), kTonalityDefault, help::Key::pitchTonality)),
+      window_(services.backend, "pitchWindow",
+              deckKnob("Buffer", scales::bufferMs(), kWindowDefault, help::Key::pitchWindow, 4)) {
   addAndMakeVisible(step_);
   for (auto* k : {&tonality_, &window_}) addAndMakeVisible(*k);
   primaryOnly = true;          // right-click toggles the panel; don't dismiss on it
-  dismissOnAnchorPress = true; // the anchor is the Transpose knob, a control
+  dismissOnAnchorPress = true; // the anchor is the Pitch knob, a control
   setSize(kWidth, kHeight);
 }
 
-void TransposeDeckPanel::resetDeck(Backend& backend) {
-  ParamBinding(backend, "transposeStep").set(kStepDefault);
-  ParamBinding(backend, "transposeTonality").set(kTonalityDefault);
-  ParamBinding(backend, "transposeWindow").set(kWindowDefault);
+void PitchDeckPanel::resetDeck(Backend& backend) {
+  ParamBinding(backend, "pitchStep").set(kStepDefault);
+  ParamBinding(backend, "pitchTonality").set(kTonalityDefault);
+  ParamBinding(backend, "pitchWindow").set(kWindowDefault);
 }
 
 namespace {
@@ -59,13 +59,13 @@ juce::Rectangle<int> column(juce::Rectangle<int> content, int i) {
 }
 }  // namespace
 
-void TransposeDeckPanel::paint(juce::Graphics& g) {
+void PitchDeckPanel::paint(juce::Graphics& g) {
   const auto box = getLocalBounds().toFloat();
   paint::fill(g, box, theme::kPanelCorner, theme::kPanelBg);
   paint::border(g, box, theme::kPanelCorner, theme::kBorder);
 }
 
-void TransposeDeckPanel::resized() {
+void PitchDeckPanel::resized() {
   auto content = contentBounds();
   content.removeFromTop(kPadTop);
   content.removeFromBottom(kPadBottom);

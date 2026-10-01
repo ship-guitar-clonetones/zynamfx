@@ -1,18 +1,18 @@
 // Bottom faceplate (port of Faceplate.tsx): main input/output gain, the gate
-// and transpose groups (GateGroup / TransposeGroup, each with an advanced
-// deck) and the global 3-band tone stack, the stereo-image slot (Spread in
-// mono chain mode, Align in stereo) and, when they apply, the input-mode
-// button, the output balance knob and auto balance. Gate, transpose and tone
-// stack carry power switches (APVTS bools, so they automate and persist like
-// everything else).
+// and pitch groups (GateGroup / PitchGroup, each with an advanced deck) and
+// the global 3-band tone stack, the stereo-image slot (Spread in mono chain
+// mode, Align in stereo) and, when they apply, the input-mode button, the
+// output balance knob and auto balance. Gate, pitch and tone stack carry
+// power switches (APVTS bools, so they automate and persist like everything
+// else).
 //
 // Five peer groups share the plate width (CSS space-between): input, the
-// effects cluster (gate + transpose, spaced like the tone stack's knobs so
-// they read as one), tone stack, image slot, output. Every group has a fixed
+// effects cluster (gate + pitch, spaced like the tone stack's knobs so they
+// read as one), tone stack, image slot, output. Every group has a fixed
 // footprint with inactive companions hidden in place, so toggling stereo /
 // spread never shifts the plate. The effects are the exception, by design:
-// Plugin Settings → Show Gate / Show Transpose picks which of them the plate
-// shows (gate by default, transpose hidden), a powered effect always shows
+// Plugin Settings → Show Gate / Show Pitch Shift picks which of them the
+// plate shows (gate by default, pitch hidden), a powered effect always shows
 // so a preset's sound is never controlled from a hidden knob, and the plate
 // re-spreads when the cluster shrinks or goes away.
 #pragma once
@@ -22,8 +22,8 @@
 #include <memory>
 
 #include "GateGroup.h"
+#include "PitchGroup.h"
 #include "StereoImageGroup.h"
-#include "TransposeGroup.h"
 #include "core/Design.h"
 #include "services/Services.h"
 #include "widgets/ChromeIconButton.h"
@@ -63,8 +63,8 @@ private:
   // Effects cluster: each group shows while its view setting is on or its
   // power is (the bindings watch the power switches for the latter).
   GateGroup gate_;
-  TransposeGroup transpose_;
-  ParamBinding gateEnabled_, transposeEnabled_;
+  PitchGroup pitch_;
+  ParamBinding gateEnabled_, pitchEnabled_;
 
   DimGroup toneDim_;
   ParamKnob bass_, middle_, treble_;
