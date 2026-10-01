@@ -299,10 +299,13 @@ hover. The web read that off `pointer: coarse`; here it is
 Windows or Linux tablet runs the desktop build and a convertible is both
 in one session. iOS and Android are touch throughout. A desktop build
 seeds from the hardware where the OS can say (Windows: an integrated touch
-digitizer and slate mode) and then follows the last press or move
+digitizer and slate mode) and then follows the last press or wheel turn
 (`PointerTracker`, a root mouse listener beside `HintTracker`): the first
-touch turns the affordances on everywhere, the next mouse move turns them
-off again. Views that carry such an affordance listen (`ToneTile`,
+touch turns the affordances on everywhere, the next mouse click or scroll
+turns them off again. Moves are deliberately not consulted: JUCE synthesises
+mouse-source moves (`Component::sendFakeMouseMove` on any relayout under the
+pointer, the peers' pointer-leave handling), and on a tablet those arrive
+mid-gesture and would read as a mouse. Views that carry such an affordance listen (`ToneTile`,
 `GalleryLane::BranchGap`). The hint copy stays compile-time
 (`design::kCoarsePointer`): its touch wording is more than a word swap in
 places, so a desktop build with a finger on it reads the desktop copy.
