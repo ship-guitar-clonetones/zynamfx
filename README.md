@@ -143,16 +143,24 @@ instead, the usual folders are:
 
 ## Linux runtime dependencies
 
-Required at run time: GTK3 (file dialogs), ALSA, FreeType, X11, and libcurl
+Required at run time: GTK3 (file dialogs), ALSA, fontconfig, X11, and libcurl
 (TONE3000 API and downloads; loaded lazily by SONAME, so no `-dev` package
 is needed on an end-user machine). All of these ship with every mainstream
 desktop distribution. The release tarball's `install.sh` checks for them
 (`./install.sh --check` to verify without installing).
 
+FreeType is deliberately not on that list: it is built from source (CPM,
+pinned in the root `CMakeLists.txt`) and linked statically into every Linux
+GUI binary, with its symbols kept local. Plugin hosts that bundle their own
+FreeType (the official Ardour / Mixbus builds ship a Debian-11-era copy in
+`/opt/<host>/lib`) would otherwise resolve our FreeType 2.13 imports against
+that older library and refuse to load the LV2 (`undefined symbol:
+FT_Get_Paint`, issue #181).
+
 Building needs the matching development packages; the list CI installs is
 in `.github/workflows/build.yml` (`libgtk-3-dev`, `libasound2-dev`,
-`libjack-jackd2-dev`, `libcurl4-openssl-dev`, `libfreetype6-dev`, and the
-X11 `-dev` set).
+`libjack-jackd2-dev`, `libcurl4-openssl-dev`, and the X11 `-dev` set;
+`libfreetype6-dev` is only there as fontconfig's header dependency).
 
 Optional: a JACK server. The standalone's Audio Driver picker offers JACK
 next to ALSA (libjack is loaded at runtime; without a server the driver just
