@@ -181,11 +181,14 @@ struct ChainBlock {
   // the built engine). Feeds refreshIrTailLength / getTailLengthSeconds so
   // hosts render real reverb tails.
   int irLengthBaseSamples{0};
-  // The single short/long classification (kernel length vs the cutoff in
-  // ProcessorModelLoader.cpp). Short = cab-like: -18 dB output pad
-  // (spectrally concentrated kernels play back hot at unit energy), 100%
-  // default mix. Long = reverb-like: no pad (diffuse kernels sit at ≈ dry
-  // level at unit energy), 50% default mix. Shipped to the UI as `irLong`.
+  // The single cab-like / reverb-like classification. Short = cab-like:
+  // -18 dB output pad (spectrally concentrated kernels play back hot at
+  // unit energy), 100% default mix. Long = reverb-like: no pad (diffuse
+  // kernels sit at ≈ dry level at unit energy), 50% default mix. Decided by
+  // the tone's gear when it is unambiguous ("cab" / "space"), else by the
+  // kernel length against the cutoff in ProcessorModelLoader.cpp (see
+  // irIsLongFor there). Runtime-only: recomputed on every load. Shipped to
+  // the UI as `irLong`.
   bool irIsLong{false};
   juce::LinearSmoothedValue<float> irNormalizationSmoother;
   float irNormalizationGainLinear{1.0f};

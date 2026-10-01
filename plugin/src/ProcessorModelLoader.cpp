@@ -18,10 +18,13 @@
 // IR block sizing constants.
 // TONE3000 IR tones cover two very different species: cab IRs (tens of
 // milliseconds) and convolution-reverb IRs (whole seconds). ONE length
-// cutoff (kShortIrMaxSeconds) classifies every IR as short or long, and
-// that classification drives everything downstream:
+// cutoff (kShortIrMaxSeconds) splits every IR into short or long, and that
+// split drives everything downstream:
 //   short: uniform zero-latency engine, -18 dB output pad, 100% default mix
 //   long:  non-uniform engine,           no output pad,     50% default mix
+// The engine choice is always by length (a CPU decision, inaudible). The
+// audible pair (pad, default mix) is by length only when the tone's catalog
+// gear doesn't already say what the IR is; see irIsLongFor.
 namespace {
 
 // Hard cap on loaded IR length. Bounds memory and engine-build time for
@@ -35,6 +38,21 @@ constexpr double kMaxIrSeconds = 10.0;
 // threshold is a constant.
 constexpr double kShortIrMaxSeconds = 1.0;
 constexpr int kShortIrMaxBaseSamples = static_cast<int>(kShortIrMaxSeconds * kChainBaseSampleRate);
+
+// The cab-like / reverb-like verdict for a loaded IR (ChainBlock::irIsLong),
+// from the tone's catalog gear and the kernel-length fallback. The gear tag
+// wins where it is unambiguous: a "cab" is a cab however much room tail or
+// trailing noise floor the file carries, and a "space" is a reverb however
+// short (github issue #89: a 389 ms chamber, and a cab whose fade-out dipped
+// under the trim floor just inside the cutoff, both used to flip on length
+// alone and land 18 dB and a mix default apart from their siblings). Every
+// other gear ("pedal", "experimental", untagged local files) genuinely mixes
+// both species, so there the length decides, as before.
+bool irIsLongFor(const juce::String& gear, bool longByLength) {
+  if (gear.equalsIgnoreCase("cab")) return false;
+  if (gear.equalsIgnoreCase("space")) return true;
+  return longByLength;
+}
 
 // Long IRs use JUCE's two-stage non-uniform engine (still zero latency):
 // the first kIrNonUniformHeadSamples convolve in callback-sized partitions,
@@ -1027,21 +1045,23 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
       }
 
       // The engine was built synchronously above, so it can report the real
-      // (trimmed + resampled) kernel length, the basis for the short/long
-      // classification and the host tail report. Fall back to the pre-trim
-      // bound defensively.
+      // (trimmed + resampled) kernel length, the basis for the length verdict
+      // and the host tail report. Fall back to the pre-trim bound
+      // defensively. (The block's final cab/reverb classification also
+      // weighs the tone's gear, which only the apply step knows; see
+      // irIsLongFor.)
       const int engineIrSamples = out.convolverMono->getCurrentIRSize();
       const int irLengthBaseSamples = engineIrSamples > 0 ? engineIrSamples : irLengthUpperBound;
 
       out.irNumChannels = irNumChannels;
       out.irLengthBaseSamples = irLengthBaseSamples;
-      out.irIsLong = irLengthBaseSamples > kShortIrMaxBaseSamples;
+      out.irIsLongByLength = irLengthBaseSamples > kShortIrMaxBaseSamples;
       out.irNormalizationGainLinear = computeIrNormalizationGain(tempFile, maxIrFileSamples);
 
       juce::Logger::writeToLog(
           "[ModelLoader] IR prepared: " + juce::String(irNumChannels) + " ch, " +
           juce::String(irLengthBaseSamples / kChainBaseSampleRate, 2) + " s (" +
-          (out.irIsLong ? "long" : "short") + ", norm " +
+          (out.irIsLongByLength ? "long" : "short") + ", norm " +
           juce::String(juce::Decibels::gainToDecibels(out.irNormalizationGainLinear), 1) + " dB)");
       out.success = true;
     }
@@ -1313,7 +1333,17 @@ void TONE3000Processor::applyPreparedModelToChainBlock(ChainBlock& block, ChainB
     std::swap(block.convolverStereo, prepared.convolverStereo);
     block.irNumChannels = prepared.irNumChannels;
     block.irLengthBaseSamples = prepared.irLengthBaseSamples;
-    block.irIsLong = prepared.irIsLong;
+
+    // Cab-like or reverb-like: the tone's gear where it is decisive, the
+    // kernel length otherwise (see irIsLongFor). toneVar is already the
+    // tone this engine belongs to; a swap sets it before queueing the load.
+    const juce::String gear = block.toneVar["gear"].toString();
+    block.irIsLong = irIsLongFor(gear, prepared.irIsLongByLength);
+    if (block.irIsLong != prepared.irIsLongByLength)
+      juce::Logger::writeToLog("[ModelLoader] IR classified " +
+                               juce::String(block.irIsLong ? "long" : "short") + " by gear '" +
+                               gear + "' (length said " +
+                               (prepared.irIsLongByLength ? "long" : "short") + ")");
 
     // The base-rate island around the convolvers: blocks added mid-session
     // were never seen by prepareChain, so (re)prepare it here with the same
