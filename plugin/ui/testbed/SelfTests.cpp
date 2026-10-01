@@ -7,6 +7,7 @@
 #include <juce_events/juce_events.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <iostream>
@@ -39,6 +40,9 @@
 #include "views/gallery/GalleryTile.h"
 #include "widgets/Avatar.h"
 #include "widgets/ChromeTextButton.h"
+#include "widgets/Clickable.h"
+#include "widgets/DbMeter.h"
+#include "widgets/DimGroup.h"
 #include "widgets/DragScroller.h"
 #include "widgets/EnergyGlow.h"
 #include "widgets/FormatBadge.h"
@@ -1747,6 +1751,169 @@ struct FaceplateEffectsTests : juce::UnitTest {
   }
 };
 
+// The input-mode menu and the chrome that follows Dual Mono: on a mono
+// chain with a stereo source the menu offers Stereo SUM / Stereo Dual Mono / Left / Right,
+// picking Dual Mono brings out Bal and Auto Balance, dims Spread with its own
+// reason and splits the output meter; with stereo chains the row is gone and
+// the stereo feed is labelled Stereo.
+struct FaceplateDualMonoTests : juce::UnitTest {
+  FaceplateDualMonoTests() : juce::UnitTest("Faceplate dual mono", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  static Knob* knob(PluginRoot& root, const juce::String& title) {
+    return dynamic_cast<Knob*>(drive::find(root, [&](juce::Component& c) {
+      return dynamic_cast<Knob*>(&c) != nullptr && c.getTitle() == title && c.isShowing();
+    }));
+  }
+
+  static juce::Component* shownWithHelp(PluginRoot& root, const juce::String& prefix) {
+    return drive::find(root, [&](juce::Component& c) {
+      return c.isShowing() && c.getHelpText().startsWith(prefix);
+    });
+  }
+
+  static DimGroup* spreadGroup(PluginRoot& root) {
+    return dynamic_cast<DimGroup*>(drive::find(root, [](juce::Component& c) {
+      return dynamic_cast<DimGroup*>(&c) != nullptr && c.getHelpText().startsWith("Spread");
+    }));
+  }
+
+  static DbMeter* meter(PluginRoot& root, const char* name) {
+    return dynamic_cast<DbMeter*>(
+        drive::find(root, [name](juce::Component& c) { return c.getName() == name; }));
+  }
+
+  // The menu's row labels, top to bottom, while it is open. Rows are the
+  // Clickables whose help text opens with their own label ("Left: …"); the
+  // anchor button ("Input Mode: …") is the one such control that isn't a row.
+  static juce::StringArray menuRows(PluginRoot& root) {
+    std::vector<juce::Component*> rows;
+    drive::find(root, [&](juce::Component& c) {
+      if (c.isShowing() && dynamic_cast<Clickable*>(&c) != nullptr && c.getName() != "Input Mode" &&
+          c.getHelpText().startsWith(c.getName() + ":"))
+        rows.push_back(&c);
+      return false;
+    });
+    std::sort(rows.begin(), rows.end(), [&](juce::Component* a, juce::Component* b) {
+      return root.getLocalPoint(a, juce::Point<int>()).y < root.getLocalPoint(b, juce::Point<int>()).y;
+    });
+    juce::StringArray labels;
+    for (auto* r : rows) labels.add(r->getName());
+    return labels;
+  }
+
+  void pick(PluginRoot& root, const juce::String& row) {
+    drive::clickByHelp(root, "Input Mode:");
+    pump(50);
+    auto* target = drive::buttonNamed(root, row);
+    expect(target != nullptr, "menu row present: " + row);
+    if (target == nullptr) {
+      drive::clickByHelp(root, "Input Mode:");
+      pump(30);
+      return;
+    }
+    drive::click(root, *target);
+    pump(50);
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    {
+      const auto* scenario = fixtures.find("chrome-input-mode");  // mono chain, stereo source
+      if (scenario == nullptr) {
+        expect(false, "chrome-input-mode scenario missing");
+        return;
+      }
+      MockBackend backend(scenario->data);
+      juce::DocumentWindow window("faceplate dual mono", juce::Colours::black, 0);
+      ScaledHost host(backend, *scenario, fixtures.root);
+      window.setContentNonOwned(&host, true);
+      window.setVisible(true);
+      pump(400);
+      auto& root = host.pluginRoot();
+
+      beginTest("a mono chain on a stereo source offers Stereo SUM, Stereo Dual Mono, Left and Right");
+      drive::clickByHelp(root, "Input Mode:");
+      pump(50);
+      expectEquals(menuRows(root).joinIntoString("|"), juce::String("Stereo SUM (L+R)|Stereo Dual Mono (L&R)|Left|Right"));
+      expect(shownWithHelp(root, "Stereo Dual Mono (L&R):") != nullptr, "the row carries the Dual Mono help");
+      drive::clickByHelp(root, "Input Mode:");  // toggles the menu closed
+      pump(50);
+      expect(knob(root, "Bal") == nullptr, "no balance to trim with one voice");
+      expect(shownWithHelp(root, "Auto Balance") == nullptr);
+      auto* spread = spreadGroup(root);
+      expect(spread != nullptr && !spread->isOff(), "a stereo rig keeps Spread available");
+      auto* out = meter(root, "output meter");
+      expect(out != nullptr && !out->stereo(), "a mono chain without spread meters one channel");
+
+      beginTest("Dual Mono brings out Bal and Auto Balance, dims Spread and splits the meter");
+      pick(root, "Stereo Dual Mono (L&R)");
+      expectEquals(backend.getChainState(-1)["inputMode"].toString(), juce::String("dual"));
+      expect(static_cast<bool>(backend.getChainState(-1)["dualMonoActive"]));
+      expect(knob(root, "Bal") != nullptr);
+      expect(shownWithHelp(root, "Auto Balance") != nullptr);
+      spread = spreadGroup(root);
+      expect(spread != nullptr && spread->isOff());
+      if (spread != nullptr)
+        expect(spread->getHelpText().startsWith("Spread off in Dual Mono"), "the dim reason names Dual Mono");
+      out = meter(root, "output meter");
+      expect(out != nullptr && out->stereo(), "two real channels leave the chain");
+      auto* in = meter(root, "input meter");
+      expect(in != nullptr && in->stereo(), "both source channels are in play");
+
+      beginTest("Left is one voice again");
+      pick(root, "Left");
+      expectEquals(backend.getChainState(-1)["inputMode"].toString(), juce::String("left"));
+      expect(knob(root, "Bal") == nullptr);
+      expect(shownWithHelp(root, "Auto Balance") == nullptr);
+      spread = spreadGroup(root);
+      expect(spread != nullptr && !spread->isOff());
+      out = meter(root, "output meter");
+      expect(out != nullptr && !out->stereo());
+      in = meter(root, "input meter");
+      expect(in != nullptr && !in->stereo(), "a one-channel feed meters one channel");
+
+      beginTest("Stereo SUM (L+R) restores the default");
+      pick(root, "Stereo SUM (L+R)");
+      expectEquals(backend.getChainState(-1)["inputMode"].toString(), juce::String("stereo"));
+      expect(!static_cast<bool>(backend.getChainState(-1)["dualMonoActive"]));
+      in = meter(root, "input meter");
+      expect(in != nullptr && in->stereo());
+      window.setVisible(false);
+    }
+
+    {
+      const auto* scenario = fixtures.find("main-stereo");  // stereo chains, stereo source
+      if (scenario == nullptr) {
+        expect(false, "main-stereo scenario missing");
+        return;
+      }
+      MockBackend backend(scenario->data);
+      backend.setInputMode("dual");  // a stale session value: stereo chains have no dual mono
+      juce::DocumentWindow window("faceplate dual mono (stereo chains)", juce::Colours::black, 0);
+      ScaledHost host(backend, *scenario, fixtures.root);
+      window.setContentNonOwned(&host, true);
+      window.setVisible(true);
+      pump(400);
+      auto& root = host.pluginRoot();
+
+      beginTest("stereo chains offer Stereo, Left and Right, and never Dual Mono");
+      expect(!static_cast<bool>(backend.getChainState(-1)["dualMonoActive"]));
+      drive::clickByHelp(root, "Input Mode:");
+      pump(50);
+      expectEquals(menuRows(root).joinIntoString("|"), juce::String("Stereo|Left|Right"));
+      expect(shownWithHelp(root, "Stereo:") != nullptr, "the stereo feed explains its per-chain routing");
+      drive::clickByHelp(root, "Input Mode:");
+      pump(50);
+      expect(knob(root, "Bal") != nullptr, "two chains always have a balance");
+      auto* spread = spreadGroup(root);
+      expect(spread != nullptr && !spread->isOff(), "Spread stays live for stereo chains");
+      window.setVisible(false);
+    }
+  }
+};
+
 HtmlTests htmlTests;
 FontTests fontTests;
 RichFlowTests richFlowTests;
@@ -1761,6 +1928,7 @@ ChainCrossLaneDragTests chainCrossLaneDragTests;
 BlockSizeToggleTests blockSizeToggleTests;
 KnobReadoutTests knobReadoutTests;
 FaceplateEffectsTests faceplateEffectsTests;
+FaceplateDualMonoTests faceplateDualMonoTests;
 UpdateCheckTests updateCheckTests;
 ConnectionGateTests connectionGateTests;
 PitchTests pitchTests;

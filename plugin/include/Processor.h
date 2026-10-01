@@ -349,29 +349,64 @@ public:
   bool setChainBranch(const juce::String& side, const std::string& afterBlockId);
   bool clearChainBranch();
 
-  // Which channels of a stereo source feed the plugin: both (default), or
-  // one channel folded onto both. Interfaces usually expose stereo pairs
-  // (line 1+2) even when only one jack is plugged in, so this lets the user
-  // pick the channel that actually carries signal. Set from the faceplate
-  // input-mode button (visible only when the source is actually stereo; see
-  // stereoInputDetected). Saved with the plugin/session state but not with
-  // presets: it's I/O routing, not tone.
-  enum class InputMode { Stereo = 0, Left = 1, Right = 2 };
+  // How a stereo source feeds the chain(s). Interfaces usually expose stereo
+  // pairs (line 1+2) even when only one jack is plugged in, and a DAW's
+  // stereo track may carry one guitar or two, so the user picks:
+  //  - Stereo (default): the natural routing for the chain mode. Mono chain:
+  //    the source is summed to mono, ½(L+R), the same fold a host applies
+  //    (a mono source on a stereo track, L == R, passes bit-identically).
+  //    Stereo chains: channel 0 feeds the Left chain, channel 1 the Right.
+  //  - DualMono: a mono chain runs each channel separately through its own
+  //    copy of the chain, as if the same blocks sat in both stereo lanes
+  //    (double-tracked guitars through one rig). Doubles the NAM work; with
+  //    multi-core the two voices run on separate cores (see NamEngine.h).
+  //    Only in effect with a mono chain on a rig that both supplies and
+  //    reproduces two channels (dualMonoEngaged); otherwise it behaves as
+  //    Stereo, so stereo chains see no difference between the two.
+  //  - Left / Right: one channel folded onto both.
+  // Set from the faceplate input-mode button (visible only when the source
+  // is actually stereo; see stereoInputDetected). Saved with the
+  // plugin/session state but not with presets: it's I/O routing, not tone.
+  enum class InputMode { Stereo = 0, Left = 1, Right = 2, DualMono = 3 };
   void setInputMode(InputMode mode);
   InputMode getInputMode() const { return static_cast<InputMode>(inputMode.load()); }
+  // Unknown strings (including "dual" read by an older build, which
+  // doesn't reach here) fall back to Stereo.
   static InputMode inputModeFromString(const juce::String& s) {
     if (s == "left") return InputMode::Left;
     if (s == "right") return InputMode::Right;
+    if (s == "dual") return InputMode::DualMono;
     return InputMode::Stereo;
   }
   static juce::String inputModeToString(InputMode mode) {
     switch (mode) {
       case InputMode::Left: return "left";
       case InputMode::Right: return "right";
+      case InputMode::DualMono: return "dual";
       case InputMode::Stereo: break;
     }
     return "stereo";
   }
+  // Modes that keep both source channels distinct (no fold onto one
+  // channel). A branched chain has a single mono source, so these are the
+  // modes it rejects (see setChainBranch).
+  static bool isStereoFeed(InputMode mode) {
+    return mode == InputMode::Stereo || mode == InputMode::DualMono;
+  }
+
+  // True while dual mono is actually in effect: the mode is selected, the
+  // chain is mono, and the rig both supplies and reproduces two channels.
+  // Atomics only, so the audio thread and getChainState can both ask.
+  bool dualMonoEngaged() const noexcept {
+    return getInputMode() == InputMode::DualMono &&
+           !stereoEnabled.load(std::memory_order_relaxed) &&
+           stereoInputDetected.load(std::memory_order_relaxed) &&
+           stereoOutputDetected.load(std::memory_order_relaxed);
+  }
+  // Diagnostics (the DSP tests pin the voice-count transitions): the voice
+  // count of a *loaded* NAM block's engine, 1 or 2 (see NamEngine.h); 0 for
+  // an unknown id, a non-NAM block, or a block still loading.
+  int namEngineVoiceCount(const std::string& blockId) const;
 
   // Editor window scale, 1.0 = the 1024x578 design size. Written by the
   // editor whenever it is resized and read back when a new editor opens, so
@@ -959,6 +994,15 @@ private:
   // (a mono rig hears them summed; see processImageStage).
   int rtChainChannels = 2;
   bool rtStereoChains = false;
+  // Dual mono in effect for this callback: dualMonoEngaged() on a stereo
+  // buffer, resolved once at the top of processBlock (before the input
+  // fold, which keys on it). The lane runs its 2-channel buffer as two
+  // independent mono signals: NAM engines use their second voice instead
+  // of fanning out, stereo IRs convolve their left channel on both sides
+  // (as inside a stereo-mode lane), Spread stays idle (the output already
+  // is two real channels) and Balance trims the two voices against each
+  // other.
+  bool rtDualMono = false;
   // True when this callback's chain stage should fork the two lanes across
   // cores (see RtWorkerPool.h): multi-core enabled, workers healthy, stereo
   // chains active, and both sides of the parallel section actually carry
@@ -1083,6 +1127,30 @@ private:
   void parameterChanged(const juce::String& parameterID, float newValue) override;
   void handleAsyncUpdate() override;
   void applyOversamplingSettings();
+
+  // NAM engine voice count the current mode requires (see NamEngine.h):
+  // two for a dual-mono mono chain, one otherwise. Deliberately keyed on
+  // the mode alone, not the rig: a rig change always comes through
+  // prepareToPlay, which re-prepares (prewarms) every engine, so a voice
+  // that idled on a mono rig never resumes with stale history. The loader
+  // builds this many voices; the apply path and the helper below enforce it.
+  int wantedNamVoices() const noexcept {
+    return getInputMode() == InputMode::DualMono && !stereoEnabled.load(std::memory_order_relaxed)
+               ? 2
+               : 1;
+  }
+  // Rebuild (from the in-memory model cache, off-thread) every loaded NAM
+  // engine whose voice count differs from wantedNamVoices(). Voices are
+  // fixed at build like the phase count, and an idle voice would resume
+  // with stale model history, so a mode change that moves the requirement
+  // rebuilds rather than toggling a dormant voice. Marks the blocks
+  // loading (`loaded` = false) exactly like applyOversamplingSettings, so
+  // callers hold a ChainEditFade and release it when the loads settle.
+  // Returns whether anything was queued. Caller holds chainMutex.
+  bool requeueNamEnginesForVoiceCount();
+  // Shared tail of the two above: queue a cache-first rebuild of `block`'s
+  // engine, marking it loading. Caller holds chainMutex.
+  void requeueLoadedNamEngine(ChainBlock& block);
 
   // Per-block cached values (refreshed once per processBlock from paramRefs).
   float cacheInputLevel = 0.5f;

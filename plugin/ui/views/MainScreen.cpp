@@ -25,10 +25,15 @@ void MainScreen::chainChanged(const ChainState&) { syncMeters(); }
 
 void MainScreen::syncMeters() {
   const auto& chain = services_.chain.state();
-  inputMeter_.setStereo(chain.stereoInput && chain.inputMode == InputMode::stereo);
+  // Two input bars whenever both source channels reach the chain (Stereo or
+  // Dual Mono); the L/R picks fold onto one.
+  inputMeter_.setStereo(chain.stereoInput && (chain.inputMode == InputMode::stereo ||
+                                              chain.inputMode == InputMode::dualMono));
   // The output carries a real stereo image only when a stereo-image feature
-  // is on (stereo mode, or mono-mode spread) AND the rig can reproduce it.
-  outputMeter_.setStereo((chain.stereoEnabled || spreadEnabled_.boolValue()) && chain.stereoOutput);
+  // is on (stereo mode, mono-mode spread, or dual mono's two voices) AND the
+  // rig can reproduce it (dualMonoActive already implies that).
+  outputMeter_.setStereo(((chain.stereoEnabled || spreadEnabled_.boolValue()) && chain.stereoOutput) ||
+                         chain.dualMonoActive);
 }
 
 void MainScreen::resized() {

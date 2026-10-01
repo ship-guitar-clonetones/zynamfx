@@ -29,7 +29,7 @@ constexpr int kChromeLift = theme::faceplateChromeLift(theme::kKnobSizeSecondary
 
 // Input mode trigger: [glyph 17][gap 3][chevron 10] + 2px padding + 1px border.
 constexpr int kInputModeWidth = 1 + 2 + (theme::kIconSize + 3) + 3 + 10 + 2 + 1;
-constexpr int kMenuWidth = 172;
+constexpr int kMenuWidth = 224;  // fits "Stereo Dual Mono (L&R)"
 constexpr int kMenuPadTop = 12, kMenuPadSide = 8, kMenuPadBottom = 8;
 constexpr int kMenuTitleHeight = 13;  // 11px/600 line
 constexpr int kMenuTitlePadBottom = 8;
@@ -56,7 +56,8 @@ Knob::Options secondaryKnob(const char* label, const KnobScale& scale, float def
 
 // The mode's glyph, shared by the trigger and the menu rows.
 void drawModeGlyph(juce::Graphics& g, InputMode mode, juce::Rectangle<float> box, juce::Colour colour) {
-  if (mode == InputMode::stereo) {
+  if (mode == InputMode::stereo || mode == InputMode::dualMono) {
+    // Both stereo feeds share the one glyph; the row label tells them apart.
     Icons::draw(g, custom_icons::kInputStereo, juce::Rectangle<float>(17, 10).withCentre(box.getCentre()),
                 colour);
     return;
@@ -69,23 +70,35 @@ void drawModeGlyph(juce::Graphics& g, InputMode mode, juce::Rectangle<float> box
 struct ModeOption {
   InputMode mode;
   const char* label;
+  help::Key help;
 };
-constexpr std::array<ModeOption, 3> kModeOptions{
-    ModeOption{InputMode::stereo, "Stereo (L+R)"},
-    ModeOption{InputMode::left, "Left"},
-    ModeOption{InputMode::right, "Right"},
+// The menu's rows, in order. The first is the Stereo routing worded for a
+// mono chain, where it sums; with stereo chains it reads "Stereo" (one
+// channel per chain) and the Dual Mono row is dropped (it has nothing to add
+// there; native treats the selection as Stereo).
+constexpr std::array<ModeOption, 4> kModeOptions{
+    ModeOption{InputMode::stereo, "Stereo SUM (L+R)", help::Key::inputModeSum},
+    ModeOption{InputMode::dualMono, "Stereo Dual Mono (L&R)", help::Key::inputModeDualMono},
+    ModeOption{InputMode::left, "Left", help::Key::inputModeLeft},
+    ModeOption{InputMode::right, "Right", help::Key::inputModeRight},
 };
+constexpr ModeOption kStereoChainsOption{InputMode::stereo, "Stereo", help::Key::inputModeStereo};
 
 }  // namespace
 
 // Input mode
-// Which channels of a stereo source feed the plugin. The trigger (current
-// glyph + down caret) opens a flat floating menu above the plate listing the
-// three routings. Stereo (the default) shows the two-circle glyph; L/R take
-// only that channel (mirrored onto both) and the trigger keeps the filled
-// "engaged" look so a non-default routing is obvious at a glance. While a
-// chain branch is active the chain has a single mono source, so the "Stereo"
-// routing is unavailable (native enforces the same).
+// How a stereo source feeds the chain. The trigger (current glyph + down
+// caret) opens a flat floating menu above the plate listing the routings.
+// Rows lead with the input mode they belong to, since that is the menu's
+// heading: Stereo (the default) shows the two-circle glyph and on a mono
+// chain sums the channels ("Stereo SUM (L+R)"), with stereo chains each
+// takes its own ("Stereo"). "Stereo Dual Mono (L&R)" (mono chain only) runs
+// each channel through its own copy of the chain under the same glyph; L/R
+// take only that channel (mirrored onto both). Every non-default routing keeps the filled
+// "engaged" look so it's obvious at a glance. With stereo chains the Dual
+// Mono row is hidden and a Dual Mono selection shows as Stereo (that's what
+// it does there). While a chain branch is active the chain has a single mono
+// source, so the stereo feeds are unavailable (native enforces the same).
 class Faceplate::InputModeButton : public Clickable {
 public:
   explicit InputModeButton(Services& services) : Clickable("Input Mode"), services_(services) {
@@ -100,10 +113,13 @@ public:
     };
   }
 
-  void setState(InputMode mode, bool branched) {
-    if (mode_ == mode && branched_ == branched) return;
+  void setState(InputMode mode, bool branched, bool stereoChains) {
+    // Dual Mono has no meaning for stereo chains: present it as Stereo.
+    if (stereoChains && mode == InputMode::dualMono) mode = InputMode::stereo;
+    if (mode_ == mode && branched_ == branched && stereoChains_ == stereoChains) return;
     mode_ = mode;
     branched_ = branched;
+    stereoChains_ = stereoChains;
     repaint();
     if (menuOpen()) {
       closeMenu();
@@ -126,6 +142,7 @@ private:
   public:
     Row(const ModeOption& option, bool selected)
         : Clickable(option.label), option_(option), selected_(selected) {
+      setHelpText(help::text(option.help));
       setMouseCursor(juce::MouseCursor::PointingHandCursor);
     }
     InputMode mode() const { return option_.mode; }
@@ -145,9 +162,13 @@ private:
 
   class Menu : public Popover {
   public:
-    Menu(InputMode mode, bool branched, std::function<void(InputMode)> onPick) {
-      for (const auto& option : kModeOptions) {
-        if (branched && option.mode == InputMode::stereo) continue;
+    Menu(InputMode mode, bool branched, bool stereoChains, std::function<void(InputMode)> onPick) {
+      for (const auto& entry : kModeOptions) {
+        const bool stereoFeed = entry.mode == InputMode::stereo || entry.mode == InputMode::dualMono;
+        if (branched && stereoFeed) continue;
+        if (stereoChains && entry.mode == InputMode::dualMono) continue;
+        const ModeOption& option =
+            stereoChains && entry.mode == InputMode::stereo ? kStereoChainsOption : entry;
         auto row = std::make_unique<Row>(option, option.mode == mode);
         row->onClick = [this, onPick, m = option.mode] {
           close();
@@ -181,10 +202,10 @@ private:
   void closeMenu() {
     if (menu_ != nullptr) menu_->close();  // kept alive: we may be inside its row's click
   }
-  // Rebuilt per open: the row set depends on `branched`.
+  // Rebuilt per open: the row set depends on `branched` and `stereoChains`.
   void openMenu() {
     if (auto* old = menu_.release()) juce::MessageManager::callAsync([old] { delete old; });
-    menu_ = std::make_unique<Menu>(mode_, branched_,
+    menu_ = std::make_unique<Menu>(mode_, branched_, stereoChains_,
                                    [this](InputMode mode) { services_.chain.setInputMode(mode); });
     menu_->open(*this, Popover::Align::left, kMenuGap, 0, Popover::Placement::above);
   }
@@ -192,6 +213,7 @@ private:
   Services& services_;
   InputMode mode_ = InputMode::stereo;
   bool branched_ = false;
+  bool stereoChains_ = false;
   std::unique_ptr<Menu> menu_;
 };
 
@@ -238,7 +260,7 @@ Faceplate::Faceplate(Services& services)
   addAndMakeVisible(toneDim_);
   addAndMakeVisible(tonePower_);
 
-  imageDim_.setHelpText(help::text(help::Key::spreadMonoOutput));
+  // Its hint (the reason it's dimmed) is set by syncFlags.
   imageDim_.addChildComponent(spread_);
   imageDim_.addChildComponent(align_);
   addAndMakeVisible(imageDim_);
@@ -292,22 +314,29 @@ void Faceplate::syncFlags() {
   // swaps Spread for Align. Mono-mode spread doesn't need auto balance: both
   // channels carry the same chain, so their energy already matches.
   const bool stereoChains = chain.stereoEnabled;
-  // The balance trim is audible (stereo chains on any rig, or spread on a
-  // stereo rig; on a mono rig it trims the chains inside the mono sum).
-  const bool balanceActive = stereoChains || (spreadEnabled_.boolValue() && stereoOutput);
+  // Dual mono running: the mono chain outputs two real channels (one take
+  // each). Spread has nothing to double, so it dims with its own reason;
+  // Balance and auto balance apply to the two voices like to two chains.
+  const bool dualMono = chain.dualMonoActive;
+  // The balance trim is audible (stereo chains on any rig, spread on a
+  // stereo rig, or dual mono; on a mono rig it trims the chains inside the
+  // mono sum).
+  const bool balanceActive = stereoChains || (spreadEnabled_.boolValue() && stereoOutput) || dualMono;
 
   if (inputMode_->isVisible() != chain.stereoInput) {
     // The input group grows by the button, so the plate spreads again.
     inputMode_->setVisible(chain.stereoInput);
     resized();
   }
-  inputMode_->setState(chain.inputMode, chain.branch.has_value());
+  inputMode_->setState(chain.inputMode, chain.branch.has_value(), stereoChains);
 
   spread_.setVisible(!stereoChains);
   align_.setVisible(stereoChains);
-  imageDim_.setOff(!stereoOutput && !stereoChains);
+  // The dimmed group's hint names the reason (mono rig, or dual mono).
+  imageDim_.setHelpText(help::text(dualMono ? help::Key::spreadDualMono : help::Key::spreadMonoOutput));
+  imageDim_.setOff(!stereoChains && (!stereoOutput || dualMono));
 
-  autoBalance_.setVisible(stereoChains);
+  autoBalance_.setVisible(stereoChains || dualMono);
   autoBalance_.setOn(services_.autoBalance.listening());
   balance_.setVisible(balanceActive);
 }

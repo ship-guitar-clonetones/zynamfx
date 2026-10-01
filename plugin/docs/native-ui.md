@@ -395,6 +395,18 @@ editor), so a hidden UI costs no polls, parsing or painting.
 webview event) plus a 1 s fallback poll; parse `var` → `ChainState` structs
 once; optimistic local reorder during drags; `revision` gates re-layout.
 
+The faceplate's input-mode button reads `inputMode` (`stereo` / `dual` /
+`left` / `right`) and the processor-derived `dualMonoActive` flag. The menu
+is built per open: a mono chain offers Stereo SUM (L+R) / Stereo Dual Mono
+(L&R) / Left / Right,
+stereo chains offer Stereo / Left / Right (a stored `dual` displays as
+Stereo there), and a branched chain drops both stereo feeds. `dualMonoActive`
+(mode is dual, chain is mono, source and rig are stereo) is what shows Bal
+and Auto Balance, dims the Spread group with its own reason and splits the
+output meter; the UI never re-derives it from the flags. `MockBackend::
+setInputMode` mirrors the derivation so the testbed's `chrome-dual-mono`
+scenario and the `Faceplate dual mono` self-test see the same state.
+
 ### 5.13 Parameters
 Faceplate knobs and toggles bind via `juce::ParameterAttachment` to
 `backend.parameter(id)`. `MockBackend` owns a minimal `juce::AudioProcessor`

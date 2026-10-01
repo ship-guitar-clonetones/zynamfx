@@ -20,6 +20,7 @@ target_sources(DspTests PRIVATE
     src/branch_tests.cpp
     src/clipboard_tests.cpp
     src/dsp_tests.cpp
+    src/dual_mono_tests.cpp
     src/duplicate_tests.cpp
     src/eq_post_routing_tests.cpp
     src/factory_preset_tests.cpp

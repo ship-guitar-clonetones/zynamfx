@@ -183,7 +183,7 @@ The full path in processing order (`TONE3000Processor::processBlock` in
 
 ```mermaid
 flowchart LR
-    IN([In]) --> IM["Input Mode *\n(stereo / L / R)"]
+    IN([In]) --> IM["Input Mode *\n(stereo / dual mono / L / R)"]
     IM --> IG["Input Level"]
     IG --> GATE["Noise Gate *"]
     GATE --> TR["Transpose *"]
@@ -191,7 +191,7 @@ flowchart LR
     RS --> OS(("×N ↑ *"))
     subgraph CHAINS["Tone chains, 48 kHz × oversampling factor"]
         direction LR
-        CL["Left chain\n(NAM / IR blocks)"]
+        CL["Left chain\n(NAM / IR blocks;\n2 voices in dual mono)"]
         CR["Right chain\n(stereo mode only)"]
     end
     OS --> CL
@@ -208,9 +208,29 @@ flowchart LR
 ```
 
 - **Input mode**: when a real stereo source feeds the plugin, a faceplate
-  button picks what enters the chain: both channels (default) or one channel
-  mirrored onto both. Saved with the session, not with presets; it's I/O
-  routing, not tone.
+  button picks how it enters the chain. Saved with the session, not with
+  presets; it's I/O routing, not tone.
+
+  | Row | Mono chain | Stereo chains |
+  |---|---|---|
+  | **Stereo SUM (L+R)** / **Stereo** (default) | ½(L+R) folded into the one chain | channel 1 → Left chain, channel 2 → Right chain |
+  | **Stereo Dual Mono (L&R)** | L and R each run their own copy of the chain | (not offered; a saved selection behaves as Stereo) |
+  | **Left** / **Right** | that channel feeds the chain | that channel feeds both chains |
+
+  Dual Mono answers the stereo-track case (a stereo synth or a doubled DI
+  through one amp rig) without duplicating the chain by hand: every NAM
+  block runs two voices of the model, a stereo IR convolves its left kernel
+  for both channels (the pair's spatial cue would otherwise collapse), the
+  tone stack, gate and DC blocker are per-channel already, and the two
+  voices leave as real L and R. Amp CPU doubles (the voices fork across
+  cores with Multi-core on; IR cost is unchanged) and the help text says so.
+  Spread stays idle (the chain already outputs two real channels), while
+  Balance and Auto Balance work as a trim between the two voices. The mode
+  engages only when the chain is mono, the source is stereo and the rig can
+  reproduce stereo; on a mono track or one-channel device it behaves as
+  Stereo SUM. Switching mode on a mono chain rebuilds its NAM engines from the
+  model cache under the same edit fade a chain edit uses, so the change is
+  a short mute rather than a click.
 - **Noise gate**: a downward expander on the input with a band-passed
   sidechain and 5 dB of hysteresis, so pickup hum never chatters the gate.
   The faceplate exposes the threshold; right-clicking the Gate group
@@ -286,8 +306,8 @@ flowchart LR
   machine-wide) spreads independent chain work across a realtime worker
   pool. The two stereo chains process concurrently (the Right chain, or the
   branch lane when branched, on a worker while the audio thread processes
-  the other), and an oversampled NAM model's phase instances fork across
-  cores too. The forking thread can always steal jobs back and run them
+  the other), and a NAM model's instances (oversampling phases × dual-mono
+  voices) fork across cores too. The forking thread can always steal jobs back and run them
   inline, so the toggle is pure scheduling and the output is bit-identical
   either way (pinned by `test/src/multicore_tests.cpp`). Design notes in
   [`plugin/docs/multicore.md`](plugin/docs/multicore.md).

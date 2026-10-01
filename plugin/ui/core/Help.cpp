@@ -53,7 +53,17 @@ std::map<Key, String> buildTable() {
 
   // Faceplate: gains
   t[Key::inputLevel] = knobDesktop("Input", "chain input level, ±24 dB.");
-  t[Key::inputMode] = U("Input Mode: source channels. Stereo: both · L/R: one. Click: choose.");
+  t[Key::inputMode] = U("Input Mode: how the stereo source feeds the chain. Click: choose.");
+  // Menu rows. The first two are the same routing (the natural one for the
+  // chain mode), worded for what it does there: a mono chain sums, stereo
+  // chains take one channel each.
+  t[Key::inputModeSum] = U("Stereo SUM (L+R): both channels folded to mono into the chain.");
+  t[Key::inputModeStereo] = U("Stereo: channel 1 feeds the Left chain, channel 2 the Right.");
+  t[Key::inputModeDualMono] =
+      U("Dual Mono (L&R): L and R each run the chain separately, identical stereo chains. "
+        "2× CPU (spread across cores with Multi-core). Spread off.");
+  t[Key::inputModeLeft] = U("Left: channel 1 on both sides.");
+  t[Key::inputModeRight] = U("Right: channel 2 on both sides.");
   t[Key::outputLevel] = knobDesktop("Output", "master output level, ±24 dB.");
   t[Key::outputBalance] = knobDesktop("Balance", "level trim between chains, ±12 dB (pre-pan). Center: off.");
   t[Key::autoBalance] = U("Auto Balance: click, play ~2 s to match chain levels. Click again: cancel.");
@@ -99,6 +109,8 @@ std::map<Key, String> buildTable() {
       U("Mono safety: dim: safe · yellow: caution · red: cancellation on mono sum.");
   t[Key::spreadMonoOutput] =
       U("Spread: unavailable, the output is mono (mono track or one-channel output device).");
+  t[Key::spreadDualMono] =
+      U("Spread off in Dual Mono: the chain already outputs two real channels.");
   t[Key::alignOffset] = knobDesktop(
       "Offset", "corrective chain alignment, ≤24 ms toward L or R. Center: off. Right-click: advanced.");
   t[Key::alignWobble] = knobDesktop("Wobble", "humanizing drift of the align delay, up to ±1.2 ms.");

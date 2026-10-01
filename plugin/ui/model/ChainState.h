@@ -14,7 +14,12 @@ enum class ChainSide { left, right };
 juce::String toString(ChainSide side);
 ChainSide chainSideFromString(const juce::String& s);
 
-enum class InputMode { stereo, left, right };
+// How a stereo source feeds the chain (see Processor.h, InputMode). `stereo`
+// is the natural routing for the chain mode (a mono chain sums L+R; stereo
+// chains take one channel each); `dualMono` runs a mono chain once per
+// channel (two independent voices); `left` / `right` fold one channel onto
+// both. Wire strings: "stereo" / "dual" / "left" / "right".
+enum class InputMode { stereo, left, right, dualMono };
 juce::String toString(InputMode mode);
 InputMode inputModeFromString(const juce::String& s);
 
@@ -148,6 +153,10 @@ struct ChainState {
   bool stereoOutput = true;
   bool standalone = false;
   InputMode inputMode = InputMode::stereo;
+  // Dual mono actually running (mode selected on a mono chain with a stereo
+  // source and a stereo rig). The faceplate shows Balance and the stereo
+  // output meter, and dims Spread, while this is set.
+  bool dualMonoActive = false;
   double namSlimSizeDefault = 0;
   bool multiCore = true;
   double sampleRate = 48000;

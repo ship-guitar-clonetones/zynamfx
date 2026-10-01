@@ -181,7 +181,14 @@ juce::var MockBackend::loadLocalToneUrls(const juce::Array<juce::URL>&, const st
 }
 
 void MockBackend::setInputMode(const juce::String& mode) {
-  chain_.getDynamicObject()->setProperty("inputMode", mode);
+  auto* chain = chain_.getDynamicObject();
+  chain->setProperty("inputMode", mode);
+  // Mirrors the processor's dualMonoEngaged(): the mode runs only on a mono
+  // chain with a stereo source and a stereo rig (stereoOutput defaults on).
+  chain->setProperty("dualMonoActive",
+                     mode == "dual" && !static_cast<bool>(chain_["stereoEnabled"]) &&
+                         static_cast<bool>(chain_["stereoInput"]) &&
+                         static_cast<bool>(chain_.getProperty("stereoOutput", true)));
   bumpChain();
 }
 

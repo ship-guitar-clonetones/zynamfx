@@ -250,17 +250,24 @@ TONE3000Processor::Lane TONE3000Processor::restoreChainSnapshot(const juce::Valu
       snapshot.getProperty("branchAfterBlockId").toString().toStdString();
   alignBranchLaneLengths();
 
-  // A restored *active* branch + a stereo input fold would silently drop a
+  // A restored *active* branch + a stereo feed would silently drop a
   // channel, so enforce the same invariant setChainBranch does (presets don't
   // carry inputMode; DAW states restore it just before this runs). A dormant
   // branch (mono snapshot) doesn't constrain the fold.
-  if (rtBranchTapIndex >= 0 && getInputMode() == InputMode::Stereo)
+  if (rtBranchTapIndex >= 0 && isStereoFeed(getInputMode()))
     inputMode.store(static_cast<int>(InputMode::Left));
 
   // Mirrors setStereoMode: the right chain's engines must be ready before the
   // audio thread starts running them.
   if (snapStereo && !wasStereo)
     prepareChain(right);
+
+  // Engines kept by the reconciliation were built for the voice count in
+  // force when they loaded. A restore can move the requirement (a stereo
+  // snapshot landing while dual mono is selected, a DAW state carrying a
+  // different input mode than the instance had), so re-check it here; every
+  // restore path holds its fade until the queued loads settle.
+  requeueNamEnginesForVoiceCount();
 
   // Restores can add/remove/retire IR blocks wholesale (undo/redo, presets,
   // project load), so resync the host-facing tail length.

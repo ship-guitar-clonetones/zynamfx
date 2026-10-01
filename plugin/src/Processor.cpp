@@ -5,6 +5,7 @@
 #include "StandaloneStateAutosave.h"
 #include <cmath>
 #include <mutex>
+#include <optional>
 #include <random>
 #include <cstring>
 #include <tuple>
@@ -455,20 +456,54 @@ void TONE3000Processor::applyOversamplingSettings() {
 
   // IR blocks need nothing here: their convolvers run at the base rate
   // behind per-block islands (re-prepared by prepareChain above), so neither
-  // the kernel nor the tail report moves with the factor.
-  for (auto& l : lanes) {
-    for (auto& block : l) {
-      if (block->type == ChainBlockType::NAM && block->loaded && !block->modelLoading) {
-        // In-flight loads are left alone: the apply path's factor-drift guard
-        // re-queues them itself.
-        block->loaded = false;
-        block->modelLoading = true;
-        queueActiveModelLoad(*block);
-      }
-    }
-  }
+  // the kernel nor the tail report moves with the factor. In-flight NAM
+  // loads are left alone: the apply path's factor-drift guard re-queues
+  // them itself.
+  for (auto& l : lanes)
+    for (auto& block : l)
+      if (block->type == ChainBlockType::NAM && block->loaded && !block->modelLoading)
+        requeueLoadedNamEngine(*block);
 
   bumpChainRevision();
+}
+
+void TONE3000Processor::requeueLoadedNamEngine(ChainBlock& block) {
+  block.loaded = false;
+  block.modelLoading = true;
+  queueActiveModelLoad(block);
+}
+
+bool TONE3000Processor::requeueNamEnginesForVoiceCount() {
+  const int wanted = wantedNamVoices();
+  bool queued = false;
+  for (auto& l : lanes) {
+    for (auto& block : l) {
+      // In-flight loads are left alone: the apply path's voice-drift guard
+      // re-queues them itself (see applyPreparedModelToChainBlock).
+      if (block->type != ChainBlockType::NAM || !block->loaded || block->modelLoading ||
+          block->namEngine == nullptr || block->namEngine->getVoiceCount() == wanted)
+        continue;
+      requeueLoadedNamEngine(*block);
+      queued = true;
+    }
+  }
+  if (queued) {
+    juce::Logger::writeToLog("[Processor] NAM engines rebuilding for " + juce::String(wanted) +
+                             (wanted == 1 ? " voice" : " voices"));
+    bumpChainRevision();
+  }
+  return queued;
+}
+
+int TONE3000Processor::namEngineVoiceCount(const std::string& blockId) const {
+  juce::ScopedLock lock(chainMutex);
+  for (const auto& l : lanes)
+    for (const auto& block : l)
+      if (block->id == blockId)
+        return block->type == ChainBlockType::NAM && block->loaded && block->namEngine != nullptr
+                   ? block->namEngine->getVoiceCount()
+                   : 0;
+  return 0;
 }
 
 TONE3000Processor::~TONE3000Processor() {
@@ -696,19 +731,42 @@ void TONE3000Processor::updateStereoIoDetection() {
 }
 
 void TONE3000Processor::setInputMode(InputMode mode) {
-  if (mode == InputMode::Stereo) {
-    // An *active* branch has a single (mono) source; a stereo fold would
-    // silently drop the non-trunk channel. The UI hides the option; this
-    // guards MIDI/stale callers. A dormant branch (mono mode) doesn't
-    // constrain the fold; re-enabling stereo re-enforces it.
+  if (mode == getInputMode())
+    return;
+
+  // A change into or out of dual mono moves the NAM voice requirement, so
+  // the engines rebuild (see requeueNamEnginesForVoiceCount). Mute-splice
+  // the whole transition like an oversampling change: the fold, the
+  // stereo-IR routing and the Spread gate all flip under the held mute, and
+  // the chain glides back in once the rebuilt engines have landed. Other
+  // mode changes are a plain fold switch, as before. The fade is armed
+  // before the lock (the audio thread needs chainMutex to run it down) and
+  // only when needed: no fade, no dip for a Left ↔ Right pick.
+  const bool revoice = (mode == InputMode::DualMono) != (getInputMode() == InputMode::DualMono);
+  std::optional<ChainEditFade> fade;
+  if (revoice)
+    fade.emplace(*this);
+
+  bool rebuilding = false;
+  {
     juce::ScopedLock lock(chainMutex);
-    if (rtBranchTapIndex >= 0) {
-      DBG("setInputMode: stereo fold unavailable while the chain is branched");
+    if (isStereoFeed(mode) && rtBranchTapIndex >= 0) {
+      // An *active* branch has a single (mono) source; a stereo feed would
+      // silently drop the non-trunk channel. The UI hides the options; this
+      // guards MIDI/stale callers. A dormant branch (mono mode) doesn't
+      // constrain the fold; re-enabling stereo re-enforces it.
+      DBG("setInputMode: stereo feed unavailable while the chain is branched");
       return;
     }
+    inputMode.store(static_cast<int>(mode));
+    rebuilding = revoice && requeueNamEnginesForVoiceCount();
+    bumpChainRevision();
   }
-  inputMode.store(static_cast<int>(mode));
-  bumpChainRevision();
+  // Hold the mute until the rebuilt engines land (bounded), like a preset
+  // load; a chain with no NAM blocks has nothing to wait for and the fade
+  // releases at scope exit.
+  if (rebuilding)
+    fade->releaseWhenChainLoadsSettle();
   DBG("Input mode: " << inputModeToString(mode));
 }
 
@@ -889,7 +947,7 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     const bool isStereo = stereoEnabled.load();
     const bool stereoRig = stereoOutputDetected.load();
     const bool monoFold = isStereo && !stereoRig;
-    const bool applyBalance = isStereo || (cacheSpreadEnabled && stereoRig);
+    const bool applyBalance = isStereo || (cacheSpreadEnabled && stereoRig) || dualMonoEngaged();
     const auto g = imageMatrixGains(isStereo && !monoFold, monoFold,
                                     applyBalance ? cacheOutputBalance : 0.5f,
                                     cacheChainPanLeft, cacheChainPanRight,
@@ -1155,7 +1213,7 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
       if (block->spectrum.isEnabled())
         block->spectrum.pushSamples(buffer.getReadPointer(0),
                                     numChannels > 1 ? buffer.getReadPointer(1) : nullptr,
-                                    numSamples);
+                                    numSamples, rtDualMono);
       continue;
     }
 
@@ -1228,12 +1286,15 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
           }
         }
 
-        // Process with the NAM engine (handles mono conversion internally).
-        // With multi-core on, the engine forks its oversampling phase
-        // instances across the worker pool (rtPhasePool, resolved per
-        // callback); nested inside a lane fork this is the pool's supported
-        // one-deep nesting. Null = phases run serially on this thread.
-        block->namEngine->process(buffer, rtPhasePool);
+        // Process with the NAM engine: channel 0 through the model, fanned
+        // out to channel 1, or in dual mono (rtDualMono, a two-voice engine)
+        // each channel through its own voice. With multi-core on, the
+        // engine forks its voice × phase instances across the worker pool
+        // (rtPhasePool, resolved per callback); nested inside a lane fork
+        // this is the pool's supported one-deep nesting (dual mono never
+        // nests: it only runs in mono chain mode, which has no lane fork).
+        // Null = instances run serially on this thread.
+        block->namEngine->process(buffer, rtPhasePool, rtDualMono);
 
         // Post-model gain: calibrated hand-off OR loudness normalization,
         // never both; they have contradictory goals (reproduce the capture
@@ -1310,10 +1371,12 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
       try {
         // True-stereo only when: the IR file is stereo, the working buffer is stereo, and no
         // NAM block downstream would collapse the image back to mono. Otherwise apply the IR's
-        // left channel to every audio channel (convolverMono, Stereo::no).
+        // left channel to every audio channel (convolverMono, Stereo::no). Dual mono always
+        // takes the mono path: each channel is its own mono chain, and inside a stereo-mode
+        // lane (the definition of dual mono) a stereo IR convolves its left channel too.
         const bool noNamAfter = (idx > lastNamIndex);
         const bool useStereoIr = block->irNumChannels > 1 && numChannels > 1 && noNamAfter &&
-                                 block->convolverStereo != nullptr;
+                                 !rtDualMono && block->convolverStereo != nullptr;
         auto& convolver = useStereoIr ? *block->convolverStereo : *block->convolverMono;
 
         // Convolution runs at the base rate inside the block's island: when
@@ -1419,11 +1482,13 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
     block->outputMeterDb.store(std::max(-60.0f, blockOutputDb));
 
     // Feed the EQ editor's analyzer with the block's final output, only while
-    // that block's EQ view is actually open in the UI.
+    // that block's EQ view is actually open in the UI. In dual mono the two
+    // channels are different takes, so the analyzer keeps them apart and
+    // shows the louder one per bin (see BlockSpectrum::pushSamples).
     if (block->spectrum.isEnabled())
       block->spectrum.pushSamples(buffer.getReadPointer(0),
                                   numChannels > 1 ? buffer.getReadPointer(1) : nullptr,
-                                  numSamples);
+                                  numSamples, rtDualMono);
   }
 }
 
@@ -1564,8 +1629,8 @@ void TONE3000Processor::processChainStage(float** inputs, float** outputs, int n
 //    matrix becomes the mono fold, ½(balL·L + balR·R) onto both channel
 //    pointers; solo and polarity keep working inside the sum, the pans are
 //    inert. Balance is forced center whenever it can't do anything (mono
-//    chain without a running spread), so a leftover Bal setting can't skew
-//    a dual-mono bus, matching the UI hiding the knob.
+//    chain with neither a running spread nor dual mono), so a leftover Bal
+//    setting can't skew a plain mono bus, matching the UI hiding the knob.
 void TONE3000Processor::processImageStage(float* chL, float* chR, int numFrames,
                                           bool stereoRig) {
   // Allocation-free stereo view over the two chain channels, for the
@@ -1573,7 +1638,10 @@ void TONE3000Processor::processImageStage(float* chL, float* chR, int numFrames,
   float* imageChannels[2] = {chL, chR};
   juce::AudioBuffer<float> image(imageChannels, 2, numFrames);
 
-  const bool spreadActive = cacheSpreadEnabled && stereoRig;
+  // Spread builds a stereo double from channel 0; in dual mono the chain
+  // already outputs two real channels, so it stays idle (the parameter keeps
+  // its value and the UI dims the group, as on a mono rig).
+  const bool spreadActive = cacheSpreadEnabled && stereoRig && !rtDualMono;
   const bool monoFold = rtStereoChains && !stereoRig;
 
   if (rtStereoChains) {
@@ -1620,7 +1688,10 @@ void TONE3000Processor::processImageStage(float* chL, float* chR, int numFrames,
   // re-polarizing inside the sum too. All four gains are smoothed so knob
   // moves AND the solo/invert/fold gating glide instead of stepping (pop).
   if (stereoRig || monoFold) {
-    const bool applyBalance = rtStereoChains || spreadActive;
+    // Balance trims the two things on the bus against each other: the two
+    // chains, Spread's two sides, or dual mono's two voices (the matrix is
+    // a diagonal L/R tilt there, like the Spread case: pan inactive).
+    const bool applyBalance = rtStereoChains || spreadActive || rtDualMono;
     const auto g = imageMatrixGains(rtStereoChains && !monoFold, monoFold,
                                     applyBalance ? cacheOutputBalance : 0.5f,
                                     cacheChainPanLeft, cacheChainPanRight,
@@ -1688,14 +1759,36 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   //   so mirror it.
   // - Input mode L/R on a stereo source: duplicate the chosen channel onto
   //   both, exactly like a host feeding a mono source to a stereo bus.
+  // - Stereo on a mono chain: sum to mono, ½(L+R), the host's own fold law
+  //   (a mono source on a stereo track, L == R, passes bit-identically; a
+  //   real stereo source reaches the chain whole instead of left-only).
+  //   Dual Mono folds the same way whenever it can't engage (mono rig; see
+  //   dualMonoEngaged), so the two modes only differ when both takes can
+  //   actually be processed and heard. With stereo chains neither folds:
+  //   channel 0 feeds the Left chain and channel 1 the Right.
+  // Dual mono is resolved once per callback, here, so the fold and the chain
+  // stage below always agree on it (a mode change landing between the two
+  // reads could otherwise fold the input and then run two voices on it).
+  rtDualMono = numChannels > 1 && dualMonoEngaged();
   if (numChannels > 1) {
     if (standaloneMonoInput.load()) {
       buffer.copyFrom(1, 0, buffer, 0, 0, numSamples);
     } else {
-      switch (static_cast<InputMode>(inputMode.load())) {
+      const auto mode = static_cast<InputMode>(inputMode.load());
+      const bool sumToMono =
+          !stereoEnabled.load() &&
+          (mode == InputMode::Stereo || (mode == InputMode::DualMono && !rtDualMono));
+      switch (mode) {
         case InputMode::Left: buffer.copyFrom(1, 0, buffer, 0, 0, numSamples); break;
         case InputMode::Right: buffer.copyFrom(0, 0, buffer, 1, 0, numSamples); break;
-        case InputMode::Stereo: break;
+        case InputMode::Stereo:
+        case InputMode::DualMono:
+          if (sumToMono) {
+            buffer.applyGain(0, 0, numSamples, 0.5f);
+            buffer.addFrom(0, 0, buffer, 1, 0, numSamples, 0.5f);
+            buffer.copyFrom(1, 0, buffer, 0, 0, numSamples);
+          }
+          break;
       }
     }
   }
@@ -1810,6 +1903,7 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
     // them, so a two-chain rig is heard in full instead of half.
     rtStereoChains = stereoEnabled.load();
     rtChainChannels = juce::jmin(numChannels, 2);
+    // rtDualMono was resolved up front, with the input fold.
 
     // One multi-core resolution per callback (under chainMutex): the phase
     // fork only needs the setting and live workers, while the lane fork
