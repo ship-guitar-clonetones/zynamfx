@@ -33,7 +33,7 @@ public:
   ~TransposeGroup() override;
 
   void resized() override;
-  // The plate hides the group (Effects view setting): its deck goes too.
+  // The plate hides the group (Show Transpose view setting): its deck goes too.
   void visibilityChanged() override;
   void mouseDown(const juce::MouseEvent& e) override;
   void secondaryPress(const juce::MouseEvent&) override { toggleDeck(); }
