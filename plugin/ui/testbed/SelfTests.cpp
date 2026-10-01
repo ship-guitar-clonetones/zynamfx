@@ -1208,7 +1208,7 @@ struct PointerTests : juce::UnitTest {
       pointer.removeListener(&counter);
       return;
     }
-    beginTest("a desktop build follows the last press or move");
+    beginTest("a desktop build follows the last press or wheel turn");
     pointer.sawInput(true);
     expect(pointer.coarse());
     expectEquals(counter.changes, 1);
@@ -1242,7 +1242,34 @@ struct PointerTests : juce::UnitTest {
     root.services().pointer.sawInput(true);
     expect(allAt(1.0f), "shown on touch");
     root.services().pointer.sawInput(false);
-    expect(allAt(0.0f), "hidden again once a mouse moves");
+    expect(allAt(0.0f), "hidden again once a mouse clicks");
+
+    // Through the peer: JUCE synthesises mouse-source moves (a relayout
+    // under the pointer, the peers' pointer-leave handling), so a move must
+    // not take the affordances away from a finger; a press does.
+    beginTest("the tracker follows presses, not moves");
+    juce::DocumentWindow window("pointer", juce::Colours::black, 0);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(300);
+    auto* peer = host.getPeer();
+    expect(peer != nullptr);
+    if (peer != nullptr) {
+      using Type = juce::MouseInputSource::InputSourceType;
+      auto& tracked = root.services().pointer;
+      tracked.sawInput(true);  // macOS has no touch source to drive, so seed the finger directly
+      const auto at = peer->getComponent().getLocalBounds().getCentre().toFloat();
+      juce::int64 now = juce::Time::currentTimeMillis();
+      peer->handleMouseEvent(Type::mouse, at, juce::ModifierKeys(), 0.0f, 0.0f, ++now);
+      peer->handleMouseEvent(Type::mouse, at.translated(8, 8), juce::ModifierKeys(), 0.0f, 0.0f, ++now);
+      pump(50);
+      expect(tracked.coarse(), "a mouse move leaves the finger in charge");
+      peer->handleMouseEvent(Type::mouse, at.translated(8, 8), juce::ModifierKeys::leftButtonModifier, 0.0f, 0.0f, ++now);
+      peer->handleMouseEvent(Type::mouse, at.translated(8, 8), juce::ModifierKeys(), 0.0f, 0.0f, ++now);
+      pump(50);
+      expect(!tracked.coarse(), "a mouse press hands over");
+    }
+    window.setVisible(false);
   }
 };
 
