@@ -27,7 +27,7 @@ public:
   ~GateGroup() override;
 
   void resized() override;
-  // The plate hides the group (Effects view setting): its deck goes too.
+  // The plate hides the group (Show Gate view setting): its deck goes too.
   void visibilityChanged() override;
   // Right-click on the group's own space toggles the deck; the knob and the
   // power button forward theirs here.

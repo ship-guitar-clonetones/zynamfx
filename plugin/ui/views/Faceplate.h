@@ -11,10 +11,10 @@
 // they read as one), tone stack, image slot, output. Every group has a fixed
 // footprint with inactive companions hidden in place, so toggling stereo /
 // spread never shifts the plate. The effects are the exception, by design:
-// Plugin Settings → Effects picks which of them the plate shows (gate by
-// default, transpose hidden), a powered effect always shows so a preset's
-// sound is never controlled from a hidden knob, and the plate re-spreads
-// when the cluster shrinks or goes away.
+// Plugin Settings → Show Gate / Show Transpose picks which of them the plate
+// shows (gate by default, transpose hidden), a powered effect always shows
+// so a preset's sound is never controlled from a hidden knob, and the plate
+// re-spreads when the cluster shrinks or goes away.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>

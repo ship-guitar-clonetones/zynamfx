@@ -1,7 +1,6 @@
 #include "PluginSettingsPage.h"
 
 #include "InlineChrome.h"
-#include "core/Design.h"
 #include "core/Fonts.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
@@ -20,12 +19,6 @@ const std::vector<SelectField::Option> kOsFactorOptions = {
     {"0", "2X - Default", {}}, {"1", "4X", {}}, {"2", "8X", {}}};
 
 RichText copy(std::initializer_list<TextRun> runs) { return RichText(runs); }
-
-// How an effect's advanced deck opens on this platform (Help.cpp's gesture).
-juce::String deckGesture() {
-  return design::kCoarsePointer ? "Touch and hold the knob for the advanced deck."
-                                : "Right-click the knob for the advanced deck.";
-}
 }  // namespace
 
 // DbuField
@@ -92,12 +85,10 @@ private:
 PluginSettingsPage::PluginSettingsPage(Services& services)
     : FormStack(form::kSectionGap),
       services_(services),
-      infoBar_("Info Bar", "Strip under the faceplate with hover tips and CPU load."),
-      effects_("Effects", "Which effects appear on the faceplate. View only: your sound and presets don't change."),
-      showGate_("Gate", "Noise gate threshold and power switch. " + deckGesture()),
-      showTranspose_("Transpose", "Pitch shift semitones and power switch. " + deckGesture()),
-      effectsTip_(copy({TextRun::plain("An effect with "), TextRun::inlineBox(inline_chrome::icon(Icon::Power)),
-                        TextRun::plain(" on always shows, even when hidden here.")})),
+      infoBar_("Show Info Bar",
+               "Shows help text on hover explaining what elements do, plus keyboard shortcuts and a CPU meter."),
+      showGate_("Show Gate", "Reduces unwanted noise like hum and hiss while you're playing."),
+      showTranspose_("Show Transpose", "Shifts the pitch of your instrument up or down. Handy for alternate tunings."),
       namSize_("NAM A2 Size",
                "Default size for new NAM blocks. Existing blocks keep their own, so presets load as saved."),
       lite_("A2-Lite", "Sounds great and uses less CPU"),
@@ -155,17 +146,11 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
   infoBar_.onChange = [this](bool on) { services_.hints.setEnabled(on); };
   add(infoBar_);
 
-  // Effects (view settings; the faceplate reads the same keys). The two
-  // toggles read as children of the section.
-  showGate_.setNested();
-  showTranspose_.setNested();
-  effects_.content().setGap(form::kControlGap);
-  effects_.content().add(showGate_);
-  effects_.content().add(showTranspose_);
-  effects_.content().add(effectsTip_);
+  // Gate / transpose: view settings the faceplate reads from the same keys.
   showGate_.onChange = [this](bool on) { services_.prefs.setBool(UiPrefs::kShowGateControl, on); };
   showTranspose_.onChange = [this](bool on) { services_.prefs.setBool(UiPrefs::kShowTransposeControl, on); };
-  add(effects_);
+  add(showGate_);
+  add(showTranspose_);
 
   // NAM A2 Size.
   namSize_.setInlineLabel();
