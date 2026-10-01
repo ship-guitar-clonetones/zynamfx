@@ -157,8 +157,9 @@ std::map<Key, String> buildTable() {
 
   // Sign-in screen
   t[Key::signInBack] = U("Back: stop signing in and return.");
-  t[Key::signInCopyLink] = U("Copy link: copy the sign-in link to paste into any browser on this machine.");
-  t[Key::signInPhone] = U("Use your phone: sign in on another device with a code, no browser needed here.");
+  t[Key::signInCopyLink] = U("Copy Link: copy the sign-in link to paste into any browser on this machine.");
+  t[Key::signInPhone] =
+      U("Sign in on a different device: scan a QR code or type a code on your phone, no browser needed here.");
   t[Key::signInNewCode] = U("New code: get a fresh code for your phone.");
   t[Key::signInRetry] = U("Try again: start the sign-in over.");
   t[Key::signInDismiss] = U("Dismiss: drop the error and return.");

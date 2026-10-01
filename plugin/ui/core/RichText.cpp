@@ -52,36 +52,50 @@ void RichLine::draw(juce::Graphics& g, const RichText& runs, float px, juce::Poi
 RichFlow::RichFlow(const RichText& runs, float px, float lineHeightPx, float width)
     : px_(px), lineHeightPx_(lineHeightPx), width_(width) {
   // Tokenise: each word keeps its run's style and remembers whether
-  // whitespace preceded it (runs of whitespace collapse to one space).
+  // whitespace preceded it (runs of whitespace collapse to one space). The
+  // space keeps the style of the run it was written in, as in CSS: a
+  // trailing space in "Visit " is plain even when the next run is
+  // underlined, while a link's own leading space underlines with it.
   struct Token {
     TextRun run;  // text = the word
     bool spaceBefore;
     bool paragraphBreak;
+    TextRun spaceStyle;  // style of the space before, when spaceBefore
   };
   std::vector<Token> tokens;
   bool pendingSpace = false;
+  TextRun pendingStyle;
+  auto styleOf = [](const TextRun& run) {
+    TextRun style = run;
+    style.text.clear();
+    return style;
+  };
   for (const auto& run : runs) {
     if (isParagraphBreak(run)) {
-      tokens.push_back({run, false, true});
+      tokens.push_back({run, false, true, {}});
       pendingSpace = false;
       continue;
     }
     if (run.box) {
       // An inline block is one unbreakable word; spacing around it comes
       // from the neighbouring runs' whitespace, as in the DOM.
-      tokens.push_back({run, pendingSpace, false});
+      tokens.push_back({run, pendingSpace, false, pendingStyle});
       pendingSpace = false;
       continue;
     }
-    if (run.text.isNotEmpty() && juce::CharacterFunctions::isWhitespace(run.text[0])) pendingSpace = true;
+    if (run.text.isNotEmpty() && juce::CharacterFunctions::isWhitespace(run.text[0])) {
+      pendingSpace = true;
+      pendingStyle = styleOf(run);
+    }
     juce::StringArray words;
     words.addTokens(run.text, " \t\r\n", {});
     words.removeEmptyStrings();
     for (const auto& word : words) {
       TextRun piece = run;
       piece.text = word;
-      tokens.push_back({piece, pendingSpace, false});
+      tokens.push_back({piece, pendingSpace, false, pendingStyle});
       pendingSpace = true;
+      pendingStyle = styleOf(run);
     }
     if (run.text.isNotEmpty() && !juce::CharacterFunctions::isWhitespace(run.text.getLastCharacter()))
       pendingSpace = false;
@@ -117,9 +131,8 @@ RichFlow::RichFlow(const RichText& runs, float px, float lineHeightPx, float wid
     }
     const auto font = runFont(token.run, px_);
     const float wordW = token.run.box ? token.run.box->width : Fonts::width(font, token.run.text);
-    // The space before a word takes that word's style; before a box it is
-    // plain paragraph text.
-    const TextRun spaceStyle = token.run.box ? TextRun::plain({}) : token.run;
+    // The space before a word keeps the style it was written in.
+    const TextRun& spaceStyle = token.spaceStyle;
     const float spaceW = Fonts::width(runFont(spaceStyle, px_), " ");
     if (!line.pieces.empty() && line.width + (token.spaceBefore ? spaceW : 0) + wordW > width_) flush();
     if (token.spaceBefore && !line.pieces.empty()) {

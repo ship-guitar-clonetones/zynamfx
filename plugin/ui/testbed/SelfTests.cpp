@@ -129,6 +129,9 @@ struct RichFlowTests : juce::UnitTest {
     const RichFlow flow(linky, 13, 18, 500);
     expectEquals(flow.linkAt({flow.maxLineWidth() - 2, 9}, {0, 0}), juce::String("https://t.co"));
     expect(flow.linkAt({1, 9}, {0, 0}).isEmpty());
+    // The space in "see " belongs to the plain run, not the link after it
+    // (so an underline never bleeds under the space before it).
+    expect(flow.linkAt({Fonts::width(Fonts::sans(13), "see") + 1, 9}, {0, 0}).isEmpty());
   }
 };
 

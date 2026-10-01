@@ -175,7 +175,7 @@ const std::map<juce::String, Drive>& drives() {
          wait(100);
          if (auto* login = buttonNamed(root, "Login")) click(root, *login);
          wait(300);
-         if (auto* copy = buttonNamed(root, "Copy link")) click(root, *copy);
+         if (auto* copy = buttonNamed(root, "Copy Link")) click(root, *copy);
          wait(200);
          unhover(root);
        }},
@@ -185,7 +185,7 @@ const std::map<juce::String, Drive>& drives() {
          wait(100);
          if (auto* login = buttonNamed(root, "Login")) click(root, *login);
          wait(300);
-         if (auto* phone = buttonNamed(root, "Use your phone")) click(root, *phone);
+         if (auto* phone = buttonNamed(root, "Sign in on a different device")) click(root, *phone);
          wait(300);
          unhover(root);
        }},
@@ -195,7 +195,7 @@ const std::map<juce::String, Drive>& drives() {
          wait(100);
          if (auto* login = buttonNamed(root, "Login")) click(root, *login);
          wait(300);
-         if (auto* phone = buttonNamed(root, "Use your phone")) click(root, *phone);
+         if (auto* phone = buttonNamed(root, "Sign in on a different device")) click(root, *phone);
          wait(400);
          unhover(root);
        }},
@@ -205,7 +205,7 @@ const std::map<juce::String, Drive>& drives() {
          wait(100);
          if (auto* login = buttonNamed(root, "Login")) click(root, *login);
          wait(300);
-         if (auto* phone = buttonNamed(root, "Use your phone")) click(root, *phone);
+         if (auto* phone = buttonNamed(root, "Sign in on a different device")) click(root, *phone);
          wait(400);
          unhover(root);
        }},

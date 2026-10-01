@@ -209,9 +209,9 @@ OAuth (PKCE) runs in the system browser. `Tone3000Session::login` starts
 `LoopbackServer` on `127.0.0.1:<ephemeral>`, opens the authorize URL with
 `redirect_uri=http://localhost:<port>/`, and the plugin shows the
 `SignInScreen` for as long as the session's `AuthFlow` is not idle: a full
-page in the tone browser's slot (Select Tone mockup 13301:49740) with a
-bare ← that abandons the sign-in, the loading dots over "Sign in on your
-browser then return here.", and under them the two ways round a browser
+page in the tone browser's slot (Select Tone mockups 13342:46017 and
+13342:46055) with a bare ← that abandons the sign-in, the loading dots over
+"Sign in with your browser", and under them the two ways round a browser
 that did not open. Every entry point (account menu, info panel, the tone
 browser's CTAs) shows this same screen; only the landing differs: a login
 started from the tone browser (`LoginIntent::browse`) comes back to it,
@@ -221,14 +221,19 @@ The browser launch is best effort — JUCE reports success once the launcher
 forks, so a browser that refuses to start (Chromium under root on Linux)
 gives no error — hence the fallbacks, always offered:
 
-- **Copy link** puts the authorize URL (`AuthFlow::authorizeUrl`) on the
+- **Copy Link** ("Browser didn't open? Copy link to sign in, then return
+  here.") puts the authorize URL (`AuthFlow::authorizeUrl`) on the
   clipboard, for any browser on this machine: the loopback listener takes
   the redirect from whichever browser completes it.
-- **Use your phone** runs the device flow (RFC 8628, `startDeviceFlow`):
-  `POST /oauth/device_authorization`, then a QR code (`widgets/QrCode`)
-  of `verification_uri_complete` beside the `user_code` and where to type
-  it, while the session polls `/oauth/token` with the device-code grant at
-  the server's interval (`slow_down` adds 5 s; `expired_token`,
+- **Sign in on a different device** (a grey text link; hand cursor, no
+  hover state) runs the device flow (RFC 8628, `startDeviceFlow`) on its
+  own page, "Sign in on your phone": `POST /oauth/device_authorization`,
+  then two cards with OR between them, a QR code (`widgets/QrCode`) of
+  `verification_uri_complete`, and "Visit tone3000.com/activate, sign in,
+  and enter this code:" over the `user_code` (the address is underlined so
+  it reads as one, but is not a link: it is for typing into the other
+  device), while the session polls `/oauth/token` with the device-code
+  grant at the server's interval (`slow_down` adds 5 s; `expired_token`,
   `access_denied` and the code's own deadline end it with a reason and a
   New code button).
 

@@ -6638,7 +6638,7 @@
    "id": "load-oauth-leaving",
    "section": "loading",
    "title": "Sign in - waiting on the browser",
-   "description": "The sign-in screen the instant a login hands off to the system browser (Select Tone mockup 13301:49740): a full page in the tone browser's slot with a bare ← to abandon it, the loading dots over \"Sign in on your browser then return here.\", and under them the ways round a browser that may not have opened: Copy link (the authorize URL, for any browser on this machine) and Use your phone (the device flow). The browser path stays live throughout.",
+   "description": "The sign-in screen the instant a login hands off to the system browser (Select Tone mockup 13342:46017): a full page in the tone browser's slot with a bare ← to abandon it, the loading dots over \"Sign in with your browser\", and under them the ways round a browser that may not have opened: \"Browser didn't open? Copy link to sign in, then return here.\" with the Copy Link button (the authorize URL, for any browser on this machine), and the grey \"Sign in on a different device\" link to the device-flow page. The browser path stays live throughout.",
    "chain": {
     "revision": 1,
     "canUndo": true,
@@ -7208,7 +7208,7 @@
    "id": "load-oauth-copied",
    "section": "loading",
    "title": "Sign in - link copied",
-   "description": "Copy link puts the authorize URL on the clipboard and reads Copied for two seconds.",
+   "description": "Copy Link puts the authorize URL on the clipboard and reads Copied for two seconds.",
    "chain": {
     "revision": 1,
     "canUndo": true,
@@ -7493,7 +7493,7 @@
    "id": "load-oauth-device-requesting",
    "section": "loading",
    "title": "Sign in - phone: getting a code",
-   "description": "Use your phone asks TONE3000 for a device code (POST /oauth/device_authorization): the dots while it answers.",
+   "description": "Sign in on a different device asks TONE3000 for a device code (POST /oauth/device_authorization): the dots while it answers.",
    "chain": {
     "revision": 1,
     "canUndo": true,
@@ -7779,7 +7779,7 @@
    "id": "load-oauth-device",
    "section": "loading",
    "title": "Sign in - phone: scan or type the code",
-   "description": "The device flow (RFC 8628): a QR code of verification_uri_complete for the phone's camera, and for anyone who cannot scan, where to go and the user code to type. The plugin polls the token endpoint at the server's interval until the code is approved; finishing in the browser still works meanwhile.",
+   "description": "The device flow (RFC 8628; Select Tone mockup 13342:46055): \"Sign in on your phone\" over two cards with OR between them, a QR code of verification_uri_complete for the phone's camera, and for anyone who cannot scan, \"Visit tone3000.com/activate, sign in, and enter this code:\" over the user code (the address underlined to read as one, not a link). The plugin polls the token endpoint at the server's interval until the code is approved; finishing in the browser still works meanwhile.",
    "chain": {
     "revision": 1,
     "canUndo": true,
@@ -8064,7 +8064,7 @@
    "id": "load-oauth-device-expired",
    "section": "loading",
    "title": "Sign in - phone: code expired",
-   "description": "The code went unused for its ten minutes (or was declined, or TONE3000 would not issue one): the reason, with New code for a fresh one and Copy link still to hand.",
+   "description": "The code went unused for its ten minutes (or was declined, or TONE3000 would not issue one): the reason, with New code for a fresh one and Copy Link still to hand.",
    "chain": {
     "revision": 1,
     "canUndo": true,
