@@ -64,6 +64,87 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 # Download CPM package manager
 include(cmake/cpm.cmake) 
 
+# Linux: FreeType is linked statically into every GUI binary instead of
+# resolved from the host at load time (issue #181). JUCE's juce_graphics
+# module asks pkg-config for the system `freetype2`, which makes the plugin
+# .so import FreeType by SONAME. That fails inside hosts that bundle their
+# own, older FreeType (the official Ardour / Mixbus builds ship a Debian-11
+# era libfreetype.so.6 in /opt/<host>/lib): the vendored HarfBuzz FreeType
+# glue in juce_graphics references the FreeType 2.13 COLRv1 API
+# (FT_Get_Paint & co) whenever the build host's headers are >= 2.13, lilv
+# opens LV2 libraries with RTLD_NOW, and the load dies with "undefined
+# symbol: FT_Get_Paint". (The VST3 only survives because Ardour opens it
+# RTLD_LAZY and no colour glyph is ever painted.) Pinning the library into
+# the binary removes the dependency on whatever FreeType a host happens to
+# carry, which is also what the Ardour maintainers require of plugins.
+#
+# Mechanism: JUCEModuleSupport's _juce_create_pkgconfig_target() returns
+# early when `juce::pkgconfig_<module>_LINUX_DEPS` already exists, so the
+# target is created here, before JUCE is added, as static FreeType plus the
+# pkg-config fontconfig JUCE would otherwise have pulled in alongside it
+# (fontconfig stays dynamic: it has to read the host's font configuration
+# and only old, stable Fc* entry points are used). Any freetype spill-over
+# from fontconfig's Requires.private is filtered out so neither the system
+# headers nor -lfreetype can reach the link. The library is built with no
+# external dependencies (internal zlib, no PNG/Brotli/bzip2/HarfBuzz: the
+# fonts are embedded TTFs), PIC so it links into the plugin modules, and
+# with FreeType's own hidden visibility so no FT_* symbol is exported from
+# our .so into the host process. 2.13.3 is the bug-fix successor of the
+# 2.13.2 the ubuntu-24.04 CI image was already building against, so glyph
+# rendering is unchanged. Desktop Linux only: HEADLESS builds take the
+# find_package(JUCE) route and macOS / Windows / iOS never touch FreeType.
+if (UNIX AND NOT APPLE AND NOT HEADLESS)
+    CPMAddPackage(
+        NAME freetype
+        GITHUB_REPOSITORY freetype/freetype
+        GIT_TAG VER-2-13-3
+        VERSION 2.13.3
+        SOURCE_DIR ${LIB_DIR}/freetype
+        EXCLUDE_FROM_ALL YES
+        OPTIONS
+            "FT_DISABLE_ZLIB ON"
+            "FT_DISABLE_BZIP2 ON"
+            "FT_DISABLE_PNG ON"
+            "FT_DISABLE_HARFBUZZ ON"
+            "FT_DISABLE_BROTLI ON"
+            "SKIP_INSTALL_ALL ON"
+    )
+    if (NOT TARGET freetype)
+        message(FATAL_ERROR "T3K_STATIC_FREETYPE: the freetype target was not created by "
+            "${LIB_DIR}/freetype; its CMake layout likely changed. Update the "
+            "package block in CMakeLists.txt.")
+    endif()
+    set_target_properties(freetype PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(T3K_FONTCONFIG REQUIRED fontconfig)
+    list(FILTER T3K_FONTCONFIG_LINK_LIBRARIES EXCLUDE REGEX "freetype")
+    list(FILTER T3K_FONTCONFIG_INCLUDE_DIRS EXCLUDE REGEX "freetype")
+
+    add_library(pkgconfig_juce_graphics_LINUX_DEPS INTERFACE)
+    add_library(juce::pkgconfig_juce_graphics_LINUX_DEPS ALIAS pkgconfig_juce_graphics_LINUX_DEPS)
+    target_link_libraries(pkgconfig_juce_graphics_LINUX_DEPS INTERFACE
+        freetype
+        ${T3K_FONTCONFIG_LINK_LIBRARIES})
+    target_include_directories(pkgconfig_juce_graphics_LINUX_DEPS INTERFACE
+        ${T3K_FONTCONFIG_INCLUDE_DIRS})
+    target_compile_options(pkgconfig_juce_graphics_LINUX_DEPS INTERFACE
+        ${T3K_FONTCONFIG_CFLAGS_OTHER})
+    # FreeType's own FT_EXPORT macro stamps every API function with
+    # visibility("default") (public-macros.h), overriding the hidden preset,
+    # so left alone the plugin .so would re-export all ~150 FT_* symbols as
+    # preemptible. In a host that already carries a FreeType, the dynamic
+    # linker resolves a dlopen'd library's preemptible references against the
+    # global scope first: our calls would bind to the host's copy for every
+    # symbol it has and to our own for the rest, mixing two implementations
+    # on one FT_Library. --exclude-libs makes the archive's symbols local in
+    # each binary that links it, so they are neither exported nor preempted.
+    target_link_options(pkgconfig_juce_graphics_LINUX_DEPS INTERFACE
+        ${T3K_FONTCONFIG_LDFLAGS_OTHER}
+        "LINKER:--exclude-libs,libfreetype.a")
+    message(STATUS "FreeType 2.13.3 linked statically into the Linux GUI targets (fontconfig stays dynamic)")
+endif()
+
 # Download JUCE using CPM
 CPMAddPackage(
     NAME JUCE
