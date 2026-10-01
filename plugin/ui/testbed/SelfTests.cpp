@@ -1784,23 +1784,34 @@ struct FaceplateDualMonoTests : juce::UnitTest {
         drive::find(root, [name](juce::Component& c) { return c.getName() == name; }));
   }
 
-  // The menu's row labels, top to bottom, while it is open. Rows are the
-  // Clickables whose help text opens with their own label ("Left: …"); the
-  // anchor button ("Input Mode: …") is the one such control that isn't a row.
+  // The open popover's rows, top to bottom: the Clickables inside the one
+  // showing Popover (the input-mode menu is the only popover these tests open).
+  static std::vector<Clickable*> menuRowButtons(PluginRoot& root) {
+    std::vector<Clickable*> rows;
+    auto* menu = drive::find(root, [](juce::Component& c) {
+      return dynamic_cast<Popover*>(&c) != nullptr && c.isShowing();
+    });
+    if (menu == nullptr) return rows;
+    for (auto* child : menu->getChildren())
+      if (auto* row = dynamic_cast<Clickable*>(child); row != nullptr && row->isShowing()) rows.push_back(row);
+    std::sort(rows.begin(), rows.end(), [](Clickable* a, Clickable* b) { return a->getY() < b->getY(); });
+    return rows;
+  }
+
   static juce::StringArray menuRows(PluginRoot& root) {
-    std::vector<juce::Component*> rows;
-    drive::find(root, [&](juce::Component& c) {
-      if (c.isShowing() && dynamic_cast<Clickable*>(&c) != nullptr && c.getName() != "Input Mode" &&
-          c.getHelpText().startsWith(c.getName() + ":"))
-        rows.push_back(&c);
-      return false;
-    });
-    std::sort(rows.begin(), rows.end(), [&](juce::Component* a, juce::Component* b) {
-      return root.getLocalPoint(a, juce::Point<int>()).y < root.getLocalPoint(b, juce::Point<int>()).y;
-    });
     juce::StringArray labels;
-    for (auto* r : rows) labels.add(r->getName());
+    for (auto* r : menuRowButtons(root)) labels.add(r->getName());
     return labels;
+  }
+
+  // The row's help is the table entry for its key, whatever the copy says.
+  void expectRowHelp(PluginRoot& root, const juce::String& label, help::Key key) {
+    for (auto* r : menuRowButtons(root))
+      if (r->getName() == label) {
+        expectEquals(r->getHelpText(), help::text(key), "help for " + label);
+        return;
+      }
+    expect(false, "no menu row named " + label);
   }
 
   void pick(PluginRoot& root, const juce::String& row) {
@@ -1836,8 +1847,10 @@ struct FaceplateDualMonoTests : juce::UnitTest {
       beginTest("a mono chain on a stereo source offers Stereo SUM, Stereo Dual Mono, Left and Right");
       drive::clickByHelp(root, "Input Mode:");
       pump(50);
-      expectEquals(menuRows(root).joinIntoString("|"), juce::String("Stereo SUM (L+R)|Stereo Dual Mono (L&R)|Left|Right"));
-      expect(shownWithHelp(root, "Stereo Dual Mono (L&R):") != nullptr, "the row carries the Dual Mono help");
+      expectEquals(menuRows(root).joinIntoString("|"),
+                   juce::String("Stereo SUM (L+R)|Stereo Dual Mono (L&R)|Left|Right"));
+      expectRowHelp(root, "Stereo SUM (L+R)", help::Key::inputModeSum);
+      expectRowHelp(root, "Stereo Dual Mono (L&R)", help::Key::inputModeDualMono);
       drive::clickByHelp(root, "Input Mode:");  // toggles the menu closed
       pump(50);
       expect(knob(root, "Bal") == nullptr, "no balance to trim with one voice");
@@ -1903,7 +1916,7 @@ struct FaceplateDualMonoTests : juce::UnitTest {
       drive::clickByHelp(root, "Input Mode:");
       pump(50);
       expectEquals(menuRows(root).joinIntoString("|"), juce::String("Stereo|Left|Right"));
-      expect(shownWithHelp(root, "Stereo:") != nullptr, "the stereo feed explains its per-chain routing");
+      expectRowHelp(root, "Stereo", help::Key::inputModeStereo);
       drive::clickByHelp(root, "Input Mode:");
       pump(50);
       expect(knob(root, "Bal") != nullptr, "two chains always have a balance");
