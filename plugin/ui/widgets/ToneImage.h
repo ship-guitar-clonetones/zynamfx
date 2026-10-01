@@ -1,7 +1,8 @@
 // Tone artwork with recovery (port of GearIcon.tsx ToneImage): the image
 // URL when it loads, otherwise the gear glyph centred on SURFACE (missing
 // artwork, or the fetch failed: offline / tone3000.com down). Local-file
-// blocks show a file glyph instead: there is no artwork and no gear id.
+// blocks have no artwork: they show the gear glyph when native inferred a
+// gear from the file (.nam metadata, cab-length IR), else a file glyph.
 // Fills its bounds like a cover-fit <img>; the gallery tiles round its
 // corners and screen-blend the live energy glow into it.
 #pragma once

@@ -134,12 +134,42 @@ juce::uint64 fnv1a64(const void* data, size_t size) {
 constexpr juce::int64 kMaxLocalFileBytes = 50 * 1024 * 1024;
 constexpr int kMaxFolderModels = 300;
 
+// Best-effort catalog gear id ("amp", "amp-cab", "cab", "pedal", "outboard")
+// for a local NAM file, from the trainer-written `metadata.gear_type`. The
+// field is free text, so only the common spellings map; anything else (or
+// no metadata at all) is "" and the UI keeps its generic file glyph.
+juce::String localGearFromNamMetadata(const nlohmann::json& config) {
+  const auto metadata = config.find("metadata");
+  if (metadata == config.end() || !metadata->is_object())
+    return {};
+  const auto gearType = metadata->find("gear_type");
+  if (gearType == metadata->end() || !gearType->is_string())
+    return {};
+
+  const juce::String type = juce::String(gearType->get<std::string>()).trim().toLowerCase();
+  if (type == "amp" || type == "pedal_amp" || type == "preamp") return "amp";
+  if (type == "amp_cab" || type == "amp_pedal_cab" || type == "amp-cab") return "amp-cab";
+  if (type == "studio" || type == "outboard") return "outboard";
+  if (type == "pedal") return "pedal";
+  if (type == "cab") return "cab";
+  return {};
+}
+
+// Same for a local IR: a kernel on the cab side of the short/long cutoff is
+// a cab; anything longer (reverbs, rooms) stays generic.
+juce::String localGearFromIr(const juce::AudioFormatReader& reader) {
+  if (reader.sampleRate <= 0.0)
+    return {};
+  const double seconds = static_cast<double>(reader.lengthInSamples) / reader.sampleRate;
+  return seconds <= kShortIrMaxSeconds ? "cab" : juce::String();
+}
+
 // One local file's bytes: validate and stash a content-addressed copy.
 // Validation happens here, at load time, instead of letting a bad file
 // reach the background loader: its failure surfaces as a retry badge, which
 // is the wrong affordance for a file that can never load. Returns the model
-// object { id, name, model_url } for the synthetic tone, or void with
-// `error` set to a user-facing message.
+// object { id, name, model_url[, gear] } for the synthetic tone, or void
+// with `error` set to a user-facing message.
 juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream& decoded,
                           juce::String& error) {
   auto fail = [&](const juce::String& message) {
@@ -153,12 +183,16 @@ juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream
   if (!isNam && extension != "wav")
     return fail("Only .nam and .wav files are supported");
 
+  // Inferred while the file is open for validation anyway (see
+  // localGearFromNamMetadata / localGearFromIr); "" when unknown.
+  juce::String gear;
   if (isNam) {
     try {
       const auto* bytes = static_cast<const char*>(decoded.getData());
       const nlohmann::json config = nlohmann::json::parse(bytes, bytes + decoded.getDataSize());
       if (!namConfigIsA2(config))
         return fail("Only A2 NAM files are supported");
+      gear = localGearFromNamMetadata(config);
     } catch (const std::exception&) {
       return fail("Not a valid NAM file");
     }
@@ -170,6 +204,7 @@ juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream
                                                   false)));
     if (reader == nullptr || reader->lengthInSamples <= 0)
       return fail("Not a valid WAV file");
+    gear = localGearFromIr(*reader);
   }
 
   const juce::uint64 hash = fnv1a64(decoded.getData(), decoded.getDataSize());
@@ -199,6 +234,8 @@ juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream
   model->setProperty("id", static_cast<int>(hash % 0x7ffffffe) + 1);
   model->setProperty("name", filename.upToLastOccurrenceOf(".", false, false));
   model->setProperty("model_url", juce::URL(stash).toString(false));
+  if (gear.isNotEmpty())
+    model->setProperty("gear", gear);
   return juce::var(model.get());
 }
 
@@ -491,6 +528,13 @@ juce::var TONE3000Processor::finishLocalToneLoad(const juce::String& title,
   tone->setProperty("title", title);
   tone->setProperty("format", isNam ? "nam" : "ir");
   tone->setProperty("models", models);
+
+  // Same catalog `gear` field a TONE3000 tone carries, inferred from the
+  // first file (see stashLocalBytes); the tile draws that gear's glyph
+  // instead of the generic file icon. Absent when nothing could be inferred.
+  const juce::String gear = models.getReference(0)["gear"].toString();
+  if (gear.isNotEmpty())
+    tone->setProperty("gear", gear);
 
   const juce::String toneJson = juce::JSON::toString(juce::var(tone.get()));
 
