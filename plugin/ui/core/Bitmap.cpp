@@ -26,14 +26,6 @@ float pixelScale(const juce::Graphics& g) {
   return g.getInternalContext().getPhysicalPixelScaleFactor();
 }
 
-juce::Image fitWithin(const juce::Image& image, int maxSide) {
-  const int side = std::max(image.getWidth(), image.getHeight());
-  if (!image.isValid() || side <= maxSide) return image;
-  const float k = static_cast<float>(maxSide) / static_cast<float>(side);
-  return resample(image, std::max(1, juce::roundToInt(image.getWidth() * k)),
-                  std::max(1, juce::roundToInt(image.getHeight() * k)));
-}
-
 juce::Image cover(const juce::Image& image, int w, int h, float scale) {
   const int pw = std::max(1, static_cast<int>(std::ceil(w * scale)));
   const int ph = std::max(1, static_cast<int>(std::ceil(h * scale)));

@@ -101,10 +101,7 @@ void ToneMeta::setInfoVisible(bool visible) {
 }
 
 void ToneMeta::loadAvatar() {
-  avatar_.setImage({});
-  avatarRequest_.cancel();
-  if (!tone_.user || tone_.user->avatarUrl.isEmpty()) return;
-  images_.load(tone_.user->avatarUrl, avatarRequest_, [this](const juce::Image& image) { avatar_.setImage(image); });
+  avatar_.setImage(images_, tone_.user ? tone_.user->avatarUrl : juce::String());
 }
 
 int ToneMeta::heightFor(int width) {

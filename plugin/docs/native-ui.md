@@ -86,7 +86,7 @@ TONE3000Processor ──► ProcessorBackend : ui::Backend ◄── MockBackend
                        │  MidiMapStore       │
                        │  ToneSession        │   tokens, user, refresh, OAuth phases
                        │  T3kClient          │   REST calls (HttpClient)
-                       │  ImageLoader        │   async artwork/avatars with LRU cache
+                       │  ImageLoader        │   async artwork/avatars, one small square per URL, 48 MB budget
                        │  ConnectionGate     │   online/offline probing
                        │  UpdateNotice       │
                        │  HintBus            │   help-text + pin, toast
@@ -120,7 +120,7 @@ This is the same shape as `useChainState`/`useChainActions` etc., minus React.
 | --- | --- | --- |
 | Backend calls (`processor.*`) | message | direct (the processor API is message-thread safe; the webview bridge called it the same way) |
 | HTTP (T3K API, update check, connectivity probe) | `ThreadPool` (2 threads) | `callAsync` + request generation guard |
-| Image download + decode | same pool | `callAsync` + `SafePointer` |
+| Image download + decode + resample to a 512 px (art) / 64 px (avatar) square | `ThreadPool` (4 threads, `ImageLoader`'s own) | `callAsync` + `WeakReference`; the component's own final resample to its box is a sub-ms pass from that square |
 | OAuth loopback listener | dedicated `juce::Thread` | `callAsync` |
 | Meters, spectrum, tuner, chain revision | message, `UiClock` 30 Hz | direct |
 

@@ -13,14 +13,11 @@ namespace t3k::ui::bitmap {
 // times the root's UI scale. Cached bitmaps are rasterised at this size.
 float pixelScale(const juce::Graphics& g);
 
-// `image` shrunk so its longer side is at most `maxSide` (never enlarged).
-// Halves repeatedly before the final resample, so heavy reductions average
-// every source pixel instead of skipping most of them.
-juce::Image fitWithin(const juce::Image& image, int maxSide);
-
 // A `w` × `h` logical box at `scale`, filled with `image` cover-fitted
-// (object-fit: cover): centred crop to the box's aspect, then one
-// high-quality resample. Always ARGB so callers can composite into it.
+// (object-fit: cover): centred crop to the box's aspect, then a resample
+// that halves repeatedly before the final pass, so heavy reductions average
+// every source pixel instead of skipping most of them. Always ARGB so
+// callers can composite into it.
 juce::Image cover(const juce::Image& image, int w, int h, float scale);
 
 // Draws a bitmap rasterised at `pixelScale` back into its logical `bounds`.

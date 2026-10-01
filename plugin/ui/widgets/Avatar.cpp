@@ -7,6 +7,22 @@
 
 namespace t3k::ui {
 
+void Avatar::setImage(ImageLoader& loader, const juce::String& url) {
+  if (url == url_) return;
+  url_ = url;
+  image_ = {};
+  cover_ = {};
+  if (url_.isNotEmpty())
+    loader.load(url_, ImageLoader::kAvatarSide, request_, [this](const juce::Image& image) {
+      image_ = image;
+      cover_ = {};
+      repaint();
+    });
+  else
+    request_.cancel();
+  repaint();
+}
+
 void Avatar::paint(juce::Graphics& g) {
   const auto box = getLocalBounds().toFloat();
   if (!image_.isValid()) {

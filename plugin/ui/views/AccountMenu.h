@@ -23,7 +23,7 @@ public:
   ~AccountMenu() override;
 
   void setAuthenticated(bool authenticated);
-  void setAvatar(juce::Image image) { avatar_.setImage(std::move(image)); }
+  void setAvatar(ImageLoader& images, const juce::String& url) { avatar_.setImage(images, url); }
   void openMenu();
 
   std::function<void()> onOpenSettings, onLogin, onLogout;
