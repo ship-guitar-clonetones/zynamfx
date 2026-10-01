@@ -22,7 +22,7 @@ constexpr float kBadgeGap = 6;
 }  // namespace
 
 ToneCard::ToneCard(ImageLoader& images, const Tone& tone)
-    : Clickable(tone.title), images_(images), tone_(tone), image_(images) {
+    : Clickable(tone.title), tone_(tone), image_(images) {
 
   image_.setCornerRadius(kImageCorner);
   image_.setTone(tone_.images.empty() ? juce::String() : tone_.images.front(), tone_.gear, /*local=*/false);
@@ -36,8 +36,7 @@ ToneCard::ToneCard(ImageLoader& images, const Tone& tone)
   addChildComponent(avatar_);
   if (tone_.user) {
     avatar_.setVisible(true);
-    if (tone_.user->avatarUrl.isNotEmpty())
-      images_.load(tone_.user->avatarUrl, avatarRequest_, [this](const juce::Image& img) { avatar_.setImage(img); });
+    avatar_.setImage(images, tone_.user->avatarUrl);
   }
   syncState();
 }

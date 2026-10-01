@@ -30,8 +30,7 @@ public:
     if (option.avatarUrl) {
       avatar_ = std::make_unique<Avatar>();
       addAndMakeVisible(*avatar_);
-      if (option.avatarUrl->isNotEmpty())
-        images.load(*option.avatarUrl, avatarRequest_, [this](const juce::Image& img) { avatar_->setImage(img); });
+      avatar_->setImage(images, *option.avatarUrl);
     }
   }
 
@@ -71,7 +70,6 @@ private:
   bool picked_;
   bool checks_;
   std::unique_ptr<Avatar> avatar_;
-  ImageLoader::Request avatarRequest_;
 };
 
 FilterMenu::FilterMenu(ImageLoader& images, Picks picks, juce::String searchPlaceholder)

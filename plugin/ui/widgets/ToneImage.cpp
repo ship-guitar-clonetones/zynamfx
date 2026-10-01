@@ -26,7 +26,7 @@ void ToneImage::setTone(const juce::String& imageUrl, const juce::String& gear, 
     url_ = imageUrl;
     image_ = {};
     if (!local_ && url_.isNotEmpty())
-      loader_.load(url_, request_, [this](const juce::Image& image) {
+      loader_.load(url_, ImageLoader::kArtSide, request_, [this](const juce::Image& image) {
         image_ = image;
         base_ = {};
         repaint();

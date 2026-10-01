@@ -141,8 +141,7 @@ void FilterBar::loadAvatar() {
   const auto user = services_.session.user();
   if (!user || user->avatarUrl.isEmpty() || user->avatarUrl == avatarUrl_) return;
   avatarUrl_ = user->avatarUrl;
-  services_.images.load(avatarUrl_, avatarRequest_,
-                        [this](const juce::Image& img) { profile_->leadingAvatar().setImage(img); });
+  profile_->leadingAvatar().setImage(services_.images, avatarUrl_);
 }
 
 // State

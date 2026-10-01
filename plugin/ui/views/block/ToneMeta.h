@@ -81,7 +81,6 @@ private:
   FormatBadge badge_;
   std::unique_ptr<BookmarkButton> bookmark_;
   Avatar avatar_;
-  ImageLoader::Request avatarRequest_;
   std::unique_ptr<BlockInfoPanel> info_;
 };
 

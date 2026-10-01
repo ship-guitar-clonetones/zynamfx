@@ -39,7 +39,6 @@ private:
   void sessionChanged() override;
 
   Services& services_;
-  ImageLoader::Request avatarRequest_;
   juce::String avatarUrl_;
   std::unique_ptr<LogoLink> logo_;
   PresetBar presetBar_;

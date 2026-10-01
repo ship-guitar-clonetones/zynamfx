@@ -93,10 +93,7 @@ void PluginHeader::sessionChanged() {
   const auto url = user ? user->avatarUrl : juce::String();
   if (url == avatarUrl_ && (url.isNotEmpty() || !session.authenticated())) return;
   avatarUrl_ = url;
-  avatarRequest_.cancel();
-  account_.setAvatar({});
-  if (url.isNotEmpty())
-    services_.images.load(url, avatarRequest_, [this](const juce::Image& image) { account_.setAvatar(image); });
+  account_.setAvatar(services_.images, url);
 }
 
 void PluginHeader::setTunerShown(bool shown) {

@@ -66,7 +66,6 @@ private:
   void measure(int width);
   void syncState();
 
-  ImageLoader& images_;
   Tone tone_;
   bool loading_ = false;
   bool disabled_ = false;
@@ -74,7 +73,6 @@ private:
   ToneImage image_;
   FormatBadge badge_;
   Avatar avatar_;
-  ImageLoader::Request avatarRequest_;
   std::unique_ptr<BusyOverlay> busy_;
 
   // Text column measured at the last width; rows placed by resized() (card

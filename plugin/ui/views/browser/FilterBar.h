@@ -103,7 +103,6 @@ private:
   // Always on the row
   std::unique_ptr<FilterChip> verified_, profile_;
   std::vector<std::unique_ptr<FilterChip>> gear_;
-  ImageLoader::Request avatarRequest_;
   juce::String avatarUrl_;  // the one requested, if any
   juce::Rectangle<int> divider_;
 
