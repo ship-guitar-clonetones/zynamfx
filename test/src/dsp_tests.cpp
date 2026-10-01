@@ -22,6 +22,7 @@
 //               ctest --test-dir build -R Dsp --output-on-failure
 #include "ChainOversampler.h"
 #include "NamEngine.h"
+#include "Processor.h"
 #include "RtWorkerPool.h"
 #include "test_helpers.h"
 
@@ -602,6 +603,10 @@ TEST(IrConvolutionTest, IslandedConvolutionInOversampledChainMatchesBaseRate) {
 int main(int argc, char** argv) {
   // JUCE convolution/format readers want the usual JUCE runtime scaffolding.
   juce::ScopedJuceInitialiser_GUI juceInit;
+  // Every processor the tests construct must start at the parameter
+  // defaults, whatever calibration/oversampling the developer's own
+  // machine-wide settings file holds.
+  TONE3000Processor::disableMachineDefaultParametersForTesting();
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

@@ -63,6 +63,10 @@ public:
   void setActiveEditChain(const juce::String&) override {}
   void setNamSlimSizeDefault(double slimSize) override;
   void setMultiCore(bool enabled) override;
+  // Recorded so self-tests can check which Settings-page edits were stored
+  // as machine defaults.
+  void persistParamAsMachineDefault(const juce::String& id) override { machineDefaults_.push_back(id); }
+  const std::vector<juce::String>& machineDefaults() const { return machineDefaults_; }
 
   bool setBlockParam(const std::string&, const juce::String&, double) override { return true; }
   bool setBlockSlimSize(const std::string& blockId, double slimSize) override;
@@ -148,6 +152,7 @@ private:
   juce::var presets_;
   std::vector<Move> presetMoves_;
   std::vector<ChainMove> chainMoves_;
+  std::vector<juce::String> machineDefaults_;
   juce::var meters_;
   juce::var tuner_;
   juce::var autoMeasure_;

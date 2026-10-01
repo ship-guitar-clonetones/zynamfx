@@ -284,6 +284,30 @@ public:
   // scheduling path must not touch the user's machine-wide preference).
   void setMultiCoreEnabled(bool enabled, bool persist = true);
 
+  // Machine-wide defaults for the Plugin Settings parameters that describe
+  // the workstation rather than the tone: input calibration (on/off, dBu
+  // level) and oversampling (on/off, factor). They stay host parameters, so
+  // a project reopens exactly as it was saved and automation keeps working;
+  // the shared settings file only seeds a fresh instance (in the
+  // constructor, before any host restore, which then wins) and is written
+  // when the user changes one of them in Plugin Settings, never from a
+  // restore or automation (github issue #66: a new DAW instance came up at
+  // the parameter defaults, while the standalone remembered them).
+  static bool isMachineDefaultParameter(const juce::String& paramId);
+  // Store `paramId`'s current value as the machine default. Ignores ids
+  // outside the set above.
+  void persistParameterAsMachineDefault(const juce::String& paramId);
+  // The two halves over an explicit PropertySet (the settings file in the
+  // plugin; a scratch set in tests). Values are stored denormalised (dBu,
+  // choice index, 0/1), like preset files, so a range retune can't move them.
+  void writeMachineDefaultParameter(juce::PropertySet& settings, const juce::String& paramId) const;
+  void applyMachineDefaultParameters(const juce::PropertySet& settings);
+  // Tests: construction seeds from the user's real settings file, which
+  // would leak a developer's oversampling choice into every DSP test, so the
+  // test binary turns the seeding off process-wide and drives the two halves
+  // above directly.
+  static void disableMachineDefaultParametersForTesting();
+
   // All meter levels in one call: { input, output, blocks: { id: { in, out } },
   // cpu (0..1 audio-callback load), correlation (-1..1 stereo-image output
   // correlation, from whichever engine the mode runs) }. Levels in dB with a
@@ -1123,6 +1147,10 @@ private:
   // written on the message thread, read wherever loadTone stamps a block.
   static double readPersistedNamSlimSizeDefault();
   std::atomic<double> namSlimSizeDefault{readPersistedNamSlimSizeDefault()};
+
+  // Constructor step: applyMachineDefaultParameters over the settings file,
+  // unless disabled for tests (see disableMachineDefaultParametersForTesting).
+  void seedMachineDefaultParameters();
 
   // Audio-callback load (timed around processBlock); ships to the UI as the
   // `cpu` field of getMeterLevels for the hint-bar readout.

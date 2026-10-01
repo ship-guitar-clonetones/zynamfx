@@ -105,6 +105,9 @@ void ProcessorBackend::setNamSlimSizeDefault(double slimSize) {
   processor_.setNamSlimSizeDefault(slimSize);
 }
 void ProcessorBackend::setMultiCore(bool enabled) { processor_.setMultiCoreEnabled(enabled); }
+void ProcessorBackend::persistParamAsMachineDefault(const juce::String& id) {
+  processor_.persistParameterAsMachineDefault(id);
+}
 
 // Per-block params / EQ / spectrum
 bool ProcessorBackend::setBlockParam(const std::string& blockId, const juce::String& param,

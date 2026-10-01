@@ -1,5 +1,6 @@
 #include "Processor.h"
 
+#include <atomic>
 #include <cstring>
 
 // #############################
@@ -9,13 +10,24 @@
 // Machine-wide user settings.
 // Shared PropertiesFile for preferences that belong to the machine, not the
 // session/preset (multi-core processing, the default A2 size for new
-// blocks). Same app-data root as PresetManager: ~/Library/Application
+// blocks, and the machine defaults for the calibration and oversampling
+// parameters). Same app-data root as PresetManager: ~/Library/Application
 // Support/TONE3000 on macOS, %APPDATA%/TONE3000 on Windows,
 // $XDG_CONFIG_HOME/TONE3000 (default ~/.config/TONE3000) on Linux.
 namespace {
 
 constexpr auto kMultiCoreKey = "multiCore";
 constexpr auto kNamSlimSizeDefaultKey = "namSlimSizeDefault";
+
+// Plugin Settings parameters that double as machine-wide defaults (see
+// Processor.h, isMachineDefaultParameter). Each is stored under its
+// parameter id.
+constexpr const char* kMachineDefaultParameterIds[] = {"calibrateInput", "inputCalibrationLevel",
+                                                       "osEnabled", "osFactor"};
+
+// Process-wide test switch for the constructor's seeding (see
+// disableMachineDefaultParametersForTesting).
+std::atomic<bool> machineDefaultParametersEnabled{true};
 
 // Magic prefix for the binary ValueTree state format (see getStateInformation).
 constexpr char kStateMagic[] = {'T', '3', 'K', 'B'};
@@ -115,6 +127,64 @@ void TONE3000Processor::setNamSlimSizeDefault(double slimSize) {
 
   juce::Logger::writeToLog("[Processor] Default NAM A2 size set to " + juce::String(slimSize));
   bumpChainRevision();
+}
+
+bool TONE3000Processor::isMachineDefaultParameter(const juce::String& paramId) {
+  for (const auto* id : kMachineDefaultParameterIds)
+    if (paramId == id)
+      return true;
+  return false;
+}
+
+void TONE3000Processor::disableMachineDefaultParametersForTesting() {
+  machineDefaultParametersEnabled.store(false);
+}
+
+void TONE3000Processor::writeMachineDefaultParameter(juce::PropertySet& settings,
+                                                     const juce::String& paramId) const {
+  auto* p = parameters.getParameter(paramId);
+  if (p == nullptr)
+    return;
+  settings.setValue(paramId, static_cast<double>(p->convertFrom0to1(p->getValue())));
+}
+
+void TONE3000Processor::applyMachineDefaultParameters(const juce::PropertySet& settings) {
+  juce::String applied;
+  for (const auto* id : kMachineDefaultParameterIds) {
+    if (!settings.containsKey(id))
+      continue;
+    auto* p = parameters.getParameter(id);
+    if (p == nullptr)
+      continue;
+    // Out-of-range file values (a hand edit, a future build's wider range)
+    // clamp to the parameter's own range through convertTo0to1.
+    const auto denormalised = static_cast<float>(settings.getDoubleValue(id));
+    p->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, p->convertTo0to1(denormalised)));
+    applied << (applied.isEmpty() ? "" : ", ") << id << "=" << settings.getValue(id);
+  }
+  if (applied.isNotEmpty())
+    juce::Logger::writeToLog("[Processor] Machine defaults applied: " + applied);
+}
+
+void TONE3000Processor::persistParameterAsMachineDefault(const juce::String& paramId) {
+  // Only the Settings-page set: a stray id here would turn a tone parameter
+  // into a machine-wide default.
+  if (!isMachineDefaultParameter(paramId)) {
+    jassertfalse;
+    return;
+  }
+  juce::PropertiesFile settings(userSettingsOptions());
+  writeMachineDefaultParameter(settings, paramId);
+  saveSettingsOrLog(settings);
+}
+
+void TONE3000Processor::seedMachineDefaultParameters() {
+  if (!machineDefaultParametersEnabled.load())
+    return;
+  // Nothing on disk yet: a fresh install runs on the parameter defaults.
+  if (!getSettingsFile().existsAsFile())
+    return;
+  applyMachineDefaultParameters(juce::PropertiesFile(userSettingsOptions()));
 }
 
 juce::ValueTree TONE3000Processor::serializeBlockSettings(const ChainBlock& block) {
