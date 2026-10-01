@@ -91,7 +91,7 @@ TONE3000Processor ──► ProcessorBackend : ui::Backend ◄── MockBackend
                        │  UpdateNotice       │
                        │  HintBus            │   help-text + pin, toast
                        │  Pointer            │   touch or mouse, from the input that arrives
-                       │  UiPrefs            │   PropertiesFile (was localStorage)
+                       │  UiPrefs            │   PropertiesFile (was localStorage); see README "Settings and where they live"
                        └──────────┬──────────┘
                                   │
                  PluginRoot (1024 × H design space, AffineTransform scaled)

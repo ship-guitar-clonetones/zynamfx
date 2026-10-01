@@ -38,6 +38,9 @@ private:
   void syncPrefs();
   void syncParams();
   void syncFooter();
+  // Settings-page parameter edits also become the machine-wide default.
+  void rememberMachineDefault(const ParamBinding& param);
+  void setAndRemember(ParamBinding& param, float normalised);
   void showLogStatus(const juce::String& status);
 
   Services& services_;

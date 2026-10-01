@@ -63,6 +63,13 @@ TONE3000Processor::TONE3000Processor()
 
   resolveParamRefs();
 
+  // Seed the Settings-page parameters (calibration, oversampling) from the
+  // machine-wide defaults before the oversampling listeners attach: the
+  // chain isn't prepared yet, so there is nothing to re-rate, and
+  // prepareToPlay reads the factor fresh. A host restore that follows
+  // (setStateInformation) overrides whatever lands here.
+  seedMachineDefaultParameters();
+
   // Age out unused drop-loaded model stash files and sweep IR temp files
   // leaked by older builds (both no-ops after the process's first instance).
   cleanLocalModelStash();

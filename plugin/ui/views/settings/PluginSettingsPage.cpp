@@ -37,7 +37,8 @@ public:
   static constexpr int kSuffixPad = 52;
   static constexpr float kSuffixPx = 14;
 
-  explicit DbuField(ParamBinding& param) : param_(param) {
+  // `onCommit` runs after a value is written to the parameter.
+  DbuField(ParamBinding& param, std::function<void()> onCommit) : param_(param), onCommit_(std::move(onCommit)) {
     field_.setBackground(juce::Colours::transparentBlack);
     field_.setBorder(form::kFieldBorder);
     field_.setCornerRadius(form::kFieldRadius);
@@ -77,11 +78,13 @@ private:
     if (text.isNotEmpty() && text.containsOnly("-+.0123456789")) {
       const float normalised = (text.getFloatValue() - kDbuMin) / (kDbuMax - kDbuMin);
       param_.set(juce::jlimit(0.0f, 1.0f, normalised));
+      if (onCommit_) onCommit_();
     }
     field_.setText(juce::String(value(), 1));
   }
 
   ParamBinding& param_;
+  std::function<void()> onCommit_;
   TextField field_;
 };
 
@@ -117,7 +120,7 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
       osFactorParam_(services.backend, "osFactor"),
       calibration_("Calibration",
                    "Matches your input level to the capture's original recording level, for accurate gain staging."),
-      dbu_(std::make_unique<DbuField>(dbuParam_)),
+      dbu_(std::make_unique<DbuField>(dbuParam_, [this] { rememberMachineDefault(dbuParam_); })),
       calibrationHelp_(copy({TextRun::plain("Set the dBu level that matches your DAW's max digital level. Typical "
                                             "values: +12 dBu (professional gear), +4 dBu (semi-pro). "),
                              TextRun::link("Learn More", kCalibrationDocsUrl, theme::kLinkBlue)})),
@@ -187,7 +190,7 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
   calibration_.content().add(calibrationTip_);
   calibration_.content().add(calibrationHandoff_);
   calibrationHelp_.onLink = [](const juce::String& href) { juce::URL(href).launchInDefaultBrowser(); };
-  calibration_.onChange = [this](bool on) { calibrateParam_.set(on); };
+  calibration_.onChange = [this](bool on) { setAndRemember(calibrateParam_, on ? 1.0f : 0.0f); };
   add(calibration_);
 
   // Oversampling.
@@ -196,9 +199,10 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
   oversampling_.content().add(osRate_);
   osRate_.setOptions(kOsFactorOptions);
   osRate_.onChange = [this](const juce::String& v) {
-    if (auto* p = services_.backend.parameter("osFactor")) osFactorParam_.set(p->convertTo0to1(v.getFloatValue()));
+    if (auto* p = services_.backend.parameter("osFactor"))
+      setAndRemember(osFactorParam_, p->convertTo0to1(v.getFloatValue()));
   };
-  oversampling_.onChange = [this](bool on) { osEnabledParam_.set(on); };
+  oversampling_.onChange = [this](bool on) { setAndRemember(osEnabledParam_, on ? 1.0f : 0.0f); };
   add(oversampling_);
 
   // Multi-core.
@@ -275,6 +279,19 @@ void PluginSettingsPage::syncPrefs() {
   const bool normalize = services_.prefs.getBool(UiPrefs::kShowBlockNormalizeControl, false);
   normalize_.setValue(normalize);
   normalize_.setExpanded(normalize);
+}
+
+// Calibration and oversampling are host parameters (so a project reopens as
+// saved) that also seed new instances machine-wide. Only a user edit here
+// updates that default; a host restore or automation moving the same
+// parameter does not (see Processor::persistParameterAsMachineDefault).
+void PluginSettingsPage::rememberMachineDefault(const ParamBinding& param) {
+  services_.backend.persistParamAsMachineDefault(param.id());
+}
+
+void PluginSettingsPage::setAndRemember(ParamBinding& param, float normalised) {
+  param.set(normalised);
+  rememberMachineDefault(param);
 }
 
 void PluginSettingsPage::syncParams() {

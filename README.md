@@ -317,6 +317,46 @@ Meters tap the signal after input gain (input meters, pre-gate), after each
 block's In Gain plus its PRE-position EQ and after its final stage (block
 LEDs), and after output gain (output meters).
 
+### Settings and where they live
+
+Every setting belongs to exactly one of these stores, which decides what
+survives a new plugin instance, a new DAW, or a switch between the standalone
+and a plugin. The two machine-wide files and the presets folder share one
+app-data root: `~/Library/Application Support/TONE3000` on macOS,
+`%APPDATA%\TONE3000` on Windows, `~/.config/TONE3000` on Linux.
+
+- **Project state** (`getStateInformation`, `plugin/src/ProcessorState.cpp`).
+  Per instance: the DAW saves it in the project and hands it back only to
+  that instance; a freshly inserted plugin never sees it. Holds every host
+  parameter (faceplate knobs and power switches, calibration, oversampling),
+  the chain (blocks, per-block EQ / gains / normalization / NAM size, with
+  the model bytes embedded so the project reopens offline), the active
+  preset, the MIDI map, input mode and the window size. The standalone app
+  saves this same blob on quit and restores it on launch, which is why it
+  remembers the whole session and a DAW instance remembers nothing on its own.
+- **Presets** (files in the user presets folder; `plugin/src/ProcessorPresets.cpp`).
+  The chain plus the faceplate parameters that are *tone*: levels, tone
+  stack, gate, transpose, spread, align, pan, polarity. Deliberately not in
+  a preset: calibration (your interface, not the capture), oversampling,
+  solo, input mode, MIDI map, window size.
+- **Machine-wide processor settings** (`preferences.settings`). Read by every
+  new instance in every format and the standalone: multi-core processing,
+  the default NAM A2 size for new blocks, and the machine defaults for
+  calibration (on/off, dBu level) and oversampling (on/off, factor). The
+  last two are still host parameters, so a project reopens exactly as saved
+  and automation works; the file seeds a fresh instance, and changing one of
+  them in Plugin Settings updates the file (a host restore or automation
+  moving the same parameter does not).
+- **Machine-wide UI preferences** (`ui-preferences.settings`,
+  `plugin/ui/services/UiPrefs.h`). View toggles (Info Bar, which effects the
+  faceplate shows, the per-block size and normalization controls, preset PC
+  numbers), the TONE3000 sign-in, dismissed banners and update notices.
+  Merged across processes under a lock, so a DAW and the standalone never
+  overwrite each other's writes.
+- **Standalone only** (`TONE3000.settings`, JUCE's standalone holder). Audio
+  device, sample rate, buffer, channels, Hear Yourself, MIDI inputs, and the
+  saved session state above.
+
 ### DSP tests
 
 A GoogleTest suite pins the chain's DSP invariants against the real model and

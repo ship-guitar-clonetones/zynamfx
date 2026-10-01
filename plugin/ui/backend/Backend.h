@@ -66,6 +66,11 @@ public:
   virtual void setActiveEditChain(const juce::String& side) = 0;
   virtual void setNamSlimSizeDefault(double slimSize) = 0;
   virtual void setMultiCore(bool enabled) = 0;
+  // Store a Settings-page parameter's current value (calibration,
+  // oversampling) as the machine-wide default new instances start from. The
+  // parameter itself is set through ParamBinding as usual; this is the
+  // extra step a user edit takes that a host restore never does.
+  virtual void persistParamAsMachineDefault(const juce::String& id) = 0;
 
   // Per-block params / EQ / spectrum
   virtual bool setBlockParam(const std::string& blockId, const juce::String& param, double value) = 0;

@@ -50,6 +50,7 @@ public:
   void setActiveEditChain(const juce::String& side) override;
   void setNamSlimSizeDefault(double slimSize) override;
   void setMultiCore(bool enabled) override;
+  void persistParamAsMachineDefault(const juce::String& id) override;
 
   bool setBlockParam(const std::string& blockId, const juce::String& param, double value) override;
   bool setBlockSlimSize(const std::string& blockId, double slimSize) override;
