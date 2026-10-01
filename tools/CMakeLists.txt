@@ -6,6 +6,7 @@ set_target_properties(PresetTool PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
 target_sources(PresetTool PRIVATE
     preset_tool.cpp
+    ../plugin/src/LegacyParamIds.cpp
     ../plugin/src/PresetFile.cpp
 )
 target_include_directories(PresetTool PRIVATE ../plugin/include)

@@ -186,7 +186,7 @@ flowchart LR
     IN([In]) --> IM["Input Mode *\n(stereo / dual mono / L / R)"]
     IM --> IG["Input Level"]
     IG --> GATE["Noise Gate *"]
-    GATE --> TR["Transpose *"]
+    GATE --> TR["Pitch Shift *"]
     TR --> RS(("⇅ 48k"))
     RS --> OS(("×N ↑ *"))
     subgraph CHAINS["Tone chains, 48 kHz × oversampling factor"]
@@ -239,16 +239,17 @@ flowchart LR
   long it stays open after the signal drops) and Range (20-80 dB, how deep
   it closes; 80 dB is a mute). Attack is fixed at 0.2 ms: with no
   lookahead, a slower attack only softens pick transients.
-- **Transpose**: a polyphonic pitch shifter on the clean DI, ahead of the
+- **Pitch Shift**: a polyphonic pitch shifter on the clean DI, ahead of the
   amp, so a `-2` plays a standard-tuned guitar as drop D through the whole
-  rig. Off by default; the faceplate knob sets the shift, two octaves
-  either way (±24), and powering on is what adds latency. The knob is also
-  hidden by default: Plugin Settings → Effects picks which of Gate and
-  Transpose the faceplate shows (view settings only; an effect that is
-  switched on always shows, so a preset that uses it stays reachable).
-  Right-clicking the group opens a deck with STEP (on by default: the knob
-  snaps to whole semitones; off, it sweeps smoothly with Shift-drag for
-  fine control, so it plays like a whammy), Tonality (1-20 kHz, the
+  rig, and a MIDI expression pedal on the knob plays it like a whammy. Off
+  by default; the faceplate Pitch knob sets the shift, two octaves either
+  way (±24), and powering on is what adds latency. The knob is also hidden
+  by default: Plugin Settings → Effects picks which of Gate and Pitch Shift
+  the faceplate shows (view settings only; an effect that is switched on
+  always shows, so a preset that uses it stays reachable). Right-clicking
+  the group opens a deck with STEP (on by default: the knob snaps to whole
+  semitones, a transpose; off, it sweeps smoothly with Shift-drag for fine
+  control), Tonality (1-20 kHz, the
   frequency above which the input bypasses the shifter, which keeps pick
   noise and string squeak natural; Off at the top) and Buffer (the engine's
   delay buffer, 20 / 30 / 40 / 60 ms; the tap's delay sweeps between a 2 ms
@@ -265,7 +266,7 @@ flowchart LR
   no lag lines every string up), so chords sustain without a periodic
   chuff. The research behind it (benchmarks against a phase vocoder,
   candidates, chords, the two-octave range, listening results) is recorded in
-  [`plugin/docs/transpose.md`](plugin/docs/transpose.md).
+  [`plugin/docs/pitch-shift.md`](plugin/docs/pitch-shift.md).
 - **Mono mode**: only the Left chain runs and the pan stage is skipped. With
   Spread on, the chain output becomes an ADT-style stereo double; see
   [`plugin/docs/stereo-image.md`](plugin/docs/stereo-image.md) for the design
@@ -356,7 +357,7 @@ app-data root: `~/Library/Application Support/TONE3000` on macOS,
   remembers the whole session and a DAW instance remembers nothing on its own.
 - **Presets** (files in the user presets folder; `plugin/src/ProcessorPresets.cpp`).
   The chain plus the faceplate parameters that are *tone*: levels, tone
-  stack, gate, transpose, spread, align, pan, polarity. Deliberately not in
+  stack, gate, pitch shift, spread, align, pan, polarity. Deliberately not in
   a preset: calibration (your interface, not the capture), oversampling,
   solo, input mode, MIDI map, window size.
 - **Machine-wide processor settings** (`preferences.settings`). Read by every
@@ -393,7 +394,7 @@ IR assets in `test/files`:
 - `gate_tests.cpp`: the noise gate's release / hold / range contracts, and
   the compatibility of the first parameters added after launch (a state
   saved before they existed lands on their defaults; presets carry them).
-- `transpose_tests.cpp`: the pitch shifter's contracts (off is bit-exact and
+- `pitch_shift_tests.cpp`: the pitch shifter's contracts (off is bit-exact and
   latency-free, the reported latency matches the engine and tracks the
   power switch alone, 0 st is a pure delay, a shift lands on pitch at unity
   gain, a splice between unrelated taps holds the level, the tonality limit
@@ -463,11 +464,11 @@ source). The CLAP build uses **clap-juce-extensions** and the **CLAP** SDK
   oversampled NAM processing; the chain oversampler's half-band
   allpass coefficients are adapted from its AudioDSPTools fork (MIT). See
   [`plugin/docs/oversampling.md`](plugin/docs/oversampling.md).
-- Transpose started from a contribution by Vivek Radhakrishna
+- Pitch Shift started from a contribution by Vivek Radhakrishna
   ([#133](https://github.com/tone-3000/tone3000-plugin/pull/133)) built on
   [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch);
   the shipped engine is the correlation-spliced delay line documented in
-  [`plugin/docs/transpose.md`](plugin/docs/transpose.md) (Eventide H949
+  [`plugin/docs/pitch-shift.md`](plugin/docs/pitch-shift.md) (Eventide H949
   de-glitch lineage; Juillerat et al.'s low-latency shifting papers and the
   Signalsmith write-up
   [Four Ways To Write A Pitch-Shifter](https://signalsmith-audio.co.uk/writing/2023/stretch-design/)

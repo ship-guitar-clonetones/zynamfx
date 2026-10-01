@@ -156,11 +156,11 @@ void TONE3000Processor::resolveParamRefs() {
   paramRefs.inputCalibrationLevel = get("inputCalibrationLevel");
   paramRefs.osEnabled = get("osEnabled");
   paramRefs.osFactor = get("osFactor");
-  paramRefs.transposeEnabled = get("transposeEnabled");
-  paramRefs.transposeSemitones = get("transposeSemitones");
-  paramRefs.transposeStep = get("transposeStep");
-  paramRefs.transposeTonality = get("transposeTonality");
-  paramRefs.transposeWindow = get("transposeWindow");
+  paramRefs.pitchEnabled = get("pitchEnabled");
+  paramRefs.pitchSemitones = get("pitchSemitones");
+  paramRefs.pitchStep = get("pitchStep");
+  paramRefs.pitchTonality = get("pitchTonality");
+  paramRefs.pitchWindow = get("pitchWindow");
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createParameterLayout() {
@@ -183,7 +183,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   };
 
   // Host text for the log-mapped real-unit ranges below (gate release,
-  // transpose tonality). A NormalisableRange with skew lambdas has no
+  // pitch tonality). A NormalisableRange with skew lambdas has no
   // interval, and JUCE's default stringFromValue then prints seven
   // decimals; a float near 20 kHz only carries about four, so
   // text -> value -> text drifted in the last digits and clap-validator's
@@ -328,39 +328,40 @@ juce::AudioProcessorValueTreeState::ParameterLayout TONE3000Processor::createPar
   layout.add(std::make_unique<juce::AudioParameterFloat>(
       juce::ParameterID{"gateRange", 38}, "gateRange", 20.0f, 80.0f, 80.0f));
 
-  // Transpose (faceplate, right of the Gate group; see Transpose.h). Off by
-  // default: powering it on is what adds latency, so a fresh chain stays
+  // Pitch shift (faceplate, right of the Gate group; see PitchShift.h). Off
+  // by default: powering it on is what adds latency, so a fresh chain stays
   // transparent. The shift is a continuous float: with STEP on (the
   // default) the processor rounds it to whole semitones on the way to the
   // engine and the knob detents, with STEP off the knob sweeps smoothly
-  // like a whammy pedal (Shift-drag for fine control).
+  // like a whammy pedal (Shift-drag for fine control). Older builds stored
+  // these as transpose*; LegacyParamIds.h renames them on load.
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"transposeEnabled", 39}, "transposeEnabled", false));
+      juce::ParameterID{"pitchEnabled", 39}, "pitchEnabled", false));
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"transposeSemitones", 40}, "transposeSemitones",
-      static_cast<float>(-Transpose::kSemitoneRange), static_cast<float>(Transpose::kSemitoneRange), 0.0f));
+      juce::ParameterID{"pitchSemitones", 40}, "pitchSemitones",
+      static_cast<float>(-PitchShift::kSemitoneRange), static_cast<float>(PitchShift::kSemitoneRange), 0.0f));
   layout.add(std::make_unique<juce::AudioParameterBool>(
-      juce::ParameterID{"transposeStep", 44}, "transposeStep", true));
-  // Transpose advanced-panel deck, in real units like the gate deck's. The
+      juce::ParameterID{"pitchStep", 41}, "pitchStep", true));
+  // Pitch advanced-panel deck, in real units like the gate deck's. The
   // tonality limit rides a log map over the range where it does something
   // on a guitar; its top end (20 kHz) is "off", the default: a pure shift.
   // The window (the engine's delay buffer, 20 / 30 / 40 / 60 ms) is a
   // 4-way choice and not automatable because, like the oversampling
   // factor, changing it changes the reported latency.
   layout.add(std::make_unique<juce::AudioParameterFloat>(
-      juce::ParameterID{"transposeTonality", 42}, "transposeTonality",
+      juce::ParameterID{"pitchTonality", 42}, "pitchTonality",
       juce::NormalisableRange<float>(
-          Transpose::kTonalityMinHz, Transpose::kTonalityOffHz,
+          PitchShift::kTonalityMinHz, PitchShift::kTonalityOffHz,
           [](float start, float end, float norm) { return start * std::pow(end / start, norm); },
           [](float start, float end, float hz) {
             return std::log(hz / start) / std::log(end / start);
           }),
-      Transpose::kTonalityOffHz, wholeUnitText("Hz")));
+      PitchShift::kTonalityOffHz, wholeUnitText("Hz")));
   juce::StringArray windows;
-  for (const int ms : Transpose::kWindowMs) windows.add(juce::String(ms) + " ms");
+  for (const int ms : PitchShift::kWindowMs) windows.add(juce::String(ms) + " ms");
   layout.add(std::make_unique<juce::AudioParameterChoice>(
-      juce::ParameterID{"transposeWindow", 43}, "transposeWindow", windows,
-      static_cast<int>(Transpose::kDefaultWindow),
+      juce::ParameterID{"pitchWindow", 43}, "pitchWindow", windows,
+      static_cast<int>(PitchShift::kDefaultWindow),
       juce::AudioParameterChoiceAttributes().withAutomatable(false)));
 
   return layout;
@@ -383,7 +384,7 @@ void TONE3000Processor::parameterChanged(const juce::String& parameterID, float 
     triggerAsyncUpdate();
     return;
   }
-  if (parameterID == "transposeEnabled" || parameterID == "transposeWindow") {
+  if (parameterID == "pitchEnabled" || parameterID == "pitchWindow") {
     // The only runtime latency edges. Hosts want latency changes off the
     // audio thread (VST3 restarts the component), so they ride the same
     // deferral as the oversampling settings; updateLatency() there is
@@ -406,15 +407,15 @@ void TONE3000Processor::handleAsyncUpdate() {
     applyHostProgram(program);
 }
 
-// Message thread. Boundary plus a powered Transpose's window; read from the
-// parameters, not the audio thread's engine, so a change is reported
+// Message thread. Boundary plus a powered pitch shifter's window; read from
+// the parameters, not the audio thread's engine, so a change is reported
 // exactly once and the report doesn't depend on a callback having run.
 void TONE3000Processor::updateLatency() {
   int latency = chainBoundaryLatency;
-  if (paramRefs.transposeEnabled->load() >= 0.5f) {
+  if (paramRefs.pitchEnabled->load() >= 0.5f) {
     const auto window =
-        Transpose::windowFromIndex(static_cast<int>(std::lround(paramRefs.transposeWindow->load())));
-    latency += Transpose::latencySamples(window, hostSampleRate);
+        PitchShift::windowFromIndex(static_cast<int>(std::lround(paramRefs.pitchWindow->load())));
+    latency += PitchShift::latencySamples(window, hostSampleRate);
   }
   setLatencySamples(latency);  // no-op (no host notification) when unchanged
 }
@@ -874,8 +875,8 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     chainBoundaryLatency = 0;
   }
   // The oversampler is minimum-phase (zero reported latency), so the boundary
-  // and a powered Transpose are the only latency sources at any factor.
-  transpose.prepare(sampleRate, juce::jmax(1, samplesPerBlock));
+  // and a powered pitch shifter are the only latency sources at any factor.
+  pitchShift.prepare(sampleRate, juce::jmax(1, samplesPerBlock));
   updateLatency();
   DBG("Chain boundary " << (boundaryNeeded ? "engaged" : "bypassed")
       << " (latency: " << chainBoundaryLatency << " samples)");
@@ -1137,18 +1138,18 @@ void TONE3000Processor::updateCachedParameters() {
   cacheChainInvertLeft = loadBool(paramRefs.chainInvertLeft);
   cacheChainInvertRight = loadBool(paramRefs.chainInvertRight);
 
-  // Transpose, in the engine's units. STEP rounds the shift to whole
+  // Pitch shift, in the engine's units. STEP rounds the shift to whole
   // semitones here, so the engine never sees the toggle and a host that
   // automates the knob with STEP on still gets semitones. The choice's raw
   // value is already denormalised (stored as a float); round so it lands
   // exactly on its step. The tonality knob's top end means off.
-  cacheTransposeEnabled = loadBool(paramRefs.transposeEnabled);
-  const float semitones = paramRefs.transposeSemitones->load();
-  cacheTranspose.semitones = loadBool(paramRefs.transposeStep) ? std::round(semitones) : semitones;
-  const float tonalityHz = paramRefs.transposeTonality->load();
-  cacheTranspose.tonalityHz = tonalityHz < Transpose::kTonalityOffHz ? tonalityHz : 0.0f;
-  cacheTranspose.window =
-      Transpose::windowFromIndex(static_cast<int>(std::lround(paramRefs.transposeWindow->load())));
+  cachePitchEnabled = loadBool(paramRefs.pitchEnabled);
+  const float semitones = paramRefs.pitchSemitones->load();
+  cachePitch.semitones = loadBool(paramRefs.pitchStep) ? std::round(semitones) : semitones;
+  const float tonalityHz = paramRefs.pitchTonality->load();
+  cachePitch.tonalityHz = tonalityHz < PitchShift::kTonalityOffHz ? tonalityHz : 0.0f;
+  cachePitch.window =
+      PitchShift::windowFromIndex(static_cast<int>(std::lround(paramRefs.pitchWindow->load())));
 }
 
 // ##########################
@@ -1847,16 +1848,17 @@ void TONE3000Processor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
   }
   gateWasEnabled = cacheGateEnabled;
 
-  // Transpose (Transpose.h): pitch-shifts the instrument before the chain,
-  // so the amp sees a down-tuned guitar. After the gate so it decides on
-  // the real transients; before the auto-align probe below, whose sweep
-  // must never be shifted. Runs while powered and through the power-off
-  // blend; once that lands it is a bit-exact, zero-latency passthrough. The
-  // latency report rides the power parameter (updateLatency), not this path.
-  transpose.setEnabled(cacheTransposeEnabled);
-  if (transpose.isRunning()) {
-    transpose.setParams(cacheTranspose);
-    transpose.process(buffer);
+  // Pitch shift (PitchShift.h): shifts the instrument before the chain, so
+  // the amp sees a down-tuned (or whammy-bent) guitar. After the gate so it
+  // decides on the real transients; before the auto-align probe below,
+  // whose sweep must never be shifted. Runs while powered and through the
+  // power-off blend; once that lands it is a bit-exact, zero-latency
+  // passthrough. The latency report rides the power parameter
+  // (updateLatency), not this path.
+  pitchShift.setEnabled(cachePitchEnabled);
+  if (pitchShift.isRunning()) {
+    pitchShift.setParams(cachePitch);
+    pitchShift.process(buffer);
   }
 
   // #########################

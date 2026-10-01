@@ -83,7 +83,7 @@ public:
   float value() const { return value_; }
   // External update (parameter echo); ignored mid-drag.
   void setValue(float normalised);
-  // Detents on or off at runtime (Transpose's STEP toggle). Applies to the
+  // Detents on or off at runtime (the pitch deck's STEP toggle). Applies to the
   // next emitted value; the owner snaps the current one if it wants to.
   void setSteps(std::optional<int> steps) { options_.steps = steps; }
 

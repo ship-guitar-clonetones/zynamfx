@@ -1,4 +1,4 @@
-#include "TransposeGroup.h"
+#include "PitchGroup.h"
 
 #include <cmath>
 #include <optional>
@@ -19,24 +19,24 @@ constexpr int kSemitoneSteps = 2 * 24 + 1;
 
 Knob::Options semitoneKnob() {
   Knob::Options o;
-  o.label = "Transpose";
+  o.label = "Pitch";
   o.size = theme::kKnobSizeSecondary;
   o.thumb = Knob::Thumb::secondary;
   o.variant = Knob::Variant::bipolar;  // noon = 0 st
   o.scale = &scales::semitones();
   o.defaultValue = 0.5f;
   o.steps = kSemitoneSteps;  // STEP's default; syncStep() follows the parameter
-  o.help = help::Key::transpose;
+  o.help = help::Key::pitch;
   return o;
 }
 
 }  // namespace
 
-TransposeGroup::TransposeGroup(Services& services)
+PitchGroup::PitchGroup(Services& services)
     : services_(services),
-      semitones_(services.backend, "transposeSemitones", semitoneKnob()),
-      power_(services.backend, "transposeEnabled", help::Key::transposePower),
-      step_(services.backend, "transposeStep"),
+      semitones_(services.backend, "pitchSemitones", semitoneKnob()),
+      power_(services.backend, "pitchEnabled", help::Key::pitchPower),
+      step_(services.backend, "pitchStep"),
       deck_(services) {
   dim_.addAndMakeVisible(semitones_);
   dim_.setOff(!power_.value(), false);
@@ -47,19 +47,19 @@ TransposeGroup::TransposeGroup(Services& services)
   syncStep();
 
   // One gesture resets the whole effect, deck included.
-  semitones_.onReset = [this] { TransposeDeckPanel::resetDeck(services_.backend); };
+  semitones_.onReset = [this] { PitchDeckPanel::resetDeck(services_.backend); };
   // Touch-and-hold on the knob is the right-click of the platform.
   semitones_.onLongPress = [this] { toggleDeck(); };
 
   setSize(kWidth, height());
 }
 
-TransposeGroup::~TransposeGroup() { deck_.close(); }
+PitchGroup::~PitchGroup() { deck_.close(); }
 
 // STEP on: the knob detents to whole semitones, and a shift left between
 // them by a smooth sweep snaps to the nearest so the knob shows what the
 // processor (which rounds under STEP) is playing. Off: the knob sweeps.
-void TransposeGroup::syncStep() {
+void PitchGroup::syncStep() {
   const bool stepped = step_.boolValue();
   semitones_.setSteps(stepped ? std::optional<int>(kSemitoneSteps) : std::nullopt);
   if (!stepped) return;
@@ -68,30 +68,28 @@ void TransposeGroup::syncStep() {
   if (!juce::approximatelyEqual(snapped, semitones_.value())) semitones_.binding().set(snapped);
 }
 
-void TransposeGroup::visibilityChanged() {
+void PitchGroup::visibilityChanged() {
   if (!isVisible()) deck_.close();
 }
 
-void TransposeGroup::mouseDown(const juce::MouseEvent& e) {
+void PitchGroup::mouseDown(const juce::MouseEvent& e) {
   if (isSecondaryPress(e)) toggleDeck();
 }
 
-void TransposeGroup::toggleDeck() {
+void PitchGroup::toggleDeck() {
   if (deck_.isOpen()) {
     deck_.close();
     return;
   }
-  // Anchored to the knob face, not its label column, so it lands like Gate's.
-  deck_.open(semitones_, Popover::Align::left, TransposeDeckPanel::kGap, kFaceInset,
-             Popover::Placement::above);
+  // Anchored to the knob: the panel's left edge tracks the knob's.
+  deck_.open(semitones_, Popover::Align::left, PitchDeckPanel::kGap, 0, Popover::Placement::above);
 }
 
-void TransposeGroup::resized() {
+void PitchGroup::resized() {
   const int baseline = getHeight() - Knob::kEditorOverflow;  // the label slot's bottom edge
-  dim_.setBounds(0, 0, kColumnWidth, getHeight());
-  semitones_.setBounds(0, 0, kColumnWidth, getHeight());  // face centred, label full width
-  power_.setTopLeftPosition(kFaceInset + theme::kKnobSizeSecondary + kGap,
-                            baseline - theme::kIconBoxSize + kChromeLift);
+  dim_.setBounds(0, 0, theme::kKnobSizeSecondary, getHeight());
+  semitones_.setTopLeftPosition(0, 0);
+  power_.setTopLeftPosition(theme::kKnobSizeSecondary + kGap, baseline - theme::kIconBoxSize + kChromeLift);
 }
 
 }  // namespace t3k::ui

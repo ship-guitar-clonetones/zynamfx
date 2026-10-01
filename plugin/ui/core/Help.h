@@ -12,9 +12,9 @@ enum class Key {
   // Faceplate: gains (the inputMode* rows are the input-mode menu's entries)
   inputLevel, inputMode, inputModeSum, inputModeStereo, inputModeDualMono, inputModeLeft,
   inputModeRight, outputLevel, outputBalance, autoBalance,
-  // Faceplate: gate, transpose, tone stack, stereo image (spread / align)
+  // Faceplate: gate, pitch shift, tone stack, stereo image (spread / align)
   gate, gatePower, gateRelease, gateHold, gateRange,
-  transpose, transposePower, transposeStep, transposeTonality, transposeWindow,
+  pitch, pitchPower, pitchStep, pitchTonality, pitchWindow,
   toneBass, toneMiddle, toneTreble, tonePower,
   spreadOffset, spreadWobble, spreadWobblePower, spreadCrossover, spreadCrossoverPower,
   spreadDiffuse, spreadAdvert, spreadPower, imageCorrelation, spreadMonoOutput, spreadDualMono,

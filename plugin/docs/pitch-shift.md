@@ -1,7 +1,8 @@
-# Transpose: low-latency pitch-shift research
+# Pitch Shift: low-latency pitch-shift research
 
-Record of the engine choice behind the Transpose effect. The feature
-started from Vivek Radhakrishna's contribution
+Record of the engine choice behind the Pitch Shift effect (the Pitch knob
+on the faceplate: stepped, it transposes; smooth, it sweeps like a whammy).
+The feature started from Vivek Radhakrishna's contribution
 ([#133](https://github.com/tone-3000/tone3000-plugin/pull/133)), which ran
 Signalsmith Stretch (a phase vocoder) at 30 / 60 / 100 ms windows. Played
 live against a commercial input transpose it was late (60 ms; ~20 ms is
@@ -14,7 +15,7 @@ range have their own sections, each with the problem, what was measured
 and how the engine handles it; Implementation lists how the shipped code
 differs from the bench prototype.
 
-Assets referenced below live in `plugin/docs/transpose/`. The bench harness
+Assets referenced below live in `plugin/docs/pitch-shift/`. The bench harness
 (C++ candidates + Python scorer) is described in enough detail to rebuild;
 it was developed outside the repo.
 
@@ -104,7 +105,7 @@ Two additions to the basic design:
 
 The delay track shows both on a real riff:
 
-![Read-tap delay of the 40 ms splicer on Power - Guitar, -2 st](transpose/guitar_delay_track.png)
+![Read-tap delay of the 40 ms splicer on Power - Guitar, -2 st](pitch-shift/guitar_delay_track.png)
 
 Ramps are the tap drifting at the pitch ratio (2^(-2/12) - 1 = -11%
 speed, so a ~1.5 s run from 2 to 40 ms); vertical drops to the 2-6 ms
@@ -259,24 +260,24 @@ Downtown - Bass, -2 st, 2.5 s excerpt, 0-1.2 kHz. Dry (top), vocoder
 with noise, most visibly at 400-800 Hz and around each attack; the splicer
 keeps each partial as a line, shifted down 2 st:
 
-![Downtown - Bass spectrograms](transpose/bass_spectrogram.png)
+![Downtown - Bass spectrograms](pitch-shift/bass_spectrogram.png)
 
 Power - Guitar, -2 st, 0-3 kHz:
 
-![Power - Guitar spectrograms](transpose/guitar_spectrogram.png)
+![Power - Guitar spectrograms](pitch-shift/guitar_spectrogram.png)
 
 ### Audio examples
 
 5 s excerpts, 48 kHz 16-bit, peak-normalised as a set so levels match:
 
 - Guitar (Power - Guitar, -2 st):
-  [dry](transpose/guitar_-2st_dry.wav),
-  [Signalsmith 60 ms](transpose/guitar_-2st_ss60.wav),
-  [splicer 40 ms](transpose/guitar_-2st_splice40.wav)
+  [dry](pitch-shift/guitar_-2st_dry.wav),
+  [Signalsmith 60 ms](pitch-shift/guitar_-2st_ss60.wav),
+  [splicer 40 ms](pitch-shift/guitar_-2st_splice40.wav)
 - Bass (Downtown - Bass, -2 st):
-  [dry](transpose/bass_-2st_dry.wav),
-  [Signalsmith 60 ms](transpose/bass_-2st_ss60.wav),
-  [splicer 40 ms](transpose/bass_-2st_splice40.wav)
+  [dry](pitch-shift/bass_-2st_dry.wav),
+  [Signalsmith 60 ms](pitch-shift/bass_-2st_ss60.wav),
+  [splicer 40 ms](pitch-shift/bass_-2st_splice40.wav)
 
 The wet files are aligned to the dry by nominal latency, so A/B'ing them in
 a DAW compares artifacts, not delay.
@@ -292,7 +293,7 @@ has a soft, periodic "chuff", a few times a second. In the spectrogram it
 is a vertical bar at each drift splice, filling the gaps between the
 partials.
 
-![Chord at -2 st: dry, fixed 6 ms fades, adaptive fades](transpose/chords_spectrogram.png)
+![Chord at -2 st: dry, fixed 6 ms fades, adaptive fades](pitch-shift/chords_spectrogram.png)
 
 ### Why chords splice badly
 
@@ -374,9 +375,9 @@ indistinguishable from the fixed-fade render.
 
 Excerpts, first four chords of the take (9 s, 48 kHz 16-bit, aligned by
 nominal latency, peak-normalised as a set):
-[dry](transpose/chords_-2st_dry.wav),
-[fixed 6 ms fade](transpose/chords_-2st_fixed6ms.wav),
-[adaptive fade](transpose/chords_-2st_adaptive.wav).
+[dry](pitch-shift/chords_-2st_dry.wav),
+[fixed 6 ms fade](pitch-shift/chords_-2st_fixed6ms.wav),
+[adaptive fade](pitch-shift/chords_-2st_adaptive.wav).
 
 On the full corpus (same scorer as the tables above, 30 ms buffer, means;
 each cell is fixed 6 ms fade -> adaptive fade):
@@ -400,7 +401,7 @@ than a 6 ms one. CPU is the same (0.22-0.37%).
 
 ## Two octaves
 
-Transpose covers -24..+24 st. Up to an octave either way is the plain case
+Pitch covers -24..+24 st. Up to an octave either way is the plain case
 above; two octaves stresses the geometry in different ways up and down.
 
 ### Up
@@ -455,11 +456,12 @@ bass note's period does not fit it.
 
 ## Controls
 
-- **Transpose**, -24..+24 st, a continuous parameter.
-- **STEP** (on by default) snaps the knob to whole semitones; off, the
-  knob sweeps smoothly and Shift-drag is the fine control, so it plays like
-  a whammy. The engine only ever sees a semitone value; the processor
-  rounds it while STEP is on.
+- **Pitch**, -24..+24 st, a continuous parameter.
+- **STEP** (on by default) snaps the knob to whole semitones, which is the
+  transpose use; off, the knob sweeps smoothly and Shift-drag is the fine
+  control, so it plays like a whammy (map a MIDI expression pedal to it).
+  The engine only ever sees a semitone value; the processor rounds it while
+  STEP is on.
 - **Tonality**, the crossover above which the input bypasses the shifter.
 - **Buffer**, the shifter's delay buffer, 20 / 30 / 40 / 60 ms. The tap's
   delay sweeps between the 2 ms floor and the buffer end, and the host is
@@ -475,8 +477,8 @@ dropped at the splice.
 
 ## Implementation
 
-The shipped engine is `plugin/include/Transpose.h` /
-`plugin/src/Transpose.cpp`; Signalsmith Stretch and Linear are not
+The shipped engine is `plugin/include/PitchShift.h` /
+`plugin/src/PitchShift.cpp`; Signalsmith Stretch and Linear are not
 dependencies. Where it differs from the bench prototype:
 
 - **Coarse-to-fine lag search.** Candidates are scored every 4 samples (at
@@ -535,7 +537,7 @@ dependencies. Where it differs from the bench prototype:
 - Verified by wrapping the plugin class as a bench candidate: every metric
   matches the `splice` prototype at the same buffer within noise.
 
-Unit tests (`test/src/transpose_tests.cpp`): latency figure matches the
+Unit tests (`test/src/pitch_shift_tests.cpp`): latency figure matches the
 engine at every window and rate; 0 st is a pure delay at the floor at unity
 gain; ±1 and ±2 octaves land on frequency at every window, and so does a
 fractional shift; shifted tones keep unity

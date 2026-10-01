@@ -4,14 +4,15 @@
 #include <memory>
 
 /**
- * Polyphonic pitch shifter for the input stage: the Transpose group on the
- * faceplate. Shifts the raw instrument signal by whole semitones (plus a
- * fine trim) before it reaches the NAM/IR chain, so a guitar in standard
- * tuning drives the amp as if it were tuned down (or up), the job of a
- * Digitech Drop or the input transpose in amp-sim suites.
+ * Polyphonic pitch shifter for the input stage: the Pitch group on the
+ * faceplate. Shifts the raw instrument signal by up to two octaves either
+ * way before it reaches the NAM/IR chain. Stepped, it transposes: a guitar
+ * in standard tuning drives the amp as if it were tuned down (or up), the
+ * job of a Digitech Drop. Continuous, it sweeps like a whammy pedal, which
+ * is what a MIDI expression pedal on the knob gets.
  *
  * Engine: a correlation-spliced delay line, the Eventide H949 "de-glitch"
- * idea (plugin/docs/transpose.md records the research that chose it over
+ * idea (plugin/docs/pitch-shift.md records the research that chose it over
  * the phase vocoder it replaced). One read tap runs through a ring buffer
  * at the pitch ratio, so its delay behind the write head drifts between a
  * floor (kMinDelayMs) and the buffer size (the Window). When it reaches the
@@ -52,7 +53,7 @@
  * blend, never a jump. Power blends the shifted signal against the dry
  * over kBlendSeconds and the engine keeps running until a fade-out lands
  * (isRunning), after which the processor stops calling it, so a powered-off
- * Transpose is a bit-exact, zero-latency passthrough (the "fresh default
+ * PitchShift is a bit-exact, zero-latency passthrough (the "fresh default
  * chain is transparent" invariant in processor_tests). A Window change
  * keeps the rings (they are sized for the largest window) and lets a tap
  * outside the new range splice back in like any drift splice.
@@ -77,7 +78,7 @@
  * path (the onset detector and the lag search run on their mean) and one
  * tap position, so the image never smears; each channel keeps its own ring.
  */
-class Transpose {
+class PitchShift {
 public:
   static constexpr int kMaxChannels = 2;
   static constexpr int kSemitoneRange = 24;  // knob is ±24
@@ -107,8 +108,8 @@ public:
     Window window = kDefaultWindow;
   };
 
-  Transpose();
-  ~Transpose();
+  PitchShift();
+  ~PitchShift();
 
   /** Sizes the rings for the largest window at this rate. Block size is
       not a constraint (the engine is per-sample). */
