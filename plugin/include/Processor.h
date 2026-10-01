@@ -544,7 +544,10 @@ private:
     std::unique_ptr<juce::dsp::Convolution> convolverStereo;
     int irNumChannels = 1;
     int irLengthBaseSamples = 0;  // base-rate kernel length (tail reporting)
-    bool irIsLong = false;        // short/long classification (see ChainBlock.h)
+    // Kernel length vs the short/long cutoff. The block's classification
+    // (ChainBlock::irIsLong) is settled at apply time, where the tone's gear
+    // can override this; see irIsLongFor in ProcessorModelLoader.cpp.
+    bool irIsLongByLength = false;
     float irNormalizationGainLinear = 1.0f;
   };
 

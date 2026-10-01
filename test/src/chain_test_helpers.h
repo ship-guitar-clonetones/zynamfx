@@ -32,10 +32,13 @@ struct ChainTestProcessor : TONE3000Processor {
 
 // An IR block tree in plugin-state shape, with the IR file's bytes embedded
 // as its ModelCache so the background loader never needs the (fake) URL.
+// `gear` is the catalog gear tag ("cab", "space", ...); empty = untagged.
 inline juce::ValueTree makeIrBlockTree(const juce::String& blockId, int toneId, int modelId,
-                                       const char* fileName = "cab-ir-test.wav") {
+                                       const char* fileName = "cab-ir-test.wav",
+                                       const juce::String& gear = {}) {
   const juce::String toneJson =
-      "{\"id\":" + juce::String(toneId) + ",\"title\":\"Test IR\",\"format\":\"ir\","
+      "{\"id\":" + juce::String(toneId) + ",\"title\":\"Test IR\",\"format\":\"ir\"," +
+      (gear.isNotEmpty() ? "\"gear\":\"" + gear + "\"," : juce::String()) +
       "\"models\":[{\"id\":" + juce::String(modelId) +
       ",\"name\":\"cab\",\"model_url\":\"https://test.invalid/cab.wav\"}]}";
 
