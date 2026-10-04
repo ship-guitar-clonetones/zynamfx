@@ -67,11 +67,12 @@ std::string rigWithOneBlock(ChainTestProcessor& proc, BlockOrigin origin, int os
   return blockId;
 }
 
+// (`far`/`near` are legacy empty macros in <windows.h>; avoid them as names.)
 std::vector<float> twoTone(int frames) {
   auto probe = makeSine(frames, kBellHz, 0.15f);
-  const auto far = makeSine(frames, kFarHz, 0.15f);
+  const auto upper = makeSine(frames, kFarHz, 0.15f);
   for (size_t i = 0; i < probe.size(); ++i)
-    probe[i] += far[i];
+    probe[i] += upper[i];
   return probe;
 }
 
