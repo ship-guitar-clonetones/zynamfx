@@ -765,6 +765,143 @@ if (EXISTS "${_juce_x11_cpp}")
     endif()
 endif()
 
+# T3K_UIA_ANNOUNCE: stop Windows users with no screen reader hearing a
+# synthetic voice from the plugin. Stock JUCE implements
+# AccessibilityHandler::postAnnouncement on Windows by speaking the text
+# itself through SAPI (ISpVoice::Speak, in-process, default system voice)
+# whenever UiaClientsAreListening() || SPI_GETSCREENREADER is true.
+# UiaClientsAreListening() is machine-wide and flips on as soon as *any*
+# process registers a UI Automation event handler (Chromium/Electron apps,
+# Magnifier, Game Bar, overlays, ...) and stays on until that process exits,
+# so with Narrator off the plugin would still start reading browser results
+# ("12 tones, page 1 of 3") out loud mid-session, until the next reboot.
+# Raise a UIA notification event (UiaRaiseNotificationEvent, Windows 10
+# 1709+, resolved at runtime) on the focused element instead: a real screen
+# reader (Narrator, NVDA, JAWS) speaks it in its own voice and nothing speaks
+# when none is running. Idempotent configure-time patch, same rationale as
+# the patches above; applied on every platform (the file only compiles on
+# Windows, patching it elsewhere is harmless and keeps libs/juce identical).
+set(_juce_a11y_win_cpp "${LIB_DIR}/juce/modules/juce_gui_basics/native/accessibility/juce_Accessibility_windows.cpp")
+if (EXISTS "${_juce_a11y_win_cpp}")
+    file(READ "${_juce_a11y_win_cpp}" _juce_a11y_win_src)
+    if (NOT _juce_a11y_win_src MATCHES "T3K_UIA_ANNOUNCE")
+        if (_juce_a11y_win_src MATCHES "\r\n")
+            set(_juce_nl "\r\n")
+        else()
+            set(_juce_nl "\n")
+        endif()
+        set(_juce_a11y_announce_old
+[=[void AccessibilityHandler::postAnnouncement (const String& announcementString, AnnouncementPriority priority)
+{
+    if (! areAnyAccessibilityClientsActive())
+        return;
+
+    if (auto* sharedVoice = SpVoiceWrapper::getInstance())
+    {
+        auto voicePriority = [priority]
+        {
+            switch (priority)
+            {
+                case AnnouncementPriority::low:    return SPVPRI_OVER;
+                case AnnouncementPriority::medium: return SPVPRI_NORMAL;
+                case AnnouncementPriority::high:   return SPVPRI_ALERT;
+            }
+
+            jassertfalse;
+            return SPVPRI_OVER;
+        }();
+
+        sharedVoice->voice->SetPriority (voicePriority);
+        sharedVoice->voice->Speak (announcementString.toWideCharPointer(), SPF_ASYNC, nullptr);
+    }
+}]=])
+        set(_juce_a11y_announce_new
+[=[// T3K_UIA_ANNOUNCE (see the CMakeLists patch comment): stock JUCE speaks
+// announcements itself through SAPI whenever UiaClientsAreListening() is
+// true, a machine-wide flag any UIA client process flips on. Hand the text
+// to UI Automation as a notification event instead, so only an actual
+// screen reader reads it (in its own voice) and nothing speaks otherwise.
+static bool t3kRaiseUiaNotification (const String& text, AccessibilityHandler::AnnouncementPriority priority)
+{
+    auto* handler = []() -> AccessibilityHandler*
+    {
+        for (auto* c = Component::getCurrentlyFocusedComponent(); c != nullptr; c = c->getParentComponent())
+            if (auto* h = c->getAccessibilityHandler())
+                return h;
+
+        for (int i = ComponentPeer::getNumPeers(); --i >= 0;)
+            if (auto* peer = ComponentPeer::getPeer (i))
+                if (auto* h = peer->getComponent().getAccessibilityHandler())
+                    return h;
+
+        return nullptr;
+    }();
+
+    if (handler == nullptr)
+        return false;
+
+    bool raised = false;
+
+    getProviderWithCheckedWrapper (*handler, [&] (WindowsUIAWrapper*, ComSmartPtr<IRawElementProviderSimple>& provider)
+    {
+        // HRESULT UiaRaiseNotificationEvent (IRawElementProviderSimple*, NotificationKind,
+        //                                    NotificationProcessing, BSTR displayString,
+        //                                    BSTR activityId) -- Windows 10 1709+, so it is
+        // resolved at runtime; older systems simply stay quiet.
+        using RaiseFunc = HRESULT (WINAPI*) (IRawElementProviderSimple*, int, int, BSTR, BSTR);
+
+        auto uiaModule = ::GetModuleHandleA ("UIAutomationCore.dll");
+
+        if (uiaModule == nullptr)
+            return;
+
+        JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wcast-function-type")
+        auto raise = (RaiseFunc) ::GetProcAddress (uiaModule, "UiaRaiseNotificationEvent");
+        JUCE_END_IGNORE_WARNINGS_GCC_LIKE
+
+        if (raise == nullptr)
+            return;
+
+        const int kind = 2; // NotificationKind_ActionCompleted
+        const int processing = priority == AccessibilityHandler::AnnouncementPriority::high   ? 0  // NotificationProcessing_ImportantAll
+                             : priority == AccessibilityHandler::AnnouncementPriority::medium ? 2  // NotificationProcessing_All
+                                                                                               : 3; // NotificationProcessing_MostRecent
+
+        auto* display  = ::SysAllocString (text.toWideCharPointer());
+        auto* activity = ::SysAllocString (L"JUCE.Announcement");
+
+        raised = SUCCEEDED (raise (provider, kind, processing, display, activity));
+
+        ::SysFreeString (activity);
+        ::SysFreeString (display);
+    });
+
+    return raised;
+}
+
+void AccessibilityHandler::postAnnouncement (const String& announcementString, AnnouncementPriority priority)
+{
+    if (! areAnyAccessibilityClientsActive())
+        return;
+
+    // T3K_UIA_ANNOUNCE: never speak in-process through SAPI (SpVoiceWrapper);
+    // the UIA notification is read by the user's screen reader, if any.
+    t3kRaiseUiaNotification (announcementString, priority);
+}]=])
+        string(REPLACE "\n" "${_juce_nl}" _juce_a11y_announce_old "${_juce_a11y_announce_old}")
+        string(REPLACE "\n" "${_juce_nl}" _juce_a11y_announce_new "${_juce_a11y_announce_new}")
+        string(REPLACE "${_juce_a11y_announce_old}" "${_juce_a11y_announce_new}" _juce_a11y_win_src "${_juce_a11y_win_src}")
+        if (NOT _juce_a11y_win_src MATCHES "T3K_UIA_ANNOUNCE")
+            message(FATAL_ERROR
+                "T3K_UIA_ANNOUNCE: failed to patch ${_juce_a11y_win_cpp}. "
+                "The JUCE source layout likely changed in this version. Update the patch "
+                "anchors in CMakeLists.txt.")
+        endif()
+        file(WRITE "${_juce_a11y_win_cpp}" "${_juce_a11y_win_src}")
+        message(STATUS "Patched JUCE Accessibility (Windows): announcements go to the screen reader via UIA, not in-process SAPI speech")
+    endif()
+endif()
+
 # Download GoogleTest Framework using CPM
 CPMAddPackage(
     NAME GOOGLETEST
