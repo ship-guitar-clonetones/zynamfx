@@ -1216,8 +1216,32 @@ struct LiveScenario {
   }
 
   static void pump(int ms) { FocusPolicyTests::pump(ms); }
+  // Pump until `ready` holds, up to a deadline; whether it does. For what
+  // the UI does on a later message (a focus callback, a store's reply): a
+  // fixed pump is too short on a loaded CI machine.
+  static bool until(const std::function<bool()>& ready, int deadlineMs = 3000) {
+    for (int waited = 0; !ready(); waited += 10) {
+      if (waited >= deadlineMs) return false;
+      pump(10);
+    }
+    return true;
+  }
   static juce::Component* focused() { return FocusPolicyTests::focused(); }
   bool key(int code, juce::ModifierKeys mods = {}) { return FocusPolicyTests::key(*peer, code, mods); }
+  // Focus a control and wait for the Desktop to tell its listeners (the
+  // scrollers that follow focus). The Desktop posts that; on a CI machine a
+  // paint can hold the queue far longer than a fixed pump, so wait for it.
+  static void focus(juce::Component& target) {
+    struct Watch : juce::FocusChangeListener {
+      bool fired = false;
+      void globalFocusChanged(juce::Component*) override { fired = true; }
+    } watch;
+    if (target.hasKeyboardFocus(false)) return;  // no change, so nothing to wait for
+    juce::Desktop::getInstance().addFocusChangeListener(&watch);
+    target.grabKeyboardFocus();
+    for (int i = 0; i < 300 && !watch.fired; ++i) pump(10);
+    juce::Desktop::getInstance().removeFocusChangeListener(&watch);
+  }
   // A point of `target` in the peer's space.
   juce::Point<float> at(juce::Component& target, juce::Point<float> local) {
     return peer->getComponent().getLocalPoint(&target, local);
@@ -1526,10 +1550,18 @@ struct ScrollSurfacesTests : juce::UnitTest {
     if (scroller == nullptr) return;
     const bool vertical = scroller->axis() == DragScroller::Axis::vertical;
     auto* content = scroller->getViewedComponent();
-    const int range = vertical ? content->getHeight() - scroller->getMaximumVisibleHeight()
-                               : content->getWidth() - scroller->getMaximumVisibleWidth();
-    expect(range > DragScroller::kKeyLineStep, "the content overflows the view");
-    if (range <= DragScroller::kKeyLineStep) return;
+    const auto range = [&] {
+      return vertical ? content->getHeight() - scroller->getMaximumVisibleHeight()
+                      : content->getWidth() - scroller->getMaximumVisibleWidth();
+    };
+    // The content has settled (a store's reply, images, a relayout) when
+    // its size has held for a while.
+    for (int held = 0, last = range(); held < 300; held += 10) {
+      live.pump(10);
+      if (range() != last) held = 0, last = range();
+    }
+    expect(range() > DragScroller::kKeyLineStep, "the content overflows the view");
+    if (range() <= DragScroller::kKeyLineStep) return;
     const auto pos = [&] { return vertical ? scroller->getViewPositionY() : scroller->getViewPositionX(); };
     const auto rewind = [&] {
       live.pump(500);  // any drag's momentum has run out
@@ -1582,27 +1614,27 @@ struct ScrollSurfacesTests : juce::UnitTest {
     const auto stops = juce::KeyboardFocusTraverser().getAllComponents(content);
     expect(stops.size() >= 2, "controls inside to focus");
     if (stops.size() < 2) return;
-    stops.front()->grabKeyboardFocus();
-    live.pump(50);
+    live.focus(*stops.front());
+    live.until([&] { return inView(*stops.front()); });  // the view has followed the focus, if it had to
     const int before = pos();
     expect(live.key(forward), "the key is taken");
-    live.pump(50);
+    // The key's work is synchronous: read it before anything else moves the view.
     if (surface.ownKeys) {
-      expectEquals(pos(), before + DragScroller::kKeyLineStep, "the scroller took the key");
+      expectEquals(pos(), juce::jmin(before + DragScroller::kKeyLineStep, range()), "the scroller took the key");
       expect(live.focused() == stops.front(), "and the focus stayed");
     } else {
       expect(live.focused() == stops[1], "the menu walked to the next row");
     }
 
-    // Focus landing out of view scrolls into it, both ways.
+    // Focus landing out of view scrolls into it, both ways. (The focus must
+    // move for the view to follow: start it at the front.)
+    live.focus(*stops.front());
     rewind();
-    stops.back()->grabKeyboardFocus();
-    live.pump(80);
-    expect(inView(*stops.back()), "the last control is in view once focused");
+    live.focus(*stops.back());
+    expect(live.until([&] { return inView(*stops.back()); }), "the last control is in view once focused");
     expect(pos() > 0, "the view moved to it");
-    stops.front()->grabKeyboardFocus();
-    live.pump(80);
-    expect(inView(*stops.front()), "and back to the first");
+    live.focus(*stops.front());
+    expect(live.until([&] { return inView(*stops.front()); }), "and back to the first");
     live.key(KP::escapeKey);
   }
 };
