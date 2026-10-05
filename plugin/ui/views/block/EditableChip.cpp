@@ -10,6 +10,7 @@ EditableChip::EditableChip(juce::String label, int valueWidth, help::Key help)
     : label_(std::move(label)), valueWidth_(valueWidth), help_(help) {
   setHelpText(help::text(help_));
   setMouseCursor(juce::MouseCursor::IBeamCursor);
+  setViewportIgnoreDragFlag(true);  // a drag on the value selects it; the column around it stays put
 
   editor_.setMultiLine(false);
   editor_.setReturnKeyStartsNewLine(false);

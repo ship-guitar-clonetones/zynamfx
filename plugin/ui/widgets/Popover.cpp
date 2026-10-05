@@ -181,19 +181,7 @@ void Popover::focusRow(bool next) {
     target = next ? rows.front() : rows.back();
   else
     target = rows[(static_cast<size_t>(at - rows.begin()) + (next ? 1 : rows.size() - 1)) % rows.size()];
-  // A row in a scrolled list scrolls into view (JUCE's Viewport doesn't
-  // follow focus on its own).
-  if (auto* viewport = target->findParentComponentOfClass<juce::Viewport>()) {
-    if (auto* content = viewport->getViewedComponent()) {
-      const auto row = content->getLocalArea(target, target->getLocalBounds());
-      const auto view = viewport->getViewArea();
-      if (row.getY() < view.getY())
-        viewport->setViewPosition(view.getX(), row.getY());
-      else if (row.getBottom() > view.getBottom())
-        viewport->setViewPosition(view.getX(), row.getBottom() - view.getHeight());
-    }
-  }
-  target->grabKeyboardFocus();
+  target->grabKeyboardFocus();  // a row in a scrolled list: the list (DragScroller) follows the focus
 }
 
 void Popover::outsidePress(const juce::MouseEvent& e) {

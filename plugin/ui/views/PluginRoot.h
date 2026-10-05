@@ -24,9 +24,11 @@
 // box on some visits and not others. The root is the keyboard focus
 // container with a traverser that names no default; Tab with nothing
 // focused enters the tab order at either end; Escape or a press elsewhere
-// drops the focus again. Keys nothing takes (Space and Enter with nothing
-// focused, Space with a button or knob focused) fall through to the host
-// as its transport keys (NativeEditor).
+// drops the focus again. The scroll keys with nothing focused move the
+// screen in front's main scroller (frontScroller), as a browser scrolls
+// its document. Keys nothing takes (Space and Enter with nothing focused,
+// Space with a button or knob focused) fall through to the host as its
+// transport keys (NativeEditor).
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -131,6 +133,14 @@ private:
   // Which of main screen, faceplate, browser and sign-in screen show under
   // the takeovers.
   void syncTakeovers();
+  // The Settings page when it is open and nothing modal sits over it: the
+  // Tab cycle to enter with nothing focused.
+  SettingsScreen* settingsInFront() const;
+  // The screen in front's main scroller (the Settings page, the browser's
+  // results, a block's detail column, the chain lane), where the scroll
+  // keys go with nothing focused; none under a modal or on a screen that
+  // does not scroll.
+  DragScroller* frontScroller();
 
   Services& services_;
   PluginHeader header_;
@@ -154,11 +164,12 @@ private:
   DelayedCall bannerWait_;
   juce::Component* watchedParent_ = nullptr;
 
-  // The two focus rules a browser has and JUCE lacks. Keys with nothing
+  // The focus rules a browser has and JUCE lacks. Keys with nothing
   // focused go to the window's component, which we are inside of, not
-  // above, so Tab-from-nothing listens on the window. A press outside the
-  // focused control drops its focus, so a Tab-focused button never keeps
-  // Enter from the host once the user is back on the mouse.
+  // above, so Tab-from-nothing and the scroll keys for the screen in
+  // front's scroller listen on the window. A press outside the focused
+  // control drops its focus, so a Tab-focused button never keeps Enter
+  // from the host once the user is back on the mouse.
   class FocusPolicy : public juce::KeyListener, public juce::MouseListener {
   public:
     explicit FocusPolicy(PluginRoot& root) : root_(root) {}

@@ -4,6 +4,7 @@
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "widgets/Clickable.h"
+#include "widgets/DragScroller.h"
 #include "widgets/Popover.h"
 
 namespace t3k::ui {
@@ -22,8 +23,6 @@ class SelectField::Dropdown : public Popover {
 public:
   explicit Dropdown(SelectField& owner) : owner_(owner) {
     viewport_.setViewedComponent(&content_, false);
-    viewport_.setScrollBarsShown(false, false, true, false);
-    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
   }
 
@@ -85,7 +84,7 @@ private:
   };
 
   SelectField& owner_;
-  juce::Viewport viewport_;
+  DragScroller viewport_{DragScroller::Axis::vertical, DragScroller::Keys::none};  // the arrows walk the rows
   juce::Component content_;
   std::vector<std::unique_ptr<Row>> rows_;
 };

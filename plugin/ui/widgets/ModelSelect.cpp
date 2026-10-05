@@ -7,6 +7,7 @@
 #include "core/Paint.h"
 #include "core/Theme.h"
 #include "widgets/Clickable.h"
+#include "widgets/DragScroller.h"
 
 namespace t3k::ui {
 
@@ -54,8 +55,6 @@ class ModelSelect::Dropdown : public Popover {
 public:
   explicit Dropdown(ModelSelect& owner) : owner_(owner) {
     viewport_.setViewedComponent(&content_, false);
-    viewport_.setScrollBarsShown(false, false, true, false);
-    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
     dots_.setVisible(false);
     content_.addChildComponent(dots_);
@@ -137,20 +136,12 @@ private:
 
   // scrollIntoView({block: 'nearest'}) on the active row.
   void scrollToActive() {
-    for (auto& row : rows_) {
-      if (!row->active()) continue;
-      const auto view = viewport_.getViewArea();
-      const int top = row->getY(), bottom = row->getBottom();
-      if (top < view.getY())
-        viewport_.setViewPosition(0, top);
-      else if (bottom > view.getBottom())
-        viewport_.setViewPosition(0, bottom - view.getHeight());
-      return;
-    }
+    for (auto& row : rows_)
+      if (row->active()) viewport_.reveal(*row, 0);
   }
 
   ModelSelect& owner_;
-  juce::Viewport viewport_;
+  DragScroller viewport_{DragScroller::Axis::vertical, DragScroller::Keys::none};  // the arrows walk the rows
   juce::Component content_;
   std::vector<std::unique_ptr<Row>> rows_;
   DotsRow dots_;
@@ -164,8 +155,11 @@ public:
   std::function<void()> onClick;
   void mouseUp(const juce::MouseEvent& e) override {
     // Local bounds, not Component::contains(): that walks up to the window
-    // peer, which an offscreen (testbed) render doesn't have.
-    if (e.mods.isLeftButtonDown() && getLocalBounds().contains(e.getPosition()) && onClick) onClick();
+    // peer, which an offscreen (testbed) render doesn't have. A press that
+    // panned the column around it is not a click.
+    if (e.mods.isLeftButtonDown() && getLocalBounds().contains(e.getPosition()) &&
+        !e.mouseWasDraggedSinceMouseDown() && onClick)
+      onClick();
   }
 };
 }  // namespace

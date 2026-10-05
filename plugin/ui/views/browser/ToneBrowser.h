@@ -73,6 +73,9 @@ public:
   // The preview's sign-in CTAs: the browse-intent login that comes back here.
   std::function<void()> onSignIn;
 
+  // The results list: the screen's main scroller.
+  DragScroller& scroller() { return *scroller_; }
+
   void paint(juce::Graphics& g) override;
   void resized() override;
 

@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "core/Fonts.h"
+#include "core/NoDefaultFocus.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
 #include "widgets/Clickable.h"
@@ -116,6 +117,9 @@ SettingsScreen::SettingsScreen(Services& services, Tab initialTab)
       tab_(standalone_ ? initialTab : Tab::plugin),
       header_(std::make_unique<Header>()),
       plugin_(services) {
+  // Its own Tab cycle while it covers the window: the controls underneath
+  // are still showing to JUCE, and the walk must not reach them.
+  setFocusContainerType(FocusContainerType::keyboardFocusContainer);
   header_->close_.onClick = [this] {
     if (onClose) onClose();
   };
@@ -134,12 +138,17 @@ SettingsScreen::SettingsScreen(Services& services, Tab initialTab)
   content_.addAndMakeVisible(stack_);
 
   viewport_.setViewedComponent(&content_, false);
+  viewport_.setFocusMargin(kFocusMargin);
   addAndMakeVisible(viewport_);
 
   setTab(tab_);
 }
 
 SettingsScreen::~SettingsScreen() = default;
+
+std::unique_ptr<juce::ComponentTraverser> SettingsScreen::createKeyboardFocusTraverser() {
+  return std::make_unique<NoDefaultFocus>();
+}
 
 void SettingsScreen::setTab(Tab tab) {
   tab_ = standalone_ ? tab : Tab::plugin;

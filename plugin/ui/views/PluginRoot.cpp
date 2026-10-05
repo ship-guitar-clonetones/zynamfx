@@ -265,15 +265,41 @@ std::unique_ptr<juce::ComponentTraverser> PluginRoot::createKeyboardFocusTravers
 }
 
 bool PluginRoot::FocusPolicy::keyPressed(const juce::KeyPress& key, juce::Component*) {
-  if (!key.isKeyCode(juce::KeyPress::tabKey)) return false;
   // Focus resting on the window itself (a standalone DocumentWindow takes
   // it when the OS activates it) is nothing focused as far as the UI goes.
   auto* focused = juce::Component::getCurrentlyFocusedComponent();
   if (focused != nullptr && root_.isParentOf(focused)) return false;
-  const auto order = juce::KeyboardFocusTraverser().getAllComponents(&root_);
-  if (order.empty()) return false;
-  (key.getModifiers().isShiftDown() ? order.back() : order.front())->grabKeyboardFocus();
-  return true;
+  if (key.isKeyCode(juce::KeyPress::tabKey)) {
+    // The Settings takeover is its own Tab cycle while it is up: its content
+    // is out of the root's order, and the chrome under it must stay out of
+    // reach.
+    auto* settings = root_.settingsInFront();
+    const auto order = juce::KeyboardFocusTraverser().getAllComponents(
+        settings != nullptr ? static_cast<juce::Component*>(settings) : &root_);
+    if (order.empty()) return false;
+    (key.getModifiers().isShiftDown() ? order.back() : order.front())->grabKeyboardFocus();
+    return true;
+  }
+  // The scroll keys move the screen's main scroller, as a browser scrolls
+  // its document with nothing focused. (With a control focused they bubble
+  // up from it to the scroller around it instead, DragScroller::keyPressed,
+  // so this is the only route they need here.)
+  auto* scroller = root_.frontScroller();
+  return scroller != nullptr && scroller->scrollByKey(key);
+}
+
+SettingsScreen* PluginRoot::settingsInFront() const {
+  // A modal over the page takes the keyboard with it.
+  if (updateNotice_ != nullptr || connectionModal_ != nullptr) return nullptr;
+  return settings_.get();
+}
+
+DragScroller* PluginRoot::frontScroller() {
+  if (updateNotice_ != nullptr || connectionModal_ != nullptr) return nullptr;  // behind a scrim: nothing moves
+  if (settings_ != nullptr) return &settings_->scroller();
+  if (tunerShown() || signInShown()) return nullptr;  // neither screen scrolls
+  if (browserShown()) return &browser_->scroller();
+  return &main_.chainScreen().scroller();
 }
 
 void PluginRoot::FocusPolicy::mouseDown(const juce::MouseEvent& e) {

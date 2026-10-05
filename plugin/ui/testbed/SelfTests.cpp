@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cmath>
 #include <iostream>
+#include <optional>
 #include <thread>
 
 #include "Drive.h"
@@ -645,6 +646,135 @@ struct DragScrollerTests : juce::UnitTest {
       for (int i = 0; i < 10; ++i) wheel(r.s, 0.0f, -0.001f);  // 0.224px each: 2.24px in all
       expectEquals(r.s.getViewPositionX(), 1002);
     }
+
+    // A vertical page, as Settings has: 300px of view over 2000px of content.
+    struct Page {
+      DragScroller s{DragScroller::Axis::vertical};
+      juce::Component content;
+      Page() {
+        content.setSize(400, 2000);
+        s.setSize(400, 300);
+        s.setViewedComponent(&content, false);
+      }
+    };
+    using KP = juce::KeyPress;
+    const auto key = [](int code, juce::ModifierKeys mods = {}) { return KP(code, mods, 0); };
+
+    beginTest("keys scroll a page: arrows by a line, Page by a page less a line, Home / End to the ends");
+    {
+      Page p;
+      expect(p.s.scrollByKey(key(KP::downKey)));
+      expectEquals(p.s.getViewPositionY(), DragScroller::kKeyLineStep);
+      expect(p.s.scrollByKey(key(KP::pageDownKey)));
+      expectEquals(p.s.getViewPositionY(), 300);  // a line, then a page less a line
+      expect(p.s.scrollByKey(key(KP::upKey)));
+      expectEquals(p.s.getViewPositionY(), 300 - DragScroller::kKeyLineStep);
+      expect(p.s.scrollByKey(key(KP::endKey)));
+      expectEquals(p.s.getViewPositionY(), 1700);
+      expect(p.s.scrollByKey(key(KP::pageUpKey)));
+      expectEquals(p.s.getViewPositionY(), 1700 - (300 - DragScroller::kKeyLineStep));
+      expect(p.s.scrollByKey(key(KP::homeKey)));
+      expectEquals(p.s.getViewPositionY(), 0);
+    }
+
+    beginTest("a key at an end is still spent, and never hands the page's keys on");
+    {
+      Page p;
+      expect(p.s.scrollByKey(key(KP::upKey)));  // already at the top
+      expectEquals(p.s.getViewPositionY(), 0);
+      p.s.scrollByKey(key(KP::endKey));
+      expect(p.s.scrollByKey(key(KP::downKey)));
+      expectEquals(p.s.getViewPositionY(), 1700);
+    }
+
+    beginTest("cross-axis arrows, modified arrows and other keys are not the page's");
+    {
+      Page p;
+      expect(!p.s.scrollByKey(key(KP::leftKey)));
+      expect(!p.s.scrollByKey(key(KP::rightKey)));
+      expect(!p.s.scrollByKey(key(KP::downKey, juce::ModifierKeys::shiftModifier)));
+      expect(!p.s.scrollByKey(key(KP::spaceKey)));
+      expect(!p.s.scrollByKey(key(KP::returnKey)));
+      expectEquals(p.s.getViewPositionY(), 0);
+    }
+
+    beginTest("a page that fits takes no keys (they stay with the host)");
+    {
+      Page p;
+      p.content.setSize(400, 200);
+      expect(!p.s.scrollByKey(key(KP::downKey)));
+      expect(!p.s.scrollByKey(key(KP::endKey)));
+    }
+
+    beginTest("reveal scrolls the least that shows a control with its margin, and not at all when it shows");
+    {
+      Page p;
+      juce::Component control;
+      p.content.addAndMakeVisible(control);
+      control.setBounds(20, 1000, 200, 40);
+      p.s.reveal(control, 48);  // below the view: its bottom edge lands 48px above the view's
+      expectEquals(p.s.getViewPositionY(), 1040 + 48 - 300);
+      const int settled = p.s.getViewPositionY();
+      p.s.reveal(control, 48);  // in view: stays put
+      expectEquals(p.s.getViewPositionY(), settled);
+      p.s.scrollByKey(key(KP::endKey));
+      p.s.reveal(control, 48);  // above the view: its top lands 48px below the view's
+      expectEquals(p.s.getViewPositionY(), 1000 - 48);
+      control.setBounds(20, 1000, 200, 400);  // taller than the view: its top wins
+      p.s.scrollByKey(key(KP::endKey));
+      p.s.reveal(control, 48);
+      expectEquals(p.s.getViewPositionY(), 1000 - 48);
+      juce::Component elsewhere;  // not on the page: ignored
+      elsewhere.setBounds(0, 0, 10, 10);
+      p.s.reveal(elsewhere, 48);
+      expectEquals(p.s.getViewPositionY(), 1000 - 48);
+    }
+
+    beginTest("reveal of a control inside a nested scroller aims at the part of it that scroller shows");
+    {
+      Page p;
+      // A 100px-tall lane at y=1000 on the page, showing one 100px slice of a 1000px strip.
+      juce::Viewport lane;
+      juce::Component strip, control;
+      p.content.addAndMakeVisible(lane);
+      lane.setBounds(0, 1000, 400, 100);
+      strip.setSize(400, 1000);
+      lane.setViewedComponent(&strip, false);
+      strip.addAndMakeVisible(control);
+      control.setBounds(0, 900, 400, 40);  // the lane has scrolled it out of its view
+      p.s.reveal(control, 0);
+      expectEquals(p.s.getViewPositionY(), 1100 - 300);  // the lane's frame, not the control's far-off spot
+      lane.setViewPosition(0, 900);  // now the lane shows it, at the lane's top
+      p.s.scrollByKey(key(KP::homeKey));
+      p.s.reveal(control, 0);
+      expectEquals(p.s.getViewPositionY(), 1040 - 300);
+    }
+
+    beginTest("a menu's list takes no keys itself: its owner walks the rows");
+    {
+      DragScroller list{DragScroller::Axis::vertical, DragScroller::Keys::none};
+      juce::Component rows;
+      rows.setSize(200, 2000);
+      list.setSize(200, 300);
+      list.setViewedComponent(&rows, false);
+      expect(!list.keyPressed(key(KP::downKey)));
+      expectEquals(list.getViewPositionY(), 0);
+      expect(list.scrollByKey(key(KP::downKey)));  // the primitive is still there for an owner that wants it
+      expectEquals(list.getViewPositionY(), DragScroller::kKeyLineStep);
+      Page page;
+      expect(page.s.keyPressed(key(KP::downKey)));  // a page's keys are its own
+      expectEquals(page.s.getViewPositionY(), DragScroller::kKeyLineStep);
+    }
+
+    beginTest("panning() is false for a control at rest, inside a scroller or not");
+    {
+      Page p;
+      juce::Component control;
+      p.content.addAndMakeVisible(control);
+      expect(!DragScroller::panning(control));
+      juce::Component loose;
+      expect(!DragScroller::panning(loose));
+    }
   }
 };
 
@@ -1044,12 +1174,477 @@ struct FocusPolicyTests : juce::UnitTest {
   }
 };
 
+// A scenario in a real window that has OS focus, for tests that drive
+// input through the peer as the OS delivers it. `ok` is false where the
+// window could not take focus (a run from a terminal or CI may not be
+// allowed to); the test logs that and returns.
+struct LiveScenario {
+  LiveScenario(juce::UnitTest& test, const juce::String& scenarioId)
+      : fixtures(Fixtures::load(fixturesDir().getChildFile("scenarios.json"))), scenario(fixtures.find(scenarioId)) {
+    if (scenario == nullptr) {
+      test.expect(false, scenarioId + " scenario missing");
+      return;
+    }
+    backend = std::make_unique<MockBackend>(scenario->data);
+    window = std::make_unique<juce::DocumentWindow>(scenarioId, juce::Colours::black, 0);
+    host = std::make_unique<ScaledHost>(*backend, *scenario, fixtures.root);
+    window->setContentNonOwned(host.get(), true);
+    window->setVisible(true);
+    pump(400);
+    peer = host->getPeer();
+    if (peer == nullptr) {
+      test.expect(false, "no window peer");
+      return;
+    }
+    // JUCE grants keyboard focus only once the OS has focused the window.
+    juce::Process::makeForegroundProcess();
+    window->toFront(true);
+    peer->grabFocus();
+    for (int i = 0; i < 20 && !peer->isFocused(); ++i) pump(50);
+    ok = peer->isFocused();
+    if (!ok) test.logMessage("the window could not take OS focus here; " + scenarioId + " not exercised");
+  }
+  ~LiveScenario() {
+    if (window != nullptr) window->setVisible(false);
+  }
+
+  PluginRoot& root() { return host->pluginRoot(); }
+  // The scenario's own drive (clicks that open its screen), then its settle.
+  void drive() {
+    if (const auto* d = driveFor(scenario->id)) (*d)(root(), *backend);
+    pump(scenario->settleMs());
+  }
+
+  static void pump(int ms) { FocusPolicyTests::pump(ms); }
+  // Pump until `ready` holds, up to a deadline; whether it does. For what
+  // the UI does on a later message (a focus callback, a store's reply): a
+  // fixed pump is too short on a loaded CI machine.
+  static bool until(const std::function<bool()>& ready, int deadlineMs = 3000) {
+    for (int waited = 0; !ready(); waited += 10) {
+      if (waited >= deadlineMs) return false;
+      pump(10);
+    }
+    return true;
+  }
+  static juce::Component* focused() { return FocusPolicyTests::focused(); }
+  bool key(int code, juce::ModifierKeys mods = {}) { return FocusPolicyTests::key(*peer, code, mods); }
+  // Focus a control and wait for the Desktop to tell its listeners (the
+  // scrollers that follow focus). The Desktop posts that; on a CI machine a
+  // paint can hold the queue far longer than a fixed pump, so wait for it.
+  static void focus(juce::Component& target) {
+    struct Watch : juce::FocusChangeListener {
+      bool fired = false;
+      void globalFocusChanged(juce::Component*) override { fired = true; }
+    } watch;
+    if (target.hasKeyboardFocus(false)) return;  // no change, so nothing to wait for
+    juce::Desktop::getInstance().addFocusChangeListener(&watch);
+    target.grabKeyboardFocus();
+    for (int i = 0; i < 300 && !watch.fired; ++i) pump(10);
+    juce::Desktop::getInstance().removeFocusChangeListener(&watch);
+  }
+  // A point of `target` in the peer's space.
+  juce::Point<float> at(juce::Component& target, juce::Point<float> local) {
+    return peer->getComponent().getLocalPoint(&target, local);
+  }
+  juce::Point<float> centre(juce::Component& target) { return at(target, target.getLocalBounds().getCentre().toFloat()); }
+  // A wheel turn (a trackpad gesture is a run of these) at a point.
+  void wheel(juce::Point<float> pos, float deltaX, float deltaY) {
+    using Type = juce::MouseInputSource::InputSourceType;
+    peer->handleMouseWheel(Type::mouse, pos, juce::Time::currentTimeMillis(), {deltaX, deltaY, false, false, false});
+    pump(10);
+  }
+
+  // One pointer (mouse, or finger 1 where the platform has touch sources)
+  // moving through the peer.
+  struct Pointer {
+    LiveScenario& live;
+    juce::MouseInputSource::InputSourceType type = juce::MouseInputSource::InputSourceType::mouse;
+    juce::int64 time = juce::Time::currentTimeMillis();
+    void at(juce::Point<float> pos, bool down) {
+      const bool touch = type == juce::MouseInputSource::InputSourceType::touch;
+      live.peer->handleMouseEvent(type, pos, down ? juce::ModifierKeys::leftButtonModifier : juce::ModifierKeys(), 0.0f,
+                                  0.0f, ++time, {}, touch ? 1 : 0);
+      pump(10);
+    }
+    // Press at `from`, move by `delta` in `steps`, release.
+    void drag(juce::Point<float> from, juce::Point<float> delta, int steps = 8) {
+      at(from, true);
+      for (int i = 1; i <= steps; ++i) at(from + delta * (static_cast<float>(i) / static_cast<float>(steps)), true);
+      at(from + delta, false);
+    }
+    void click(juce::Point<float> pos) {
+      at(pos, true);
+      at(pos, false);
+    }
+  };
+  Pointer mouse() { return Pointer{*this}; }
+  // A finger, or nothing where the platform has no touch input source
+  // (macOS): the first touch event would add one to the desktop's list.
+  std::optional<Pointer> finger() {
+    Pointer p{*this, juce::MouseInputSource::InputSourceType::touch};
+    p.at(centre(root()).translated(0, -1000.0f), false);  // a move well off the UI
+    auto& desktop = juce::Desktop::getInstance();
+    for (int i = 0; i < desktop.getNumMouseSources(); ++i)  // the source stays once a platform has made it
+      if (desktop.getMouseSource(i)->getType() == juce::MouseInputSource::InputSourceType::touch) return p;
+    return std::nullopt;
+  }
+
+  Fixtures fixtures;
+  const Scenario* scenario = nullptr;
+  std::unique_ptr<MockBackend> backend;
+  std::unique_ptr<juce::DocumentWindow> window;
+  std::unique_ptr<ScaledHost> host;
+  juce::ComponentPeer* peer = nullptr;
+  bool ok = false;
+};
+
+// The Settings page from the keyboard, in a real window. Issue #203: a
+// pointer with no wheel (a wheel-less mouse; a touchscreen the OS presents
+// as a mouse) had no way to reach the device picker below the fold. With
+// nothing focused the scroll keys move the page and Space / Enter still go
+// to the host; the Tab walk stays on the page and lands every control in
+// view; a focused control passes the keys it does not take on to the page.
+struct SettingsKeyboardTests : juce::UnitTest {
+  SettingsKeyboardTests() : juce::UnitTest("Settings keyboard", "ui") {}
+
+  void runTest() override {
+    using KP = juce::KeyPress;
+    LiveScenario live(*this, "settings-system");  // standalone: the long System page
+    if (!live.ok) return;
+    auto& root = live.root();
+    root.openSettings(SettingsScreen::Tab::system);
+    live.pump(500);
+    auto* settings = root.settings();
+    expect(settings != nullptr);
+    if (settings == nullptr) return;
+    auto& view = settings->scroller();
+    auto* page = view.getViewedComponent();
+    const int maxY = page->getHeight() - view.getMaximumVisibleHeight();
+    expect(maxY > DragScroller::kKeyLineStep * 4, "the System page overflows the window");
+    const auto inView = [&](const juce::Component& c) {
+      const auto box = page->getLocalArea(&c, c.getLocalBounds());
+      const juce::Rectangle<int> visible(0, view.getViewPositionY(), page->getWidth(), view.getMaximumVisibleHeight());
+      return visible.contains(box) || box.getHeight() > visible.getHeight();
+    };
+
+    beginTest("with nothing focused, arrows, Page and Home / End scroll the page");
+    expect(live.focused() == nullptr);
+    expect(live.key(KP::downKey));
+    expectEquals(view.getViewPositionY(), DragScroller::kKeyLineStep);
+    expect(live.key(KP::pageDownKey));
+    expect(view.getViewPositionY() > DragScroller::kKeyLineStep);
+    expect(live.key(KP::endKey));
+    expectEquals(view.getViewPositionY(), maxY);
+    expect(live.key(KP::pageUpKey));
+    expect(view.getViewPositionY() < maxY);
+    expect(live.key(KP::homeKey));
+    expectEquals(view.getViewPositionY(), 0);
+
+    beginTest("Space and Enter are still the host's; a modified arrow is not the page's");
+    expect(!live.key(KP::spaceKey));
+    expect(!live.key(KP::returnKey));
+    expect(!live.key(KP::downKey, juce::ModifierKeys::shiftModifier));
+    expectEquals(view.getViewPositionY(), 0);
+
+    beginTest("a Tab walk stays on the page and wraps; the page follows it below the fold");
+    bool followed = false, wrapped = false;
+    int stops = 0;
+    juce::Component* first = nullptr;
+    for (int i = 0; i < 200; ++i) {
+      expect(live.key(KP::tabKey));
+      live.pump(30);  // the focus callback that reveals is posted
+      auto* f = live.focused();
+      if (f == nullptr || !page->isParentOf(f)) break;  // walked off the page: the chrome underneath
+      if (first == nullptr) first = f;
+      else if (f == first) {
+        wrapped = true;
+        break;
+      }
+      ++stops;
+      expect(inView(*f), "Tab stop " + juce::String(stops) + " (" + f->getName() + ") is out of view");
+      if (view.getViewPositionY() > 0) followed = true;
+    }
+    expect(wrapped, "the cycle came back to its first stop without leaving the page");
+    expect(stops > 3 && followed, "the walk reached controls below the fold and the page followed");
+    live.key(KP::escapeKey);
+    expect(live.focused() == nullptr);
+
+    beginTest("a focused control passes the page's keys up to the page");
+    view.setViewPosition(0, 0);
+    expect(live.key(KP::tabKey));  // the first stop: the Close button
+    live.pump(30);
+    expect(dynamic_cast<Clickable*>(live.focused()) != nullptr);
+    expect(live.key(KP::downKey));
+    expectEquals(view.getViewPositionY(), DragScroller::kKeyLineStep);
+    expect(!live.key(KP::spaceKey));  // and Space still falls through to the host
+    live.key(KP::escapeKey);
+    expect(live.focused() == nullptr);
+  }
+};
+
+// Every scroll surface in the UI, in a real window, moved every way a
+// device can move it: a wheel turn (a trackpad gesture is a run of them;
+// a plain wheel pans a sideways lane too), a mouse drag, a finger where the
+// platform has touch sources, the keys with nothing focused (the screen's
+// main scroller only), the keys bubbling up from a focused control inside
+// (a menu's list leaves them to the menu, which walks its rows instead),
+// and keyboard focus landing on a control out of view, which the surface
+// scrolls to. One table, so a surface added later gets the whole matrix.
+struct ScrollSurfacesTests : juce::UnitTest {
+  ScrollSurfacesTests() : juce::UnitTest("Scroll surfaces", "ui") {}
+
+  struct Surface {
+    const char* name;
+    const char* scenario;
+    // Before the scenario's own drive: lengthen the data so the surface
+    // overflows. After it: open a panel the scenario does not.
+    std::function<void(LiveScenario&)> before, after;
+    std::function<DragScroller*(PluginRoot&)> scroller;
+    bool mainScroller;  // the root's scroll keys with nothing focused go here
+    bool ownKeys;       // Keys::scroll; else a menu's list (its owner walks the rows)
+    // Where a drag starts, in the scroller's space; default its centre. The
+    // chain lane's centre is a tile, which sorts on a drag: the gap pans.
+    std::function<juce::Point<float>(DragScroller&)> grab;
+  };
+
+  static DragScroller* scrollerWhere(juce::Component& root, const std::function<bool(DragScroller&)>& pred) {
+    return dynamic_cast<DragScroller*>(drive::find(root, [&](juce::Component& c) {
+      auto* s = dynamic_cast<DragScroller*>(&c);
+      return s != nullptr && s->isShowing() && pred(*s);
+    }));
+  }
+  static bool overflows(const DragScroller& s) {
+    const auto* content = s.getViewedComponent();
+    if (content == nullptr) return false;
+    return s.axis() == DragScroller::Axis::vertical ? content->getHeight() > s.getMaximumVisibleHeight()
+                                                     : content->getWidth() > s.getMaximumVisibleWidth();
+  }
+  static bool inPopover(const juce::Component& c) { return c.findParentComponentOfClass<Popover>() != nullptr; }
+  // The screen's own scroller along `axis`: showing, overflowing, not a panel's.
+  static std::function<DragScroller*(PluginRoot&)> screenScroller(DragScroller::Axis axis) {
+    return [axis](PluginRoot& root) {
+      return scrollerWhere(root, [&](DragScroller& s) { return s.axis() == axis && overflows(s) && !inPopover(s); });
+    };
+  }
+  // The list inside the open panel.
+  static DragScroller* panelScroller(PluginRoot& root) {
+    return scrollerWhere(root, [](DragScroller& s) { return inPopover(s); });
+  }
+
+  // Eight blocks: the lane overflows the window with room to pan.
+  static void lengthenChain(LiveScenario& live) {
+    auto chain = live.scenario->data["chain"].clone();
+    auto* blocks = chain["chain"].getArray();
+    const auto seed = *blocks;
+    for (int i = 0; blocks->size() < 8; ++i) {
+      auto block = seed[i % seed.size()].clone();
+      block.getDynamicObject()->setProperty("blockId", "blk-long-" + juce::String(i));
+      blocks->add(block);
+    }
+    live.backend->setChain(chain);
+    live.pump(600);  // the store polls the revision
+  }
+  // A dozen more presets: the browser's list overflows its cap.
+  static void lengthenPresets(LiveScenario& live) {
+    for (int i = 0; i < 12; ++i) live.root().services().presets.save("Long list " + juce::String(i + 1));
+    live.pump(100);
+  }
+  // A dozen input devices: the Input device select's list overflows its cap.
+  static void lengthenDevices(LiveScenario& live) {
+    auto device = live.scenario->data["device"].clone();
+    auto* inputs = device["inputDevices"].getArray();
+    for (int i = 0; inputs->size() < 12; ++i) inputs->add("Interface " + juce::String(i + 1));
+    live.backend->setDevice(device);
+    live.pump(200);
+  }
+  static void openInputDeviceSelect(LiveScenario& live) {
+    if (auto* select = drive::find(live.root(), [](juce::Component& c) { return c.getName() == "Input device"; }))
+      drive::click(live.root(), *select);
+    live.pump(300);
+  }
+  // The gap after the first tile.
+  static juce::Point<float> laneGap(DragScroller& lane) {
+    auto* tile = drive::find(lane, [](juce::Component& c) { return dynamic_cast<GalleryTile*>(&c) != nullptr; });
+    if (tile == nullptr) return lane.getLocalBounds().getCentre().toFloat();
+    const auto box = lane.getLocalArea(tile, tile->getLocalBounds()).toFloat();
+    return {box.getRight() + gallery::kTileGap / 2.0f, box.getCentreY()};
+  }
+
+  void runTest() override {
+    using KP = juce::KeyPress;
+    const auto settingsPage = [](PluginRoot& root) {
+      return root.settings() != nullptr ? &root.settings()->scroller() : nullptr;
+    };
+    const Surface surfaces[] = {
+        {"the chain lane", "main-mono", lengthenChain, nullptr, screenScroller(DragScroller::Axis::horizontal), true,
+         true, laneGap},
+        {"a block's detail column with its info open", "main-detail-info", nullptr, nullptr,
+         screenScroller(DragScroller::Axis::vertical), true, true},
+        {"the Settings page", "settings-system", nullptr, nullptr, settingsPage, true, true},
+        {"the tone browser's results", "browser-search", nullptr, nullptr, screenScroller(DragScroller::Axis::vertical),
+         true, true},
+        {"the browser's filter chips", "browser-filters-expanded", nullptr, nullptr,
+         screenScroller(DragScroller::Axis::horizontal), false, true},
+        {"the preset browser's list (a panel's rows)", "chrome-preset-browse", lengthenPresets, nullptr, panelScroller,
+         false, false},
+        {"a select field's options (a panel's rows)", "settings-system", lengthenDevices, openInputDeviceSelect,
+         panelScroller, false, false},
+    };
+    for (const auto& surface : surfaces) run(surface);
+
+    beginTest("a mouse drag on a tile sorts it; the lane around it stays put");
+    {
+      LiveScenario live(*this, "main-mono");
+      if (!live.ok) return;
+      live.drive();
+      lengthenChain(live);
+      auto* lane = screenScroller(DragScroller::Axis::horizontal)(live.root());
+      auto* tile = dynamic_cast<GalleryTile*>(drive::find(live.root(), [](juce::Component& c) {
+        return dynamic_cast<GalleryTile*>(&c) != nullptr && c.isShowing();
+      }));
+      expect(lane != nullptr && tile != nullptr);
+      if (lane == nullptr || tile == nullptr) return;
+      auto mouse = live.mouse();
+      const auto from = live.centre(*tile);
+      mouse.at(from, true);
+      for (int i = 1; i <= 6; ++i) mouse.at(from.translated(-20.0f * i, 0), true);
+      expectEquals(lane->getViewPositionX(), 0);
+      mouse.at(from.translated(-120.0f, 0), false);
+      live.pump(300);
+      expectEquals(lane->getViewPositionX(), 0);
+    }
+
+    beginTest("a mouse drag across a text field selects its text; the page around it stays put");
+    {
+      LiveScenario live(*this, "settings-advanced");
+      if (!live.ok) return;
+      live.drive();
+      auto* settings = live.root().settings();
+      auto* editor = settings != nullptr ? dynamic_cast<juce::TextEditor*>(drive::find(*settings, [](juce::Component& c) {
+        return dynamic_cast<juce::TextEditor*>(&c) != nullptr && c.isShowing();
+      })) : nullptr;
+      expect(editor != nullptr, "a text field on the page");
+      if (editor == nullptr) return;
+      auto& page = settings->scroller();
+      page.reveal(*editor, 0);
+      live.pump(50);
+      const int before = page.getViewPositionY();
+      auto mouse = live.mouse();
+      mouse.drag(live.at(*editor, {2.0f, editor->getHeight() / 2.0f}), {static_cast<float>(editor->getWidth()), 0.0f});
+      live.pump(100);
+      expect(!editor->getHighlightedRegion().isEmpty(), "the drag selected text");
+      expectEquals(page.getViewPositionY(), before);
+    }
+  }
+
+  void run(const Surface& surface) {
+    using KP = juce::KeyPress;
+    beginTest(surface.name);
+    LiveScenario live(*this, surface.scenario);
+    if (!live.ok) return;
+    if (surface.before) surface.before(live);
+    live.drive();
+    if (surface.after) surface.after(live);
+    auto* scroller = surface.scroller(live.root());
+    expect(scroller != nullptr, "the scroller is showing");
+    if (scroller == nullptr) return;
+    const bool vertical = scroller->axis() == DragScroller::Axis::vertical;
+    auto* content = scroller->getViewedComponent();
+    const auto range = [&] {
+      return vertical ? content->getHeight() - scroller->getMaximumVisibleHeight()
+                      : content->getWidth() - scroller->getMaximumVisibleWidth();
+    };
+    // The content has settled (a store's reply, images, a relayout) when
+    // its size has held for a while.
+    for (int held = 0, last = range(); held < 300; held += 10) {
+      live.pump(10);
+      if (range() != last) held = 0, last = range();
+    }
+    expect(range() > DragScroller::kKeyLineStep, "the content overflows the view");
+    if (range() <= DragScroller::kKeyLineStep) return;
+    const auto pos = [&] { return vertical ? scroller->getViewPositionY() : scroller->getViewPositionX(); };
+    const auto rewind = [&] {
+      live.pump(500);  // any drag's momentum has run out
+      scroller->setViewPosition(0, 0);
+    };
+    const auto along = [&](float d) { return vertical ? juce::Point<float>(0.0f, d) : juce::Point<float>(d, 0.0f); };
+    const auto inView = [&](const juce::Component& c) {
+      const auto box = content->getLocalArea(&c, c.getLocalBounds());
+      const int start = vertical ? box.getY() : box.getX(), end = vertical ? box.getBottom() : box.getRight();
+      const int visible = vertical ? scroller->getMaximumVisibleHeight() : scroller->getMaximumVisibleWidth();
+      return (start >= pos() && end <= pos() + visible) || end - start > visible;
+    };
+    const int forward = vertical ? KP::downKey : KP::rightKey;
+    const auto middle = surface.grab ? live.at(*scroller, surface.grab(*scroller)) : live.centre(*scroller);
+
+    // A plain wheel turn pans it, whichever way it runs.
+    rewind();
+    live.wheel(middle, 0.0f, -0.5f);
+    expect(pos() > 0, "the wheel pans");
+
+    // A mouse drag pans it.
+    rewind();
+    live.mouse().drag(middle, along(-150.0f));
+    expect(pos() > 0, "a mouse drag pans");
+
+    // A finger pans it, where the platform has touch sources.
+    rewind();
+    if (auto finger = live.finger()) {
+      finger->drag(middle, along(-150.0f));
+      expect(pos() > 0, "a touch drag pans");
+    } else {
+      logMessage("no touch input source on this platform; the touch pan is not exercised");
+    }
+
+    // The keys with nothing focused: the screen's main scroller's. (A
+    // panel holds the focus while it is open, so there is no such state.)
+    rewind();
+    if (live.focused() == nullptr) {
+      const bool took = live.key(forward);
+      if (surface.mainScroller) {
+        expect(took, "the root sends the key here");
+        expectEquals(pos(), DragScroller::kKeyLineStep);
+      } else {
+        expectEquals(pos(), 0, "not the screen's main scroller: the root's keys go elsewhere");
+      }
+    }
+
+    // The keys from a focused control inside.
+    rewind();
+    const auto stops = juce::KeyboardFocusTraverser().getAllComponents(content);
+    expect(stops.size() >= 2, "controls inside to focus");
+    if (stops.size() < 2) return;
+    live.focus(*stops.front());
+    live.until([&] { return inView(*stops.front()); });  // the view has followed the focus, if it had to
+    const int before = pos();
+    expect(live.key(forward), "the key is taken");
+    // The key's work is synchronous: read it before anything else moves the view.
+    if (surface.ownKeys) {
+      expectEquals(pos(), juce::jmin(before + DragScroller::kKeyLineStep, range()), "the scroller took the key");
+      expect(live.focused() == stops.front(), "and the focus stayed");
+    } else {
+      expect(live.focused() == stops[1], "the menu walked to the next row");
+    }
+
+    // Focus landing out of view scrolls into it, both ways. (The focus must
+    // move for the view to follow: start it at the front.)
+    live.focus(*stops.front());
+    rewind();
+    live.focus(*stops.back());
+    expect(live.until([&] { return inView(*stops.back()); }), "the last control is in view once focused");
+    expect(pos() > 0, "the view moved to it");
+    live.focus(*stops.front());
+    expect(live.until([&] { return inView(*stops.front()); }), "and back to the first");
+    live.key(KP::escapeKey);
+  }
+};
+
 // A press on the tone browser's results that pans the list, through the
 // peer and JUCE's own drag-to-scroll: a tap picks, a scroll gesture pans and
-// does not pick the card it started on. macOS has no touch input source, so
-// the mouse stands in with the scroller set to pan on any drag; the Button
-// state the fix corrects is the same either way (the card stays under the
-// pointer while the content pans).
+// does not pick the card it started on. Any pointer pans (DragScroller), so
+// the mouse source stands in for a finger here; the Button state the fix
+// corrects is the same either way (the card stays under the pointer while
+// the content pans).
 struct TouchScrollTests : juce::UnitTest {
   TouchScrollTests() : juce::UnitTest("Touch scroll", "ui") {}
 
@@ -1085,7 +1680,6 @@ struct TouchScrollTests : juce::UnitTest {
     auto* scroller = card != nullptr ? card->findParentComponentOfClass<DragScroller>() : nullptr;
     expect(peer != nullptr && card != nullptr && scroller != nullptr);
     if (peer == nullptr || card == nullptr || scroller == nullptr) return;
-    scroller->setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
     int picks = 0;
     card->onClick = [&] { ++picks; };
     Pointer pointer{*peer};
@@ -1959,6 +2553,8 @@ FontTests fontTests;
 RichFlowTests richFlowTests;
 AccessibilityTests accessibilityTests;
 FocusPolicyTests focusPolicyTests;
+SettingsKeyboardTests settingsKeyboardTests;
+ScrollSurfacesTests scrollSurfacesTests;
 TouchScrollTests touchScrollTests;
 PopoverFollowTests popoverFollowTests;
 PointerTests pointerTests;

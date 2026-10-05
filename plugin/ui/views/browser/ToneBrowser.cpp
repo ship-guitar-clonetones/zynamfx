@@ -110,6 +110,7 @@ ToneBrowser::ToneBrowser(Services& services)
   body_->addChildComponent(filters_);
 
   scroller_->setViewedComponent(content_.get(), false);
+  scroller_->setFocusMargin(kGridGap);  // a focused card clears its neighbours' gap
   body_->addAndMakeVisible(*scroller_);
   content_->addChildComponent(dots_);
   paginator_.onPageChange = [this](int page) { setPage(page); };

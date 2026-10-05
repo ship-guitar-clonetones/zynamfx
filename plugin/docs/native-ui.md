@@ -270,27 +270,63 @@ modal as in `Plugin.tsx`. A sign-in in flight is not a modal but a page:
 `SignInScreen` takes the tone browser's slot (see the UI README, "Sign-in").
 
 ### 5.8 Scrolling
-`DragScroller` wraps `juce::Viewport` with scrollbars hidden, one axis, wheel →
-content scroll, edge fades painted over the viewport by the owner. A plain
-wheel pans a sideways scroller by the gesture's dominant axis, as the web's
-`useHorizontalWheelScroll` did, with the sub-pixel remainder carried between
-events. JUCE's own remap takes `deltaX` whenever it is non-zero, and a mostly
-vertical trackpad gesture jitters a few sideways pixels of either sign, so it
-stuttered back and forth until the gesture was big enough to read as purely
-vertical; it also rounded every event up to a whole pixel. Touch drag scrolling is `Viewport::setScrollOnDragMode`, plus one
-rule JUCE leaves out: once a drag has become a scroll, the press it started
-with is spent. `juce::Button` would still fire on release, because for touch
-it counts "still over" by bounds and the content pans along under the finger
-(the card stays put relative to it); so `Clickable` checks
-`Viewport::isCurrentlyScrollingOnDrag()` up its ancestry on every drag and
-on release, lets go of the pressed state as soon as the pan begins and does
-not click (`TouchScrollTests`, driven through the peer). Controls
-that drag for themselves (knobs, EQ dots and faders, gallery tiles) set
-`setViewportIgnoreDragFlag` so a drag on them never pans the page; the gaps
-around them do. Gallery tiles make one exception: a quick, mostly sideways
-touch swipe (the drag distance within `GalleryTile::kFlickMs`) clears the
-flag mid-gesture and the chain lane pans from the press with the viewport's
-own inertia; a slower drag sorts. Any touch source, on every platform.
+Every scroll area in the UI is one widget, `DragScroller`: `juce::Viewport`
+with scrollbars hidden, one axis, and every way of moving it built in, so an
+owner only picks the axis, whether the keys are its own (`Keys`) and how much
+room to leave when it follows focus (`setFocusMargin`). There are no
+scrollbars anywhere; the ways in are:
+
+- **Wheel / trackpad.** A plain wheel pans a sideways scroller by the
+  gesture's dominant axis, as the web's `useHorizontalWheelScroll` did, with
+  the sub-pixel remainder carried between events. JUCE's own remap takes
+  `deltaX` whenever it is non-zero, and a mostly vertical trackpad gesture
+  jitters a few sideways pixels of either sign, so it stuttered back and
+  forth until the gesture was big enough to read as purely vertical; it also
+  rounded every event up to a whole pixel.
+- **Drag, with any pointer** (`ScrollOnDragMode::all`). A finger or a mouse
+  that moves 8px before release pans the content, with the viewport's own
+  inertia; a shorter press is a click. JUCE leaves out one rule: once a drag
+  has become a pan, the press it started with is spent. `juce::Button` would
+  still fire on release, because for touch it counts "still over" by bounds
+  and the content pans along under the pointer; so `Clickable` asks
+  `DragScroller::panning()` on every drag and on release, lets go of the
+  pressed state as soon as the pan begins and does not click
+  (`TouchScrollTests`, driven through the peer). Controls that drag for
+  themselves set `setViewportIgnoreDragFlag`, so a drag on them never pans
+  the page and the gaps around them do: knobs, EQ dots and faders, gallery
+  tiles (a drag sorts), the preset browser's grips, and text fields (a drag
+  selects text). Gallery tiles make one exception: a quick, mostly sideways
+  touch swipe (the drag distance within `GalleryTile::kFlickMs`) clears the
+  flag mid-gesture and the lane pans from the press; a slower drag sorts.
+  Mouse drag used to be opted out (`nonHover`: a finger pans, a mouse
+  selects); it is in because it is the only pointer affordance left where
+  the pointer has no wheel and no touch: a mouse without one, or a
+  touchscreen the OS hands the plugin as a mouse. Raspberry Pi OS's labwc
+  does that by default (`<touch mouseEmulation="yes"/>`; the "Multitouch"
+  switch in Screen Configuration turns it off and the finger arrives as
+  touch), and a Windows or Linux tablet may too.
+- **Keys**, as a browser scrolls a document: arrows a line
+  (`DragScroller::kKeyLineStep`), Page Up / Down a page less a line, Home /
+  End to the ends (`DragScroller::scrollByKey`; a key at an end is still
+  spent, a page that fits takes none, Space, Enter, cross-axis and modified
+  arrows are never the scroller's). With a control focused the key bubbles
+  up from it through `DragScroller::keyPressed` to the nearest enclosing
+  scroller whose keys are its own. With nothing focused it comes through
+  `PluginRoot::FocusPolicy` to `PluginRoot::frontScroller()`: the screen in
+  front's main scroller (Settings' page, the browser's results, the chain
+  lane or an open block's detail column; none under a modal, the tuner or
+  sign-in). `juce::Viewport` scrolls from keys only with a visible
+  scrollbar, hence the widget's own. Popover lists (`SelectField`,
+  `ModelSelect`, `PresetBar`, the filter menus) are `Keys::none`: the popover
+  walks the rows with the arrows and the list follows the focused row.
+- **Focus follow.** A `DragScroller` listens for keyboard focus and reveals
+  the focused control with its margin (`DragScroller::reveal`, from
+  `FocusChangeListener`): a Tab stop below the fold, a tile moved with the
+  arrows, a popover row walked to. For a control inside a nested scroller
+  (a knob in a lane on a page) the outer one aims at the part the inner one
+  shows, not at the control's far-off spot.
+
+Edge fades are painted over the viewport by the owner.
 
 What a mouse reveals on hover (the tile's power / swap / trash strip, the
 branch dots in the stereo gaps) has to stay up for a finger, which can't
@@ -324,11 +360,15 @@ that no control takes go back to the host (`NativeEditor::keyPressed`, the
   with nothing focused, so `PluginRoot::FocusPolicy` listens on the window's
   component and enters the order at either end (focus resting on a
   standalone `DocumentWindow` counts as nothing). Tab order is JUCE's
-  (top-to-bottom, left-to-right per parent).
+  (top-to-bottom, left-to-right per parent). While the Settings takeover is
+  up (and no modal over it) Tab enters its cycle instead: `SettingsScreen` is
+  a keyboard focus container, since the chrome it covers is still showing
+  to JUCE and must stay out of reach. Every scroller scrolls each stop into
+  view (5.8).
 - **Focus is dropped** by Escape (`PluginRoot::keyPressed`) and by a press
   anywhere outside the focused control's line of ancestry (`FocusPolicy::
-  mouseDown`, a recursive mouse listener on the root). `PluginRoot` and
-  `Popover` are keyboard focus containers whose traverser
+  mouseDown`, a recursive mouse listener on the root). `PluginRoot`,
+  `SettingsScreen` and `Popover` are keyboard focus containers whose traverser
   (`core/NoDefaultFocus`) names no default, so removing the focused
   component or activating the window focuses nothing instead of JUCE's
   "first focusable".
@@ -367,7 +407,16 @@ actual screen reader reads them.
 
 Tests: `--selftest` runs the naming rules and each control's keys
 (`AccessibilityTests`) and the whole focus policy in a real window
-(`FocusPolicyTests`: keys and presses through the peer). `--capture` audits
+(`FocusPolicyTests`: keys and presses through the peer), the Settings
+page's keys and Tab cycle (`SettingsKeyboardTests`), and every scroll
+surface in the app, each in its own scenario in a real window, against the
+same list: wheel, mouse drag, finger (where the platform has a touch
+source), keys with nothing focused, keys from a focused control, and focus
+follow to the far end (`ScrollSurfacesTests`: the chain lane, a block's
+detail column, the Settings page, the browser's results and filter chips,
+the preset browser's rows, a select field's rows; plus a drag on a tile
+sorting and a drag across a text field selecting, with the surface around
+each staying put). `--capture` audits
 every scenario for Tab stops without a name (`drive::unnamedFocusables`) and
 fails the run on any.
 
