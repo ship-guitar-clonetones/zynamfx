@@ -286,7 +286,10 @@ flowchart LR
   NAM models or IRs carry different baked-in latency; the auto-align button
   mutes the output for under half a second, drives both chains with an
   identical internal sweep, and measures the lag and relative polarity from
-  the cross-correlation (`plugin/include/AutoOffset.h`). On a rig that can't
+  the cross-correlation (`plugin/include/AutoOffset.h`; the same probe
+  measured per model, with a dependency-free version for other
+  integrators, is written up in
+  [`plugin/docs/model-latency.md`](plugin/docs/model-latency.md)). On a rig that can't
   reproduce stereo (mono track, one-channel output device) both chains still
   run and are summed to mono at the output (½(L+R), the host's own mono-fold
   law), with balance/solo/Ø live inside the sum, pans inert, and a MONO chip
@@ -430,7 +433,7 @@ Debug`.
 | --------------- | ----------------------------------------------------- |
 | `plugin/`       | C++ plugin: processor, DSP, presets, MIDI mapping; vendors NeuralAmpModelerCore and AudioDSPTools |
 | `plugin/ui/`    | The JUCE UI: views, widgets, services, testbed (see [plugin/ui/README.md](plugin/ui/README.md)) |
-| `plugin/docs/`  | Design docs (UI, spread, oversampling, multi-core, local models) |
+| `plugin/docs/`  | Design docs (UI, spread, oversampling, multi-core, local models, pitch shift, model latency) |
 | `test/`         | GoogleTest DSP suite + test assets                    |
 | `script/`       | Build, packaging, and install helpers                 |
 | `tools/`        | Maintainer utilities, not built by default (`PresetTool` regenerates the shipped presets) |
