@@ -358,6 +358,12 @@ avatars, artwork, badges and busy overlays are `setAccessible(false)`.
 Status that only paints elsewhere is spoken through `help::announce()`
 (`AccessibilityHandler::postAnnouncement`): toasts, banners as they show,
 browser results ("12 tones, page 1 of 3"), nothing found, fetch failures.
+On Windows, stock JUCE speaks these itself through SAPI in-process whenever
+`UiaClientsAreListening()` is set, a machine-wide flag any UIA client
+(Chromium/Electron apps, Magnifier, Game Bar) flips on, so users with no
+screen reader heard a voice from the plugin. The `T3K_UIA_ANNOUNCE` patch in
+the root `CMakeLists.txt` raises a UIA notification event instead, so only an
+actual screen reader reads them.
 
 Tests: `--selftest` runs the naming rules and each control's keys
 (`AccessibilityTests`) and the whole focus policy in a real window
