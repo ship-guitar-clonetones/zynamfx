@@ -9,7 +9,9 @@
 // subtree (the tone browser's body, at 1x under the window zoom) is 1x too.
 // Keyboard: the panel takes focus when it opens and is its own focus
 // container, so Tab / Shift+Tab and the arrows walk its rows (buttons)
-// without leaving it; Enter presses a row. A panel the keyboard opened (or
+// without leaving it; Enter presses a row. A list of rows that scrolls is a
+// DragScroller built with Keys::none, so the arrows reach the panel and the
+// list follows the focused row. A panel the keyboard opened (or
 // walked) hands focus back to its anchor when it closes; one the mouse
 // opened leaves nothing focused, so the host's keys work again.
 #pragma once

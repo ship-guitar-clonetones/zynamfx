@@ -30,6 +30,9 @@ public:
   void returnToGallery();
 
   ChainView& gallery() { return gallery_; }
+  // The scroller in front: the detail's column while one is open, else
+  // the gallery's lane.
+  DragScroller& scroller() { return detail_ != nullptr ? detail_->scroller() : gallery_.scroller(); }
 
   void resized() override;
 

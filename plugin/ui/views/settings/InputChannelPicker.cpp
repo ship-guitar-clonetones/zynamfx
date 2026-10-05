@@ -7,6 +7,7 @@
 #include "core/Paint.h"
 #include "core/Theme.h"
 #include "widgets/DotMeter.h"
+#include "widgets/DragScroller.h"
 
 namespace t3k::ui {
 
@@ -80,8 +81,6 @@ class InputChannelPicker::ChannelList : public FormItem {
 public:
   ChannelList() {
     viewport_.setViewedComponent(&column_, false);
-    viewport_.setScrollBarsShown(false, false, true, false);
-    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
   }
 
@@ -108,7 +107,7 @@ public:
   }
 
 private:
-  juce::Viewport viewport_;
+  DragScroller viewport_{DragScroller::Axis::vertical};
   juce::Component column_;
   std::vector<std::unique_ptr<ChannelRow>> rows_;
 };

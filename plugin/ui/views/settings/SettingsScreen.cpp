@@ -138,24 +138,16 @@ SettingsScreen::SettingsScreen(Services& services, Tab initialTab)
   content_.addAndMakeVisible(stack_);
 
   viewport_.setViewedComponent(&content_, false);
+  viewport_.setFocusMargin(kFocusMargin);
   addAndMakeVisible(viewport_);
 
   setTab(tab_);
-  juce::Desktop::getInstance().addFocusChangeListener(this);
 }
 
-SettingsScreen::~SettingsScreen() { juce::Desktop::getInstance().removeFocusChangeListener(this); }
+SettingsScreen::~SettingsScreen() = default;
 
 std::unique_ptr<juce::ComponentTraverser> SettingsScreen::createKeyboardFocusTraverser() {
   return std::make_unique<NoDefaultFocus>();
-}
-
-void SettingsScreen::globalFocusChanged(juce::Component* focused) {
-  // Only focus inside the scrolling content: a dropdown's panel opens in the
-  // overlay layer and takes focus there, and the page should stay put under
-  // it.
-  if (focused == nullptr || !content_.isParentOf(focused)) return;
-  viewport_.reveal(*focused, kFocusMargin);
 }
 
 void SettingsScreen::setTab(Tab tab) {

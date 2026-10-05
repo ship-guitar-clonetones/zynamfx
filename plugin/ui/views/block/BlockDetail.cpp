@@ -43,6 +43,7 @@ BlockDetail::BlockDetail(Services& services, const std::string& blockId)
   };
   column_.addAndMakeVisible(*back_);
   scroller_->setViewedComponent(&column_, false);
+  scroller_->setFocusMargin(kBackGap);  // a focused control clears the row above and below it
   addAndMakeVisible(*scroller_);
   services_.chain.addListener(this);
   sync();

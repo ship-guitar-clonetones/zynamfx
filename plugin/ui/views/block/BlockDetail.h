@@ -34,6 +34,9 @@ public:
   // The card's ⇄: swap this block's tone.
   std::function<void(const std::string& blockId)> onSwap;
 
+  // The column: the screen's main scroller while the detail is up.
+  DragScroller& scroller() { return *scroller_; }
+
   void resized() override;
 
 private:

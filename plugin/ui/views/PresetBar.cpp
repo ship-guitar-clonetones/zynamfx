@@ -8,6 +8,7 @@
 #include "core/Paint.h"
 #include "core/Theme.h"
 #include "widgets/Clickable.h"
+#include "widgets/DragScroller.h"
 #include "widgets/Popover.h"
 #include "widgets/TextField.h"
 
@@ -204,8 +205,6 @@ public:
     addChildComponent(reorderToggle_);
 
     viewport_.setViewedComponent(&content_, false);
-    viewport_.setScrollBarsShown(false, false, true, false);
-    viewport_.setWantsKeyboardFocus(false);  // the rows are the Tab stops
     addAndMakeVisible(viewport_);
   }
 
@@ -268,7 +267,7 @@ private:
   TextField search_;
   GlyphButton pcToggle_{Icon::MidiPort, 15, 7, help::Key::presetPcToggle};
   GlyphButton reorderToggle_{Icon::ArrowUpDown, 15, 7, help::Key::presetReorder};
-  juce::Viewport viewport_;
+  DragScroller viewport_{DragScroller::Axis::vertical, DragScroller::Keys::none};  // the arrows walk the rows
   juce::Component content_;
   std::vector<std::unique_ptr<juce::Component>> items_;  // headers, rows, empty text
   std::vector<Row*> rows_;
@@ -307,6 +306,7 @@ public:
     if (sortable_) {
       grip_ = std::make_unique<GlyphButton>(Icon::GripVertical, 14, 3, help::Key::presetDrag);
       grip_->setMouseCursor(juce::MouseCursor::DraggingHandCursor);
+      grip_->setViewportIgnoreDragFlag(true);  // a drag on the grip sorts the row; the list does not pan
       grip_->addMouseListener(this, false);
       addAndMakeVisible(*grip_);
     } else if (!preset_.factory && !renaming_) {

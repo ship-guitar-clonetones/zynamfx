@@ -1,5 +1,6 @@
 #include "Clickable.h"
 
+#include "DragScroller.h"
 #include "core/Help.h"
 
 namespace t3k::ui {
@@ -46,22 +47,15 @@ std::unique_ptr<juce::AccessibilityHandler> Clickable::createAccessibilityHandle
   return std::make_unique<Handler>(*this);
 }
 
-bool Clickable::scrolling() const {
-  for (auto* v = findParentComponentOfClass<juce::Viewport>(); v != nullptr;
-       v = v->findParentComponentOfClass<juce::Viewport>())
-    if (v->isCurrentlyScrollingOnDrag()) return true;
-  return false;
-}
-
 // The button's own handler runs before the viewport's listeners, so on the
 // release the pan is still in progress here.
 void Clickable::mouseDrag(const juce::MouseEvent& e) {
-  if (scrolling()) setState(buttonNormal);
+  if (DragScroller::panning(*this)) setState(buttonNormal);
   else juce::Button::mouseDrag(e);
 }
 
 void Clickable::mouseUp(const juce::MouseEvent& e) {
-  if (scrolling()) setState(buttonNormal);
+  if (DragScroller::panning(*this)) setState(buttonNormal);
   else juce::Button::mouseUp(e);
 }
 

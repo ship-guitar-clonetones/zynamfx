@@ -48,6 +48,7 @@ FilterBar::FilterBar(Services& services, BrowserState& state)
       query_(state.query),
       scroller_(std::make_unique<DragScroller>(DragScroller::Axis::horizontal)) {
   scroller_->setViewedComponent(&row_, false);
+  scroller_->setFocusMargin(kBleed);  // a focused chip clears the edge fade
   scroller_->onScroll = [this] { repaint(); };
   addAndMakeVisible(*scroller_);
   buildChips();

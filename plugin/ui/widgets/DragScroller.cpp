@@ -4,16 +4,26 @@
 
 namespace t3k::ui {
 
-DragScroller::DragScroller(Axis axis) : axis_(axis) {
+DragScroller::DragScroller(Axis axis, Keys keys) : axis_(axis), keys_(keys) {
   const bool vertical = axis == Axis::vertical;
   setScrollBarsShown(false, false, vertical, !vertical);
-  setScrollOnDragMode(ScrollOnDragMode::nonHover);
-  // Not a Tab stop: the controls inside are, and the page follows them.
+  setScrollOnDragMode(ScrollOnDragMode::all);
+  // Not a Tab stop: the controls inside are, and the view follows them.
   setWantsKeyboardFocus(false);
+  juce::Desktop::getInstance().addFocusChangeListener(this);
 }
+
+DragScroller::~DragScroller() { juce::Desktop::getInstance().removeFocusChangeListener(this); }
 
 void DragScroller::visibleAreaChanged(const juce::Rectangle<int>&) {
   if (onScroll) onScroll();
+}
+
+bool DragScroller::panning(const juce::Component& c) {
+  for (auto* v = c.findParentComponentOfClass<juce::Viewport>(); v != nullptr;
+       v = v->findParentComponentOfClass<juce::Viewport>())
+    if (v->isCurrentlyScrollingOnDrag()) return true;
+  return false;
 }
 
 DragScroller::Span DragScroller::span() const {
@@ -57,10 +67,24 @@ bool DragScroller::scrollByKey(const juce::KeyPress& key) {
   return true;
 }
 
+bool DragScroller::keyPressed(const juce::KeyPress& key) { return keys_ == Keys::scroll && scrollByKey(key); }
+
 void DragScroller::reveal(const juce::Component& target, int margin) {
   const auto* content = getViewedComponent();
   if (content == nullptr || !content->isParentOf(&target)) return;
-  const auto box = content->getLocalArea(&target, target.getLocalBounds());
+  // The target's box in the content's space. Crossing a nested scroller on
+  // the way up, the box is the part of its frame the target shows in (or
+  // the frame itself while it is scrolled out of it): that scroller brings
+  // the target into its own frame, and the frame is what this one shows.
+  auto box = target.getLocalBounds();
+  for (const auto* c = &target; c != content; c = c->getParentComponent()) {
+    const auto* parent = c->getParentComponent();
+    box = parent->getLocalArea(c, box);
+    if (dynamic_cast<const juce::Viewport*>(parent) != nullptr) {
+      const auto frame = parent->getLocalBounds();
+      box = box.intersects(frame) ? box.getIntersection(frame) : frame;
+    }
+  }
   const auto s = span();
   const bool vertical = axis_ == Axis::vertical;
   const int start = (vertical ? box.getY() : box.getX()) - margin;
@@ -71,6 +95,10 @@ void DragScroller::reveal(const juce::Component& target, int margin) {
     setSpanPosition(start);
   else if (end > s.position + s.visible)
     setSpanPosition(end - s.visible);
+}
+
+void DragScroller::globalFocusChanged(juce::Component* focused) {
+  if (focused != nullptr) reveal(*focused, focusMargin_);  // only a descendant of the content moves the view
 }
 
 void DragScroller::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) {

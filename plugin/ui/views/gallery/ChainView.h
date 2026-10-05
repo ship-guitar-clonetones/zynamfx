@@ -41,6 +41,9 @@ public:
   // Launch the Select flow: `insertBlockId` adds, a tone block's id swaps.
   std::function<void(ChainSide side, const std::string& targetBlockId)> onSelectTone;
 
+  // The lane: the main screen's scroller.
+  DragScroller& scroller() { return *scroller_; }
+
   void paint(juce::Graphics& g) override;
   void paintOverChildren(juce::Graphics& g) override;
   void resized() override;
