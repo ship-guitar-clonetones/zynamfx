@@ -45,6 +45,9 @@ private:
   juce::String targetContext(const juce::String& targetId) const;
   void armTimeout();
   void commitCc();
+  // Run a store change from a row control once the event that asked for it
+  // has unwound: the change rebuilds the list, destroying that very control.
+  void defer(std::function<void()> action);
 
   Services& services_;
   std::unique_ptr<ListCard> list_;

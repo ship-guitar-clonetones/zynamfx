@@ -334,6 +334,26 @@ bool MockBackend::removeMidiMapping(const juce::String& targetId) {
   return true;
 }
 
+// As MidiMapper::setCcMapping: replace any mapping for the target, and a
+// typed number supersedes a learn armed for the same target.
+bool MockBackend::setMidiCcMapping(const juce::String& targetId, int cc) {
+  if (cc < 0 || cc > 127) return false;
+  juce::Array<juce::var> kept;
+  for (const auto& m : *midiMap_["mappings"].getArray())
+    if (m["targetId"].toString() != targetId)
+      kept.add(m);
+  auto* mapping = new juce::DynamicObject();
+  mapping->setProperty("targetId", targetId);
+  mapping->setProperty("source", "cc");
+  mapping->setProperty("number", cc);
+  kept.add(juce::var(mapping));
+  auto* map = midiMap_.getDynamicObject();
+  map->setProperty("mappings", kept);
+  if (map->getProperty("learnTargetId").toString() == targetId) map->setProperty("learnTargetId", "");
+  notifyMidiMapChanged();
+  return true;
+}
+
 juce::var MockBackend::getMeterLevels() {
   if (signal_ != nullptr)
     return signal_->meters(chain_);
