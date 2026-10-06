@@ -2187,6 +2187,83 @@ struct BlockSizeToggleTests : juce::UnitTest {
   }
 };
 
+// Committing a typed CC number swaps the listening row for a mapping row of
+// the same height. The form host only re-flows on a height change, so the
+// card has to place its new rows itself or they sit at 0×0 and the card
+// paints as an empty box until Settings is reopened (issue #220).
+struct MidiMapCommitTests : juce::UnitTest {
+  MidiMapCommitTests() : juce::UnitTest("MIDI mapping commit", "ui") {}
+
+  static void pump(int ms) { juce::MessageManager::getInstance()->runDispatchLoopUntil(ms); }
+
+  static juce::Component* named(juce::Component& root, const juce::String& name) {
+    return drive::find(root, [&](juce::Component& c) { return c.getName() == name && c.isShowing(); });
+  }
+
+  void runTest() override {
+    const auto fixtures = Fixtures::load(fixturesDir().getChildFile("scenarios.json"));
+    const auto* scenario = fixtures.find("settings-midi-empty");
+    if (scenario == nullptr) {
+      expect(false, "settings-midi-empty scenario missing");
+      return;
+    }
+    MockBackend backend(scenario->data);
+    juce::DocumentWindow window("midi commit", juce::Colours::black, 0);
+    ScaledHost host(backend, *scenario, fixtures.root);
+    window.setContentNonOwned(&host, true);
+    window.setVisible(true);
+    pump(400);
+    auto& root = host.pluginRoot();
+    drive::openSettings(root);
+    drive::scrollSettingsTo(root, "MIDI Mapping");
+    pump(100);
+
+    beginTest("choosing a control arms a listening row with a CC field");
+    expect(named(root, "CC number") == nullptr);
+    root.services().midiMap.startLearn("outputLevel");
+    pump(50);
+    juce::Component::SafePointer<juce::Component> cc(named(root, "CC number"));
+    expect(cc != nullptr);
+    if (cc == nullptr) return;
+    expect(!cc->getParentComponent()->getBounds().isEmpty());
+
+    beginTest("Return commits once the key event has unwound, not under the field's own callback");
+    drive::submit(root, "CC #", "15");
+    const auto& state = root.services().midiMap.state();
+    expect(cc != nullptr, "the CC field was destroyed inside its Return handler");
+    expect(state && state->learnTargetId == "outputLevel");  // still armed until the deferred commit
+    pump(50);
+    expect(cc == nullptr);
+    expect(state && state->learnTargetId.isEmpty());
+    const auto* mapping = state ? state->mappingFor("outputLevel") : nullptr;
+    expect(mapping != nullptr && mapping->number == 15);
+
+    beginTest("the mapping row shows in place");
+    expect(named(root, "CC number") == nullptr);
+    juce::Component::SafePointer<juce::Component> remove(named(root, "Remove"));
+    expect(remove != nullptr, "no mapping row after commit");
+    if (remove == nullptr) return;
+    // The row was placed inside the card, not left at 0×0.
+    auto* row = remove->getParentComponent();
+    expect(row != nullptr && !row->getBounds().isEmpty(), "mapping row has no bounds");
+    expect(row != nullptr && row->getBounds().contains(remove->getBounds()));
+    expect(row != nullptr && row->getWidth() == row->getParentComponent()->getWidth() - 2);
+
+    beginTest("Remove outlives its own click, then the list empties");
+    auto* removeButton = dynamic_cast<juce::Button*>(remove.getComponent());
+    expect(removeButton != nullptr && removeButton->onClick != nullptr);
+    if (removeButton == nullptr || removeButton->onClick == nullptr) return;
+    removeButton->onClick();  // the handler itself; triggerClick() and drive::click() both pump
+    expect(remove != nullptr, "the Remove button was destroyed inside its click handler");
+    expect(state && !state->mappings.empty());  // the change waits for the click to unwind
+    pump(50);
+    expect(remove == nullptr);
+    expect(state && state->mappings.empty());
+    expect(named(root, "Remove") == nullptr);
+    window.setVisible(false);
+  }
+};
+
 // A readout wider than its knob ("-100 dB" under the 36px gate, whose dim
 // group is exactly the knob's width) shows whole: it floats in the overlay
 // layer, past the column and the parents that clip the knob.
@@ -2562,6 +2639,7 @@ GlowCornerTests glowCornerTests;
 PresetReorderTests presetReorderTests;
 ChainCrossLaneDragTests chainCrossLaneDragTests;
 BlockSizeToggleTests blockSizeToggleTests;
+MidiMapCommitTests midiMapCommitTests;
 KnobReadoutTests knobReadoutTests;
 FaceplateEffectsTests faceplateEffectsTests;
 FaceplateDualMonoTests faceplateDualMonoTests;

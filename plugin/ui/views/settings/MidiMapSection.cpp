@@ -228,6 +228,10 @@ public:
     }
     empty_.setVisible(rows_.empty());
     heightChanged();
+    // The host only re-lays out when the card's height changes; a learning
+    // row committing to a mapping row of the same height still needs the new
+    // rows placed, or they sit at 0×0 and the card paints empty.
+    resized();
   }
 
   // Hands back the row for `targetId` (so a listening row survives a rebuild).
@@ -326,7 +330,6 @@ void MidiMapSection::rebuild() {
   const auto& state = services_.midiMap.state();
   if (!state) return;
   const auto& learn = state->learnTargetId;
-  auto& store = services_.midiMap;
 
   // The listening row survives a rebuild for the same target (its typed
   // draft with it); a new target starts clean.
@@ -341,7 +344,8 @@ void MidiMapSection::rebuild() {
           ccDraft_ = draft;
           armTimeout();
         },
-        [this] { commitCc(); }, [&store] { store.cancelLearn(); });
+        [this] { defer([this] { commitCc(); }); },
+        [this] { defer([this] { services_.midiMap.cancelLearn(); }); });
   };
 
   std::vector<std::unique_ptr<Row>> rows;
@@ -353,8 +357,8 @@ void MidiMapSection::rebuild() {
     } else {
       const auto id = mapping.targetId;
       rows.push_back(std::make_unique<MappingRow>(
-          mapping, targetContext(id), [&store, id] { store.startLearn(id); },
-          [&store, id] { store.removeMapping(id); }));
+          mapping, targetContext(id), [this, id] { defer([this, id] { services_.midiMap.startLearn(id); }); },
+          [this, id] { defer([this, id] { services_.midiMap.removeMapping(id); }); }));
     }
   }
   // A learn armed for a not-yet-mapped target renders as a pending row at
@@ -407,6 +411,17 @@ void MidiMapSection::commitCc() {
   if (!state || ccDraft_.isEmpty()) return;
   const int number = ccDraft_.getIntValue();
   if (number <= 127) services_.midiMap.setCcMapping(state->learnTargetId, number);
+}
+
+// The store notifies synchronously, so a change asked for by a row control
+// would rebuild the list, and destroy that control, under its own callback.
+// Posting the change lets the click or Return finish first; the section may
+// have gone by then (Settings closed), so the action is skipped if so.
+void MidiMapSection::defer(std::function<void()> action) {
+  juce::MessageManager::callAsync(
+      [safe = juce::Component::SafePointer<MidiMapSection>(this), action = std::move(action)] {
+        if (safe != nullptr) action();
+      });
 }
 
 }  // namespace t3k::ui
