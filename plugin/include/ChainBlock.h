@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
+#include <algorithm>
 #include <atomic>
 #include <map>
 #include <memory>
@@ -52,6 +53,42 @@ constexpr double kWetFadeSeconds = 0.025;
 // trailing inserts are trimmed below this baseline so its indented rail ends
 // level with the trunk lane (see alignBranchLaneLengths).
 constexpr int kMinLaneSlots = 5;
+
+// IR convolver block size cap. juce::dsp::Convolution's zero-latency engines
+// size their FFT partition from ProcessSpec::maximumBlockSize and run a full
+// forward + inverse FFT of that size on *every* process() call, however few
+// samples it carries. Preparing from the host's promised maximum ties IR CPU
+// to a number unrelated to the real callback size: Ardour advertises 8192 to
+// every LV2 plugin whatever buffer it actually runs, and one cab IR at
+// 64-sample callbacks then costs ~90% of a core instead of ~2%. So the
+// convolver's prepared block size is the host's base block *capped* at this
+// (irConvolverBlockSizeFor), and the RT path never feeds it more per call
+// (processConvolverInChunks). Hosts at or below the cap get exactly the
+// partition they always did, so nothing changes for them; hosts above it
+// (or over-promising ones) get a 256 partition and chunked input instead
+// of an oversized FFT per callback.
+constexpr int kIrConvolverMaxBlockSize = 256;
+
+// The block size convolvers are prepared with for a chain whose base-rate
+// block is `chainBaseBlockSize` frames (TONE3000Processor::chainBaseBlockSize).
+inline int irConvolverBlockSizeFor(int chainBaseBlockSize) noexcept {
+  return std::min(std::max(chainBaseBlockSize, 1), kIrConvolverMaxBlockSize);
+}
+
+// Feed `block` to a convolver prepared via irConvolverBlockSizeFor in pieces
+// of at most kIrConvolverMaxBlockSize frames. When the base block is at or
+// below the cap this is a single call (the island hands at most the base
+// block per callback); above it, the convolver was prepared at the cap and
+// the loop keeps every call within what it was prepared for.
+inline void processConvolverInChunks(juce::dsp::Convolution& convolver,
+                                     const juce::dsp::AudioBlock<float>& block) {
+  const size_t numSamples = block.getNumSamples();
+  constexpr size_t chunkSize = static_cast<size_t>(kIrConvolverMaxBlockSize);
+  for (size_t start = 0; start < numSamples; start += chunkSize) {
+    auto chunk = block.getSubBlock(start, std::min(chunkSize, numSamples - start));
+    convolver.process(juce::dsp::ProcessContextReplacing<float>(chunk));
+  }
+}
 
 // Chain block data structure
 struct ChainBlock {

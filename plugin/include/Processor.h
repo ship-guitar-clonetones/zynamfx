@@ -555,6 +555,12 @@ private:
       block size times the current oversampling factor. */
   int chainDomainBlockSize() const noexcept;
 
+  /** The block size IR convolvers are prepared with right now: the base
+      block capped at kIrConvolverMaxBlockSize (see ChainBlock.h). */
+  int irConvolverBlockSize() const noexcept {
+    return irConvolverBlockSizeFor(chainBaseBlockSize());
+  }
+
   /** The effective chain rate: kChainBaseSampleRate × oversampling factor.
       Safe from any thread (the factor is atomic; it only changes inside the
       full re-prepare paths, never under the audio thread's feet). */
@@ -572,6 +578,13 @@ private:
     // engines carry their phase count and get re-queued by the apply step;
     // IR convolvers are rate-independent and always built at the base rate.)
     int preparedBlockSize = 0;
+
+    // The block size the convolvers were prepared with (irConvolverBlockSize
+    // at prepare time). The apply step re-prepares them when the live value
+    // differs: a restore-time load sees the 4096 default before prepareToPlay
+    // reports the real host block, and would otherwise sit at the cap on a
+    // host that really runs 64.
+    int preparedIrBlockSize = 0;
 
     std::unique_ptr<NamEngine> namEngine;
 

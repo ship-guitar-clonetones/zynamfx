@@ -55,7 +55,8 @@ bool irIsLongFor(const juce::String& gear, bool longByLength) {
 }
 
 // Long IRs use JUCE's two-stage non-uniform engine (still zero latency):
-// the first kIrNonUniformHeadSamples convolve in callback-sized partitions,
+// the first kIrNonUniformHeadSamples convolve in partitions of the
+// convolver's prepared block size (irConvolverBlockSizeFor, ChainBlock.h),
 // the tail in partitions of this size, so per-callback CPU stops scaling
 // linearly with tail length. Bigger head = more per-callback FFT work;
 // smaller = chunkier tail batches. 8192 (~170 ms) is a conventional
@@ -998,10 +999,13 @@ TONE3000Processor::PreparedBlockModel TONE3000Processor::prepareBlockModelOffThr
 
       // IR convolution always runs at the base rate: when the chain is
       // oversampled, the block's island (ChainBlock::irBaseRateIsland) hands
-      // the convolver base-rate frames. So the spec is factor-independent:
-      // base rate, base block size.
-      juce::dsp::ProcessSpec spec{kChainBaseSampleRate,
-                                  static_cast<juce::uint32>(chainBaseBlockSize()), 2};
+      // the convolver base-rate frames, and the RT path never passes more
+      // than kIrConvolverMaxBlockSize of them per call. So the spec is
+      // factor-independent: base rate, base block size capped at that.
+      const int irBlockSize = irConvolverBlockSize();
+      out.preparedIrBlockSize = irBlockSize;
+      juce::dsp::ProcessSpec spec{kChainBaseSampleRate, static_cast<juce::uint32>(irBlockSize),
+                                  2};
 
       // Load *before* prepare: prepare() drains the convolver's background
       // message queue synchronously, so the engine (FFT segmentation and
@@ -1297,22 +1301,29 @@ void TONE3000Processor::applyPreparedModelToChainBlock(ChainBlock& block, ChainB
   // covered it (the engine wasn't on the block yet). Re-prepare before it
   // goes live; feeding an engine more frames than it was prepared for is what
   // used to silently kill blocks on relaunch ("Processing failed").
-  // (Convolver re-prepare rebuilds the FFT engine under chainMutex, heavier
-  // for reverb-length IRs, but this path only fires on that startup race,
-  // when audio has barely started.)
   const int requiredBlockSize = chainDomainBlockSize();
-  if (prepared.preparedBlockSize < requiredBlockSize) {
+  if (prepared.namEngine != nullptr && prepared.preparedBlockSize < requiredBlockSize) {
     juce::Logger::writeToLog("[ModelLoader] Chain domain drifted during prepare (block " +
                              juce::String(prepared.preparedBlockSize) + " -> " +
                              juce::String(requiredBlockSize) + "); re-preparing");
-    if (prepared.namEngine != nullptr)
-      prepared.namEngine->prepare(requiredBlockSize);
-    // Convolvers always run at the base rate behind the block's island, so
-    // only the base block size can have drifted.
+    prepared.namEngine->prepare(requiredBlockSize);
+  }
+  // Convolvers track the capped base block (irConvolverBlockSizeFor). Unlike
+  // NAM, a *shrink* matters too: a load that ran before prepareToPlay saw the
+  // 4096 default and built a 256-partition engine, which on a host that then
+  // reports 64 would cost more per callback than it needs to. Re-prepare on
+  // any difference so the convolver always matches the live host block.
+  // (prepare() rebuilds the FFT engine under chainMutex, heavier for
+  // reverb-length IRs, but this only fires on that startup race, when audio
+  // has barely started.)
+  const int requiredIrBlockSize = irConvolverBlockSize();
+  if (prepared.convolverMono != nullptr && prepared.preparedIrBlockSize != requiredIrBlockSize) {
+    juce::Logger::writeToLog("[ModelLoader] Host block drifted during IR prepare (convolver " +
+                             juce::String(prepared.preparedIrBlockSize) + " -> " +
+                             juce::String(requiredIrBlockSize) + "); re-preparing");
     const juce::dsp::ProcessSpec spec{kChainBaseSampleRate,
-                                      static_cast<juce::uint32>(chainBaseBlockSize()), 2};
-    if (prepared.convolverMono != nullptr)
-      prepared.convolverMono->prepare(spec);  // keeps the loaded impulse
+                                      static_cast<juce::uint32>(requiredIrBlockSize), 2};
+    prepared.convolverMono->prepare(spec);  // keeps the loaded impulse
     if (prepared.convolverStereo != nullptr)
       prepared.convolverStereo->prepare(spec);
   }
