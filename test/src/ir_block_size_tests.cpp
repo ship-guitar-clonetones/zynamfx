@@ -4,19 +4,24 @@
 // it is prepared with and runs a full FFT pair of that size on every
 // process() call. Ardour promises 8192 to every LV2 plugin while running
 // 64-sample cycles, so convolvers prepared from the host's promise made one
-// IR block cost ~85% of a core. The processor now prepares every convolver
-// at kIrConvolverBlockSize and chunks larger blocks (ChainBlock.h), so what
-// the host promises must not change what a callback costs.
+// IR block cost ~85% of a core. The processor now caps the convolver's
+// prepared block at kIrConvolverMaxBlockSize and chunks larger blocks
+// (ChainBlock.h), so an oversized promise can't inflate what a callback
+// costs, while hosts at or below the cap keep exactly the partition they
+// always had.
 //
-// The partition size is invisible from outside the processor; CPU is its
-// only symptom, so that is what this pins. The pinned gap is ~45x (promise
-// 8192 vs 64 before the fix) against a ~1x ratio after it, so a 3x bound
-// leaves wide margin both ways, and taking the fastest of several runs
-// keeps a busy machine from inflating either side.
-//
-// The second test is the sound-side guard: the whole processor (island,
-// chunking, normalization) must render the same audio whatever block size
-// the host promises or actually delivers.
+// Three guards:
+//  - the sizing policy itself (irConvolverBlockSizeFor): identity up to the
+//    cap, so honest small-buffer hosts see no change at all;
+//  - CPU: the partition size is invisible from outside the processor and
+//    CPU is its only symptom. The pinned gap is ~45x (promise 8192 vs 64
+//    before the fix) against ~1.7x after it (a 256 partition fed 64 does a
+//    512-point FFT pair per call where a 64 partition does 256-point), so a
+//    3x bound leaves margin both ways, and taking the fastest of several
+//    runs keeps a busy machine from inflating either side;
+//  - sound: the whole processor (island, chunking, normalization) must
+//    render the same audio whatever block size the host promises or
+//    actually delivers.
 #include "chain_test_helpers.h"
 
 #include <gtest/gtest.h>
@@ -113,6 +118,18 @@ double fastestOf(int runs, const char* irFile, const juce::String& gear, int pro
 
 }  // namespace
 
+TEST(IrBlockSizeTest, ConvolverBlockSizeIsHostBlockCappedAtMax) {
+  // The no-regression promise for honest hosts: at or below the cap the
+  // convolver is prepared at exactly the host's base block, as it always
+  // was. Only above the cap does the size change.
+  for (int hostBlock : {1, 32, 64, 70, 128, 255, 256})
+    EXPECT_EQ(irConvolverBlockSizeFor(hostBlock), hostBlock) << "host block " << hostBlock;
+  for (int hostBlock : {257, 512, 1000, 1024, 4096, 8192})
+    EXPECT_EQ(irConvolverBlockSizeFor(hostBlock), kIrConvolverMaxBlockSize)
+        << "host block " << hostBlock;
+  EXPECT_EQ(irConvolverBlockSizeFor(0), 1) << "never prepare(0)";
+}
+
 TEST(IrBlockSizeTest, IrCpuDoesNotScaleWithPromisedMaxBlockSize) {
   struct Ir {
     const char* file;
@@ -139,13 +156,12 @@ TEST(IrBlockSizeTest, IrSoundIsIndependentOfPromisedAndDeliveredBlockSize) {
   // straddle the 256 partition, the awkward case); and an 8192 host that
   // really delivers 8192 (32 chunks per call).
   //
-  // Bound: -80 dB relative to peak. A different delivered block size changes
-  // the order float FFT convolution accumulates in, and that alone measures
-  // ~1.5e-5 relative here (the same spread the pre-fix code had between
-  // hosts of different block sizes, so it isn't something this change
-  // added). A real bug (a dropped chunk, a wrong partition, a misaligned
-  // overlap) is at the 1e-1 level. The Ardour case (8192 promised, 64
-  // delivered) renders bit-identically to 64/64 since the fix.
+  // Bound: -80 dB relative to peak. A different partition or delivered block
+  // size changes the order float FFT convolution accumulates in, and that
+  // alone measures ~1.5e-5 relative here (the same spread the pre-fix code
+  // had between hosts of different block sizes, so it isn't something this
+  // change added). A real bug (a dropped chunk, a wrong partition, a
+  // misaligned overlap) is at the 1e-1 level.
   struct Host {
     int promised;
     int delivered;

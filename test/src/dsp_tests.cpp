@@ -753,14 +753,15 @@ TEST(IrConvolutionTest, IslandedConvolutionInOversampledChainMatchesBaseRate) {
   }
 }
 
-TEST(IrConvolutionTest, ChunkedFixedBlockConvolverMatchesHostSizedConvolver) {
-  // The RT path prepares every convolver at kIrConvolverBlockSize and feeds
-  // it through processConvolverInChunks, whatever the host block size (hosts
-  // like Ardour promise 8192 while running 64, and a convolver prepared for
-  // the promise burns ~40x the CPU). Partitioning must not change the sound:
-  // at every host block size, including ones above the fixed size and not a
-  // multiple of it, the output matches a convolver prepared for exactly that
-  // host block.
+TEST(IrConvolutionTest, ChunkedCappedConvolverMatchesHostSizedConvolver) {
+  // Above kIrConvolverMaxBlockSize the RT path prepares the convolver at the
+  // cap and feeds it through processConvolverInChunks (hosts like Ardour
+  // promise 8192 while running 64, and a convolver prepared for the promise
+  // burns ~40x the CPU). Partitioning must not change the sound: at every
+  // host block size, including ones above the cap and not a multiple of it,
+  // a capped, chunk-fed convolver matches one prepared for exactly that host
+  // block. (At or below the cap the plugin uses the host size itself, so
+  // the 64 and 256 rows here pin the helper, not the production spec.)
   const int total = 96000;
   const auto noise = makeNoise(total, 777, 0.25f);
 
@@ -797,9 +798,9 @@ TEST(IrConvolutionTest, ChunkedFixedBlockConvolverMatchesHostSizedConvolver) {
       auto reference =
           makeConvolver(testFile(irName), juce::dsp::Convolution::Stereo::no, hostBlock);
       auto fixed = makeConvolver(testFile(irName), juce::dsp::Convolution::Stereo::no,
-                                 kIrConvolverBlockSize);
+                                 kIrConvolverMaxBlockSize);
       settle(*reference, hostBlock);
-      settle(*fixed, kIrConvolverBlockSize);
+      settle(*fixed, kIrConvolverMaxBlockSize);
 
       const auto expected = run(*reference, hostBlock, false);
       const auto actual = run(*fixed, hostBlock, true);
