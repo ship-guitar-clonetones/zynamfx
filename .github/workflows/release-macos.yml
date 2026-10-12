@@ -81,6 +81,15 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.sync-upstream.outputs.commit || github.ref }}
           submodules: recursive
+      - name: Read upstream provenance
+        id: upstream
+        run: |
+          upstream_tag="$(tr -d '[:space:]' < .github/upstream-release)"
+          upstream_sha="$(tr -d '[:space:]' < .github/upstream-sha)"
+          [[ "$upstream_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid upstream release tag: $upstream_tag" >&2; exit 1; }
+          [[ "$upstream_sha" =~ ^[0-9a-f]{40,64}$ ]] || { echo "Invalid upstream commit: $upstream_sha" >&2; exit 1; }
+          echo "tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$upstream_sha" >> "$GITHUB_OUTPUT"
       - name: Install build tools
         run: brew install cmake ninja
       - name: Build Standalone, AU and VST3
@@ -119,6 +128,8 @@ jobs:
         env:
           VERSION: ${{ needs.sync-upstream.outputs.version }}
           PUSHED_TAG: ${{ github.ref_name }}
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
         run: |
           version="${VERSION:-${PUSHED_TAG#v}}"
           [ -n "$version" ] || { echo "Could not determine zynamfx version" >&2; exit 1; }
@@ -127,8 +138,11 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent build/plugin/TONE3000_artefacts/Release/AU/zynamfx.component "release/zynamfx-$version-macos-arm64-au.zip"
           ditto -c -k --sequesterRsrc --keepParent build/plugin/TONE3000_artefacts/Release/VST3/zynamfx.vst3 "release/zynamfx-$version-macos-arm64-vst3.zip"
           python3 script/package-local-source.py "release/zynamfx-$version-source.tar.gz"
-          cat > release/INSTALL.txt <<'EOF'
-          zynamfx macOS Apple Silicon test release
+          cat > release/INSTALL.txt <<EOF
+          zynamfx macOS Apple Silicon release
+
+          Based on the TONE3000 plugin ${UPSTREAM_TAG} release
+          (upstream commit ${UPSTREAM_SHA}). See UPSTREAM.txt for links.
 
           These builds are ad-hoc signed and not notarized. In Finder, open the
           standalone app with Control-click > Open the first time. Install the AU
@@ -136,11 +150,20 @@ jobs:
           ~/Library/Audio/Plug-Ins/VST3, then restart your audio host.
           Matching corresponding source is included in the source archive.
           EOF
+          cat > release/UPSTREAM.txt <<EOF
+          zynamfx release: v$version
+          Forked upstream: TONE3000/tone3000-plugin $UPSTREAM_TAG
+          Upstream release: https://github.com/tone-3000/tone3000-plugin/releases/tag/$UPSTREAM_TAG
+          Upstream commit: $UPSTREAM_SHA
+          Upstream commit URL: https://github.com/tone-3000/tone3000-plugin/commit/$UPSTREAM_SHA
+          EOF
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.package.outputs.version }}
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          UPSTREAM_SHA: ${{ steps.upstream.outputs.sha }}
         run: |
           tag="v$VERSION"
           git fetch origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || true
@@ -148,5 +171,5 @@ jobs:
             git tag "$tag"
             git push origin "$tag"
           fi
-          gh release create "$tag" release/* --title "zynamfx $tag" \
-            --notes "Free, open-source zynamfx Version 2 for macOS Apple Silicon. Includes Standalone, AU and VST3 builds and the corresponding source archive. Builds are ad-hoc signed and not notarized. See README for features, installation and TONE3000 integration terms."
+          gh release create "$tag" release/* --title "zynamfx $tag (TONE3000 $UPSTREAM_TAG)" \
+            --notes "Free, open-source zynamfx Version 2 for macOS Apple Silicon, based on [TONE3000 plugin $UPSTREAM_TAG](https://github.com/tone-3000/tone3000-plugin/releases/tag/$UPSTREAM_TAG) at upstream commit [$UPSTREAM_SHA](https://github.com/tone-3000/tone3000-plugin/commit/$UPSTREAM_SHA). Includes Standalone, AU and VST3 builds, matching source, and an UPSTREAM.txt provenance file. Builds are ad-hoc signed and not notarized. See README for features, installation and TONE3000 integration terms."
