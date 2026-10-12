@@ -4,7 +4,7 @@
 
 **zynamfx** is a free, open-source macOS guitar signal-chain application. It is available as a Standalone app and as Audio Unit (AU) and VST3 plug-ins. It loads Neural Amp Modeler (NAM) captures and impulse responses (IRs), and can host separately installed AU/VST3 effects.
 
-This is the public **Version 2** line. The earlier Version 1 source line is archived privately. Version 2 gives the project its own zynamfx product identity, standalone application, interface, settings location, and release line. It builds on the open-source TONE3000 codebase; it is not an official TONE3000 product and has no TONE3000 or Line 6 endorsement.
+This is the public **Version 2** line. The earlier Version 1 source line is archived privately. Version 1 follows the aesthetics of the original TONE3000 plug-in. Version 2 has its own design language, giving the project a distinct zynamfx interface, graphics, product identity, standalone application, settings location, and release line. It builds on the open-source TONE3000 codebase; it is not an official TONE3000 product and has no TONE3000 or Line 6 endorsement.
 
 ## What it does
 
@@ -29,7 +29,7 @@ The diagnostic log is `~/Library/Logs/zynamfx/zynamfx.log`. AU and VST3 chain st
 
 ## Version 2 compared with Version 1
 
-Version 1 was the earlier tone3000-plugin-effects source line and is now archived privately. Version 2 is the separate **zynamfx** product and public repository. It uses its own app name, icon, plug-in identifiers, configuration/settings folder (`zynamfx`), standalone bundle, graphics, and release artifacts. The TONE3000 NAM/IR processing foundation and required third-party notices remain credited and licensed under their applicable terms. The two versions are related source lines with distinct product identities.
+Version 1 was the earlier tone3000-plugin-effects source line and is now archived privately. Version 2 is the separate **zynamfx** product and public repository. It uses its own app name, icon, plug-in identifiers, configuration/settings folder (`zynamfx`), standalone bundle, graphics, and release artifacts. The TONE3000 NAM/IR processing foundation and required third-party notices remain credited and licensed under their applicable terms. The two versions are related source lines with distinct product identities. **Version 1 follows the aesthetics of the original TONE3000 plug-in; Version 2 has its own design language**, expressed through its distinct interface, graphics, and visual direction.
 
 **Starting chain slots:** Version 1 shows five slots per lane in an empty chain; Version 2 shows seven, adding two starting slots per lane. This is the initial layout, not a maximum: both versions add a trailing slot as blocks are added.
 
