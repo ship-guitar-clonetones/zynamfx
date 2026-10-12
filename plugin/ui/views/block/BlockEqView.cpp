@@ -25,7 +25,7 @@ constexpr int kBodyPadding = 16;
 constexpr int kDimMs = 200;
 // Controls stay black/white/gray (like the knobs); the only colour in the EQ
 // is the brand-gradient spectrum behind everything.
-const juce::Colour kCurveColour{0xff8e8e93};
+const juce::Colour kCurveColour = theme::kEffect;
 const juce::Colour kAxisLabel = juce::Colour(235, 235, 245).withAlpha(0.35f);
 constexpr float kAxisFontPx = 9;
 
@@ -501,13 +501,7 @@ public:
       if (t > 0.001f) {
         const float h = travel.getHeight() * t;
         const auto fill = juce::Rectangle<float>(track.getX(), track.getBottom() - h, kTrackW, h);
-        juce::ColourGradient ramp(juce::Colour(30, 30, 30).withAlpha(0.3f), 0, fill.getBottom(), theme::kWhite, 0,
-                                  fill.getY(), false);
-        ramp.addColour(0.2, juce::Colour(50, 50, 50).withAlpha(0.6f));
-        ramp.addColour(0.4, juce::Colour(100, 100, 100).withAlpha(0.75f));
-        ramp.addColour(0.6, juce::Colour(160, 160, 160).withAlpha(0.85f));
-        ramp.addColour(0.8, juce::Colour(220, 220, 220).withAlpha(0.9f));
-        g.setGradientFill(ramp);
+        g.setColour(theme::kAccent.withAlpha(0.6f));
         g.fillRect(fill);
       }
 
@@ -515,13 +509,10 @@ public:
       // whole pixels like the browser's div so its edges stay crisp.
       const float cy = static_cast<float>(travel.getY()) + travel.getHeight() * (1 - t);
       const auto cap = juce::Rectangle<int>(kCapW, kCapH).withCentre({design::snap(cx), design::snap(cy)});
-      juce::ColourGradient capRamp(theme::kWhite, 0, static_cast<float>(cap.getY()), juce::Colour(0xffd6d6db), 0,
-                                   static_cast<float>(cap.getBottom()), false);
-      g.setGradientFill(capRamp);
-      g.fillRect(cap);
-      g.setColour(theme::kBlack);
-      g.drawRect(cap, 1);
-      g.fillRect(cap.getX() + 1, cap.getCentreY() - 1, kCapW - 2, 2);
+      g.setColour(theme::kAccent);
+      g.fillRoundedRectangle(cap.toFloat(),2.0f);
+      g.setColour(theme::kWhite);
+      g.fillRect(cap.getX()+5,cap.getCentreY(),kCapW-10,1);
       if (!editable) g.endTransparencyLayer();
     }
 

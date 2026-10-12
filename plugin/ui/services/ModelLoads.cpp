@@ -24,7 +24,7 @@ void ModelLoads::switchModel(const std::string& blockId, const Model& model, std
   }
   session_.ensureNativeAuth([go, done](const juce::String& error) {
     if (error.isNotEmpty()) {
-      juce::Logger::writeToLog("Cannot switch model: TONE3000 session expired: " + error);
+      juce::Logger::writeToLog("Cannot switch model: catalog session expired: " + error);
       if (done) done(false);
       return;
     }

@@ -11,6 +11,8 @@ release-build/
 vs-build/
 output/
 .DS_Store
+__pycache__/
+*.py[cod]
 xcode-build/
 .env
 .env.local

@@ -17,7 +17,7 @@ inline int snap(float v) { return static_cast<int>(std::lround(v)); }
 
 inline constexpr int kWidth = 1024;
 // Core UI height (content only; Figma's 600 includes a 22px mock title bar).
-inline constexpr int kHeight = 578;
+inline constexpr int kHeight = 720;
 
 // Chrome strips that grow the window instead of squishing the core.
 inline constexpr int kBannerHeight = 44;   // AppBanner.tsx

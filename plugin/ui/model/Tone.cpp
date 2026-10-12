@@ -39,6 +39,7 @@ Tone Tone::parse(const juce::var& v) {
   t.id = integer(v, "id");
   t.title = str(v, "title");
   t.description = str(v, "description");
+  t.license = v["license"].isObject() ? str(v["license"], "name") : str(v, "license");
   t.gear = str(v, "gear");
   t.format = str(v, "format");
   t.images = strings(v, "images");

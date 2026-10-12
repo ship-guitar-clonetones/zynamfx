@@ -339,7 +339,9 @@ void Faceplate::syncFlags() {
 }
 
 void Faceplate::paint(juce::Graphics& g) {
-  g.fillAll(theme::kSurfaceRaised);
+  g.setGradientFill(juce::ColourGradient::vertical(theme::kSurfaceRaised,0,theme::kSurface,static_cast<float>(getHeight())));
+  g.fillAll();
+  g.setColour(theme::kAccent.withAlpha(0.45f));g.fillRect(0,0,getWidth(),2);
   paint::hairlineH(g, 0, static_cast<float>(getWidth()), 0, theme::kBorder);
 }
 

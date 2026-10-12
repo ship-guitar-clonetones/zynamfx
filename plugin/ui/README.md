@@ -103,8 +103,8 @@ plugin/ui/
                       MeterScale, MidiCatalog, Alerts, Blur, Bitmap (photos
                       resampled once at device density), Wheel
   model/              juce::var → structs: ChainState, Tone, AudioDeviceState,
-                      MidiMapState (VarReader); ToneQuery (the browser's
-                      filters → the API query string)
+                      MidiMapState (VarReader); ToneQuery (bounded list routes;
+                      free-form search stays in hosted Select)
   backend/            ui::Backend (everything the UI asks of the processor)
                       and ProcessorBackend over TONE3000Processor
   services/           Services (one bundle per editor) and its members
@@ -130,8 +130,8 @@ plugin/ui/
                       SignInScreen, …
     gallery/          ChainView, GalleryLane, ToneTile, AddTile, StereoPanRail
     block/            BlockDetail, BlockCard, BlockInfoPanel, BlockEqView
-    browser/          ToneBrowser (the Select tone takeover: search + FilterBar over
-                      the card grid, Paginator pinned under it), FilterBar /
+    browser/          ToneBrowser (bounded trending preview with gear filter;
+                      hosted Select handles full catalog browsing), FilterBar /
                       FilterChip / FilterMenu, ToneCard, Paginator, BrowserPrompt
     settings/         SettingsScreen, PluginSettingsPage, SystemSettingsPage,
                       MidiMapSection, …
@@ -218,90 +218,25 @@ started from the tone browser (`LoginIntent::browse`) comes back to it,
 the rest land on the chain.
 
 The browser launch is best effort — JUCE reports success once the launcher
-forks, so a browser that refuses to start (Chromium under root on Linux)
-gives no error — hence the fallbacks, always offered:
+forks, so a browser that refuses to start gives no error. The screen keeps a
+copy-link fallback for another browser on the same machine:
 
 - **Copy Link** ("Browser didn't open? Copy link to sign in, then return
   here.") puts the authorize URL (`AuthFlow::authorizeUrl`) on the
   clipboard, for any browser on this machine: the loopback listener takes
   the redirect from whichever browser completes it.
-- **Sign in on a different device** (a grey text link; hand cursor, no
-  hover state) runs the device flow (RFC 8628, `startDeviceFlow`) on its
-  own page, "Sign in on your phone": `POST /oauth/device_authorization`,
-  then two cards with OR between them, a QR code (`widgets/QrCode`) of
-  `verification_uri_complete`, and "Visit tone3000.com/activate, sign in,
-  and enter this code:" over the `user_code` (the address is underlined so
-  it reads as one, but is not a link: it is for typing into the other
-  device), while the session polls `/oauth/token` with the device-code
-  grant at the server's interval (`slow_down` adds 5 s; `expired_token`,
-  `access_denied` and the code's own deadline end it with a reason and a
-  New code button).
+Device authorization is unavailable in the public Free-tier build. The
+redirect is checked against the PKCE `state` and exchanged for tokens
+(`Tone3000Client`, persisted in `UiPrefs`, refreshed transparently with a
+single in-flight refresh and one 401 retry). Closing the editor stops the
+listener; a stale callback is ignored.
 
-The launch is attempted on every platform regardless; only a launcher that
-refuses outright is reported (`AuthFlow::browserProblem`, the copy says
-so), and a browser that starts and dies simply leaves the user on the
-fallbacks. All paths feed the same token store: the first to finish signs
-in and the others are dropped. The redirect is checked against the PKCE `state` and
-exchanged for tokens (`Tone3000Client`, persisted in `UiPrefs`, refreshed
-transparently with a single in-flight refresh and one 401 retry). Closing
-the editor stops the listener and the polling; a stale callback is ignored.
+## Public TONE3000 integration
 
-## The tone browser (Select tone)
+The product uses TONE3000's hosted OAuth `select_tone` experience for full-catalog search, filtering, audition and selection. The in-app preview shows only the bounded trending feed (at most ten tones), optionally filtered by gear; the search field and taxonomy/profile controls are not exposed in public builds.
 
-The screen takes over everything under the header (meters, chain and
-faceplate; `PluginRoot` mounts it only while open and hides what it
-covers). Searching needs a session. Signed out, the screen is a preview
-instead: the gear chips alone (`FilterBar::setGearOnly`) over TONE3000's
-trending feed (`ToneSession::listTrending`, `GET /tones/trending[?gear=]`,
-which takes no token; the feed's one filter is the gear, and the pick is
-the same `ToneQuery::gear` so it carries into the search after sign-in),
-with a `BrowserPrompt` CTA under the cards ("Discover a zillion more tones."
-/ "Sign in or create free account"). A card click opens the sign-in page
-(the bare `←` back to the cards, the prompt centred); either button runs the
-browse-intent login, which lands back on this same screen signed in
-(`browser-signed-out*`). Signed in, `ToneBrowser` pins a search box and a `FilterBar`
-above the card grid and the `Paginator` below it; the grid scrolls between
-the two, fading out under each, and asks `ToneSession::searchTones` for one
-page at a time. The ← row zooms with the window; the body under it does
-not: it is laid out in screen pixels under the zoom, the search box and
-filter row keep their 1x height and widen with the column, the cards keep
-their 1x height and widen to fill two columns, and go three-up once three
-fit at the default width (`browser-zoom-wide`, `browser-zoom-three-up`,
-`browser-zoom-menu`; a scenario's `zoom` sizes the testbed window).
+`ToneQuery::requestPath` emits only the trending route or the documented bounded profile-list routes. `Tone3000Client::listTones` rejects all other routes and request parameters, enforces page and page-size bounds, and disallows pagination on trending/latest. Custom search, taxonomy/account lookups, device authorization, favorite writes, and the TONE3000 update endpoint make no network requests.
 
-- `BrowserState` (`services/`, one per editor) is what the screen keeps
-  between visits: the `ToneQuery`, whether the filter row is unfolded, the
-  page and the page's results (flagged when they are the signed-out
-  trending feed, so a return across a sign-in or out fetches instead). The
-  browser is mounted only while open, so coming back renders the last page
-  at once with no fetch; it refreshes on the next search, filter change or
-  page turn. Closing the editor forgets it.
-- `ToneQuery` (model) is the one place the filters live: text, sort, gear,
-  format, tags / makes / creators, calibrated, verified, profile. It builds
-  the API path itself (`requestPath`): `/tones/search` with the query string,
-  or `/tones/{downloaded,favorited,created}` with the title search and gear
-  alone when a profile filter is set. The plugin's NAM architecture always rides along (the API
-  ignores it for IR, and omitting it falls back to a legacy A1-only default).
-  The default sort (best match with text, else trending) is stored as no
-  pick, so Trending never reads as a filter. Unit-tested in `SelfTests.cpp`.
-- `FilterBar` edits the state's query through one horizontally scrolling row
-  of chips (`FilterChip`): the filters button, then (once unfolded, pushing
-  the rest right) Sort, Format, Tags, Makes, Creators, Calibrated, a
-  divider, then verified, the profile chip (the user's avatar alone until a
-  profile is picked) and the gear chips. A chip holding a value shows it
-  with an × that clears it (Sort: back to the default); the filters button
-  carries a dot while any of the unfolded ones are set. A profile filter
-  parks the catalog-only controls (dimmed, hint says why) without losing
-  their values; the search box stays live, matching titles within the
-  stream; IR gear (cabinet, space) or the IR
-  format parks Calibrated the same way, and the flag stays out of the
-  request (`ToneQuery::calibratedInForce`).
-- `FilterMenu` is the dropdown (`Popover`). Single-pick menus (Sort, Format,
-  Profile) show the current value in white; multi-pick ones add a check
-  column. Rows may lead with an icon (Favorites' bookmark) or a creator
-  avatar. Taxonomy menus add a search field and look their rows up from
-  `ToneSession::listTaxonomy` (debounced, a newer lookup cancels the one in
-  flight). Any pick closes the menu.
-- The search box submits on Enter (or its ×, or Escape, which clear it);
-  every filter change fetches page 1 at once. An older page arriving after
-  a newer one is dropped.
+After the user selects a tone in the hosted flow, the callback state is verified and the authorization code exchanged. Tone metadata and model URLs are then fetched for that selection, as shown in TONE3000's Select-flow documentation; a model download begins only to load the selected tone. The app preserves creator and license metadata, uses the user's own publishable client ID and account, and ships without API credentials or catalog models. Release builds force an empty publishable key and the production service origin; the user enters their own key in Settings.
+
+The bundled `ToneBrowser` component retains its bounded preview. Its former custom-search widgets are hidden in the public UI; they do not issue custom search or taxonomy requests. This is a Free-tier integration summary, not a substitute for the current provider terms.

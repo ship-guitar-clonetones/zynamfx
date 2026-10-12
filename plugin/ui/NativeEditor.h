@@ -1,12 +1,7 @@
 // The plugin's editor: owns the backend, the services and the PluginRoot,
-// and manages the window box: the 1024 x
-// 578(+chrome) design box times an aspect-locked user scale between 1x and
-// kMaxScale, persisted on the processor, grown by the chrome strips' height
-// on request.
-//
-// The root is laid out in design space and scaled with one AffineTransform:
-// top-anchored and horizontally centred in whatever box the host actually
-// gives us, so a refused resize letterboxes instead of squishing.
+// and manages a freely resizable window around the fixed 1024 x 720(+chrome)
+// design box. Independent horizontal and vertical scaling fills the editor;
+// independent window bounds persist in processor state.
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -21,9 +16,16 @@
 #include "views/PluginRoot.h"
 #include "widgets/KnobFace.h"
 
+// Fork distribution identity (cmake/ForkIdentity.cmake): the prefs lock name
+// follows the app-data folder so the fork never contends with an official
+// install's lock. Fallback keeps non-CMake builds on upstream.
+#ifndef T3K_APP_DATA_DIR_NAME
+#define T3K_APP_DATA_DIR_NAME "zynamfx"
+#endif
+
 namespace t3k::ui {
 
-class NativeEditor : public juce::AudioProcessorEditor, public Shell, private juce::Timer {
+class NativeEditor : public juce::AudioProcessorEditor, public Shell {
 public:
   explicit NativeEditor(TONE3000Processor& owner);
   ~NativeEditor() override;
@@ -48,17 +50,15 @@ public:
 
 private:
   static constexpr int kMaxExtraHeight = 160;  // banner (~44) + hint bar (36) + headroom
-  // How long a taller design box keeps the current scale while the host
-  // resize is pending, before shrinking to fit.
-  static constexpr int kShrinkGraceMs = 450;
-
   int designHeight() const { return design::kHeight + extraContentHeight_; }
-  double currentScale() const { return getWidth() / static_cast<double>(design::kWidth); }
+  double currentScale() const {
+    return juce::jmin(getWidth() / static_cast<double>(design::kWidth),
+                      getHeight() / static_cast<double>(designHeight()));
+  }
   double maxStartScale() const;
   void applyScaledSize(double scale);
   void updateResizeConstraints();
   void fitRoot();
-  void timerCallback() override { fitRoot(); }
 
   // The per-machine preferences file. Every plugin instance in the process
   // reads and writes the same file, and PropertiesFile saves its whole
@@ -67,7 +67,7 @@ private:
   // (each DAW, the standalone) UiPrefs merges under the lock and saves each
   // write itself, so the file never autosaves.
   struct PrefsFile {
-    juce::InterProcessLock lock{"TONE3000.ui-preferences"};
+    juce::InterProcessLock lock{T3K_APP_DATA_DIR_NAME ".ui-preferences"};
     juce::PropertiesFile file{[this] {
       auto options = TONE3000Processor::uiPreferencesOptions();
       options.processLock = &lock;
@@ -114,7 +114,6 @@ private:
   // Guards resized() against persisting a size we didn't choose (see
   // parentHierarchyChanged).
   bool restoringSize_ = false;
-  juce::int64 shrinkAllowedAtMs_ = 0;
   ProcessorBackend backend_;
   // Owned here rather than in Services: the session persists its tokens in
   // the prefs, and Services needs the session.

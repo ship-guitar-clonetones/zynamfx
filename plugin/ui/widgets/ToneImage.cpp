@@ -7,6 +7,7 @@
 #include "core/GearGlyphs.h"
 #include "core/Icons.h"
 #include "core/Theme.h"
+#include "core/BlockArt.h"
 
 namespace t3k::ui {
 
@@ -27,9 +28,7 @@ void ToneImage::setTone(const juce::String& imageUrl, const juce::String& gear, 
     image_ = {};
     if (!local_ && url_.isNotEmpty())
       loader_.load(url_, ImageLoader::kArtSide, request_, [this](const juce::Image& image) {
-        image_ = image;
-        base_ = {};
-        repaint();
+        image_ = image; base_ = {}; repaint();
       });
     else
       request_.cancel();
@@ -91,8 +90,13 @@ void ToneImage::rebuildBase(float scale) {
   // Local files carry a gear only when native could infer one from the file
   // (see finishLocalToneLoad); otherwise the generic file glyph, never
   // svgFor's catalog default of an amp.
-  Icons::draw(g, local_ && gear_.isEmpty() ? gear::kFileIcon : gear::svgFor(gear_),
-              box.withSizeKeepingCentre(size, size), theme::kGray);
+  const auto accent=blockart::colour(gear_);
+  g.setColour(accent.withAlpha(0.07f));
+  g.fillRoundedRectangle(box.reduced(8),6.0f);
+  g.setColour(accent.withAlpha(0.3f));
+  g.drawRoundedRectangle(box.reduced(8),6.0f,1.0f);
+  blockart::draw(g,box.withSizeKeepingCentre(size,size),gear_);
+
 }
 
 void ToneImage::paint(juce::Graphics& g) {

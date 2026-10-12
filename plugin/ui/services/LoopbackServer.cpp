@@ -18,7 +18,7 @@ constexpr int kReadTimeoutMs = 3000;
 // with no check and copy to match.
 juce::String landingPage(bool signedIn) {
   juce::String page;
-  page << "<!doctype html><html><head><meta charset=\"utf-8\"><title>TONE3000</title>"
+  page << "<!doctype html><html><head><meta charset=\"utf-8\"><title>zynamfx</title>"
           "<style>"
           "body{margin:0;min-height:100vh;background:#000;color:#fff;font:16px/1.4 Arial,sans-serif;"
           "display:flex;align-items:center;justify-content:center;text-align:center}"
@@ -33,7 +33,7 @@ juce::String landingPage(bool signedIn) {
     page << "<svg width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00d13b\" stroke-width=\"2\""
             " stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>";
   page << "<h1>" << (signedIn ? "You\xe2\x80\x99re signed in." : "Sign-in didn\xe2\x80\x99t finish.") << "</h1>"
-       << "<p>You can close this window and return to the TONE3000 Plugin.</p>"
+       << "<p>You can close this window and return to zynamfx.</p>"
           "</div><script>window.close()</script></body></html>";
   return page;
 }

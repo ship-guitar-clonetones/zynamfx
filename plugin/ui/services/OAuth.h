@@ -35,6 +35,7 @@ struct Callback {
   };
   Kind kind = Kind::error;
   juce::String code;
+  int toneId = 0;  // Select/Load Tone ID; validated after state.
   juce::String error;
 
   // `query` is the redirect URL's query string (with or without the '?').

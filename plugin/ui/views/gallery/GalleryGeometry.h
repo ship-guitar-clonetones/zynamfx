@@ -7,18 +7,18 @@
 
 namespace t3k::ui::gallery {
 
-inline constexpr int kTileSize = 224;
+inline constexpr int kTileSize = 128;
 // Stereo shows two lanes, so its tiles shrink to fit the fixed height.
-inline constexpr int kStereoTileSize = 160;
+inline constexpr int kStereoTileSize = 112;
 // Gap between tiles: the visible run of each connector line.
-inline constexpr int kTileGap = 24;
+inline constexpr int kTileGap = 32;
 // Vertical gap between the two stereo lanes.
 inline constexpr int kLaneGap = 24;
 // Gutter inside the scroll area; tiles fade out under it while scrolling.
 inline constexpr int kEdgeFadeWidth = 32;
 // Connector lines and the branch elbow.
 inline constexpr float kLineWidth = 2.0f;
-inline constexpr float kTileCorner = 16.0f;
+inline constexpr float kTileCorner = 8.0f;
 // Add tile's dashed border, and the green one an OS file drag arms.
 inline constexpr float kAddTileBorderWidth = 2.0f;
 inline const juce::Colour kAddTileBorder = juce::Colour(141, 141, 147).withAlpha(0.65f);

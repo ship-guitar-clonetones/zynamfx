@@ -53,10 +53,10 @@ juce::PropertiesFile::Options userSettingsOptions() {
   // PresetManager and the logs).
   options.folderName =
       juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-          .getChildFile("TONE3000")
+          .getChildFile(T3K_APP_DATA_DIR_NAME)
           .getFullPathName();
 #else
-  options.folderName = "TONE3000";
+  options.folderName = T3K_APP_DATA_DIR_NAME;
 #endif
   return options;
 }
@@ -201,7 +201,16 @@ juce::ValueTree TONE3000Processor::serializeBlockSettings(const ChainBlock& bloc
   blockState.setProperty("outputGain", block.outputGainNormalized, nullptr);
   blockState.setProperty("mix", block.mixNormalized, nullptr);
 
-  if (block.type != ChainBlockType::INSERT) {
+  if (block.type == ChainBlockType::EFFECT) {
+    blockState.setProperty("effectDescription", block.effectDescriptionXml, nullptr);
+    blockState.setProperty("effectName", block.effectName, nullptr);
+    juce::MemoryBlock state;
+    if (block.effectInstance != nullptr)
+      block.effectInstance->getStateInformation(state);
+    else
+      state = block.effectState;
+    blockState.setProperty("effectState", juce::var(state), nullptr);
+  } else if (block.type != ChainBlockType::INSERT) {
     blockState.setProperty("toneId", block.toneId, nullptr);
     blockState.setProperty("toneJson", block.toneJson, nullptr);
     blockState.setProperty("activeModelId", block.activeModelId, nullptr);
@@ -217,6 +226,15 @@ void TONE3000Processor::applyBlockSettings(ChainBlock& block, const juce::ValueT
   block.inputGainNormalized = static_cast<float>(blockState.getProperty("inputGain", 0.5f));
   block.outputGainNormalized = static_cast<float>(blockState.getProperty("outputGain", 0.5f));
   block.mixNormalized = static_cast<float>(blockState.getProperty("mix", 1.0f));
+
+  if (block.type == ChainBlockType::EFFECT) {
+    block.effectDescriptionXml = blockState.getProperty("effectDescription").toString();
+    block.effectName = blockState.getProperty("effectName").toString();
+    block.effectState.reset();
+    const auto effectData = blockState.getProperty("effectState");
+    if (const auto* bytes = effectData.getBinaryData())
+      block.effectState = *bytes;
+  }
 
   // States from before per-block sizes restore as lite (0.0). An engine the
   // restore keeps loaded (see reconcileChainFromTree) retiers in place: the
@@ -282,11 +300,13 @@ void TONE3000Processor::getStateInformation(juce::MemoryBlock& destData) {
   state.appendChild(parameters.copyState(), nullptr);
 
   // Session-only settings. Presets deliberately don't carry these: input
-  // mode is I/O routing, editor scale is a workstation preference, and the
+  // mode is I/O routing, editor size is a workstation preference, and the
   // MIDI map describes the user's rig, not the tone. (Per-block NAM A2
   // sizes ride the chain snapshot below, with presets and undo.)
   state.setProperty("inputMode", inputModeToString(getInputMode()), nullptr);
   state.setProperty("editorScale", editorScale.load(), nullptr);
+  state.setProperty("editorWidth", editorWidth.load(), nullptr);
+  state.setProperty("editorHeight", editorHeight.load(), nullptr);
   state.setProperty("editorExtraHeight", editorExtraHeight.load(), nullptr);
   state.appendChild(midiMapper.toValueTree(), nullptr);
 
@@ -357,6 +377,8 @@ void TONE3000Processor::setStateInformation(const void* data, int sizeInBytes) {
   // Older projects have no editorScale; keep the 1x default. The editor
   // clamps to its supported range when it reads this.
   editorScale.store(static_cast<double>(state.getProperty("editorScale", 1.0)));
+  editorWidth.store(static_cast<int>(state.getProperty("editorWidth", 0)));
+  editorHeight.store(static_cast<int>(state.getProperty("editorHeight", 0)));
   // Default matches the UI's default-visible hint bar (see Processor.h).
   editorExtraHeight.store(static_cast<int>(state.getProperty("editorExtraHeight", 36)));
 

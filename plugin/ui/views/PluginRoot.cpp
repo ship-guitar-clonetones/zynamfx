@@ -43,7 +43,13 @@ PluginRoot::PluginRoot(Services& services)
   // second browser tab.
   header_.onLogin = [this] {
     if (signInShown()) return;
-    services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::plain); });
+    juce::AlertWindow::showAsync(juce::MessageBoxOptions().withTitle("Powered by TONE3000")
+      .withMessage("Browse NAM captures and IRs from TONE3000’s community of creators. Continue to TONE3000 to sign in and select a tone. Your account and the creators’ licenses apply.")
+      .withButton("Continue").withButton("Cancel"),
+      [self = juce::Component::SafePointer(this)](int result) {
+        if (self != nullptr && result == 1)
+          self->services_.connection.requireConnection([self] { if (self != nullptr) self->services_.session.login(ToneSession::LoginIntent::plain); });
+      });
   };
   header_.onLogout = [this] { logout(); };
 
@@ -377,7 +383,17 @@ void PluginRoot::setBrowserShown(bool shown) {
     // same browser.
     browser_->onSignIn = [this] {
       if (signInShown()) return;
-      services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::browse); });
+      if (services_.session.authenticated()) {
+        services_.connection.requireConnection([this] { services_.session.login(ToneSession::LoginIntent::browse); });
+      } else {
+        juce::AlertWindow::showAsync(juce::MessageBoxOptions().withTitle("Powered by TONE3000")
+          .withMessage("zynamfx connects to TONE3000’s library of NAM captures and IRs, created by musicians. Continue to sign in with your TONE3000 account and choose a tone. Creator attribution and licenses are preserved.")
+          .withButton("Continue").withButton("Cancel"),
+          [self = juce::Component::SafePointer(this)](int result) {
+            if (self != nullptr && result == 1)
+              self->services_.connection.requireConnection([self] { if (self != nullptr) self->services_.session.login(ToneSession::LoginIntent::browse); });
+          });
+      }
     };
     // Right above the faceplate: under a tuner, Settings and the overlay.
     addChildComponent(*browser_, getIndexOfChildComponent(&faceplate_) + 1);

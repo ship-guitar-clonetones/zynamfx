@@ -237,15 +237,15 @@ void ChainView::paint(juce::Graphics& g) {
   if (stereo()) return;
   // Mono-only section title in the top-left dead space, aligned with the
   // first tile (the lane's edge-fade inset).
-  const auto font = Fonts::mono(kTitleSize);
+  const auto font = Fonts::tracked(Fonts::mono(10,true),0.08f);
   const int x = scroller_->getX() + gallery::kEdgeFadeWidth;
-  paint::text(g, "SIGNAL CHAIN", {x, kPadY, 300, juce::roundToInt(kTitleSize * 1.2f)}, font,
+  paint::text(g, "SIGNAL FLOW", {x, 2, 300, 16}, font,
               theme::kWhite);
 }
 
 // Fade the lanes out under the gutters as they scroll.
 void ChainView::paintOverChildren(juce::Graphics& g) {
-  paint::edgeFades(g, scroller_->getBounds().toFloat(), gallery::kEdgeFadeWidth, juce::Colours::black);
+  paint::edgeFades(g, scroller_->getBounds().toFloat(), gallery::kEdgeFadeWidth, theme::kBlack);
 }
 
 // Sorting: pointer + keyboard

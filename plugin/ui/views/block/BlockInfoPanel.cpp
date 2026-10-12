@@ -12,7 +12,7 @@
 namespace t3k::ui {
 
 namespace {
-constexpr const char* kSignedOutPrompt = "Sign in to TONE3000 to see tone details.";
+constexpr const char* kSignedOutPrompt = "Sign in to see TONE3000 tone details.";
 
 // Makes / tags come straight off the network: trimmed non-empty names only.
 std::vector<juce::String> clean(const std::vector<juce::String>& names) {
@@ -231,6 +231,12 @@ void BlockInfoPanel::rebuild(int width) {
     }
   }
 
+  if (state_.tone && state_.tone->license.isNotEmpty()) {
+    addTitle("Creator license");
+    auto flow = std::make_unique<TextFlow>(body, kLineHeight, state_.tone->license, w);
+    const auto height = flow->height();
+    add(Item::Kind::body, height).flows.push_back(std::move(flow));
+  }
   if (state_.pageUrl.isNotEmpty()) {
     if (signedOut || errored || hasSections) add(Item::Kind::hairline, 1);
     auto& item = add(Item::Kind::control, view_->getHeight());

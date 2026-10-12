@@ -75,6 +75,13 @@ Callback Callback::parse(const juce::String& query, const juce::String& expected
   }
   if (params["error"].isNotEmpty()) return fail(params["error"]);
   if (cb.code.isEmpty()) return fail("missing_code");
+  const auto toneId = params["tone_id"];
+  if (toneId.isNotEmpty()) {
+    if (toneId.length() > 10 || !toneId.containsOnly("0123456789") ||
+        toneId.getLargeIntValue() < 1 || toneId.getLargeIntValue() > 2147483647)
+      return fail("invalid_tone_id");
+    cb.toneId = static_cast<int>(toneId.getLargeIntValue());
+  }
   cb.kind = Kind::code;
   return cb;
 }

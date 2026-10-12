@@ -65,7 +65,7 @@ TEST(BlockClipboardTest, PasteFillsInsertSlotAndCarriesEverySetting) {
 
   const juce::var after = proc.getChainState(-1);
   const auto layout = laneLayout(after, "chain");
-  ASSERT_EQ(layout.size(), 5u);  // 2 tones + 3 inserts (kMinLaneSlots)
+  ASSERT_EQ(layout.size(), static_cast<size_t>(kMinLaneSlots));  // 2 tones + 5 inserts (kMinLaneSlots)
   EXPECT_EQ(layout[0], std::make_pair(juce::String("tone"), juce::String("blk-a")));
   EXPECT_EQ(layout[1], std::make_pair(juce::String("tone"), juce::String(newId)));
 

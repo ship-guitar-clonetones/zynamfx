@@ -174,7 +174,7 @@ SystemSettingsPage::SystemSettingsPage(Services& services)
       services_(services),
       micDenied_(AlertVariant::error,
                  boldThen("Microphone access is off.",
-                          juce::String::fromUTF8(" TONE3000 can\xe2\x80\x99t hear your instrument until you allow "
+                          juce::String::fromUTF8(" zynamfx can\xe2\x80\x99t hear your instrument until you allow "
                                                  "it in your privacy settings, then relaunch.")),
                  {{"Allow Access", [this] { apply([&] { return services_.audioDevice.openMicSettings(); }); }}}),
       inlineError_(AlertVariant::error, {},

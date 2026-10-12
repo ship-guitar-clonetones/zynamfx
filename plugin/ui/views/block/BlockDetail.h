@@ -22,8 +22,8 @@ namespace t3k::ui {
 
 class BlockDetail : public juce::Component, private ChainStore::Listener, private juce::ComponentListener {
 public:
-  static constexpr int kPadY = 24;
-  static constexpr int kBackGap = 16;
+  static constexpr int kPadY = 8;
+  static constexpr int kBackGap = 8;
 
   BlockDetail(Services& services, const std::string& blockId);
   ~BlockDetail() override;

@@ -122,16 +122,15 @@ public:
   // architecture filter, which is all the plugin loads).
   virtual void listToneModels(int toneId, const juce::String& format,
                               Reply<std::vector<Model>> reply) = 0;
-  // PUT / DELETE /tones/{id}/favorite (idempotent).
+  // Catalog writes are disabled in public Free-tier builds.
   virtual void setToneFavorite(int toneId, bool favorite, Done done) = 0;
-  // One page of the browser's results: GET /tones/search for the query, or
-  // the profile filter's GET /tones/{downloaded|favorited|created}.
+  // One page from a permitted bounded list endpoint. Custom search is not
+  // issued by the public integration.
   virtual void searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) = 0;
   // The signed-out preview's feed: GET /tones/trending, the homepage's top
   // 10, narrowed to one gear type when `gear` is set. Needs no session.
   virtual void listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) = 0;
-  // The options a taxonomy filter offers: GET /tags, /makes or /users, the
-  // most-used first, narrowed by `text` when given (up to one page).
+  // Custom taxonomy lookups are disabled in the public integration.
   virtual void listTaxonomy(Taxonomy kind, const juce::String& text, Reply<std::vector<TaxonomyEntry>> reply) = 0;
   // Resolve a tone picked in the browser: the tone, its first loadable
   // model and a fresh token for native, then onToneSelected. `done` reports
@@ -158,10 +157,7 @@ public:
   virtual void cancelFlow() = 0;
   // Drop the error without restarting.
   virtual void clearAuthError() = 0;
-  // While leaving: ask TONE3000 for a device code and poll for its
-  // approval alongside the browser (AuthFlow::device follows). Called again
-  // after a failure for a fresh code. Whichever of the two completes first
-  // signs in.
+  // Device authorization is disabled in public Free-tier builds.
   virtual void startDeviceFlow() = 0;
 
   // Reachability (useConnectionGate.ts)
@@ -177,9 +173,7 @@ public:
   virtual void probeSecureConnection(std::function<void(Probe)> reply) = 0;
 
   // Update check (useUpdateNotice.ts)
-  // GET /plugin/version, with the Bearer when signed in (beta payloads),
-  // X-Device-Id and X-Plugin-Version (the running build); the raw JSON
-  // body, validated by UpdateCheck.
+  // Disabled for public builds; updates are published through releases.
   virtual void fetchPluginVersion(Reply<juce::var> reply) = 0;
 
 protected:

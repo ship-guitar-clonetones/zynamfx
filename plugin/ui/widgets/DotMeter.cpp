@@ -31,7 +31,7 @@ void DotRail::paint(juce::Graphics& g, juce::Rectangle<float> box, float db, boo
     const float dotDb = meter::kMinDb + position * (meter::kMaxDb - meter::kMinDb);
     const bool active = i == count - 1 ? clipped : db >= dotDb;
     g.setColour(meter::gradientColour(position).withAlpha(active ? 1.0f : kDimOpacity));
-    g.fillEllipse(dot(i, box));
+    g.fillRoundedRectangle(dot(i, box), 0.5f);
   }
 }
 

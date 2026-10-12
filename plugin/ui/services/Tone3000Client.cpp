@@ -127,25 +127,12 @@ std::optional<DeviceAuthorization> DeviceAuthorization::fromVar(const juce::var&
 }
 
 void Tone3000Client::requestDeviceAuthorization(Reply<DeviceAuthorization> reply) {
-  juce::StringPairArray form;
-  form.set("client_id", key_);
-  postForm("/api/v1/oauth/device_authorization", form, [cb = std::move(reply)](HttpResponse response) {
-    if (!response.ok()) {
-      const auto err = response.json()["error"].toString();
-      cb(Result<DeviceAuthorization>::fail(err.isNotEmpty() ? err : juce::String("device_authorization_failed")));
-      return;
-    }
-    if (auto d = DeviceAuthorization::fromVar(response.json())) cb(Result<DeviceAuthorization>::ok(*d));
-    else cb(Result<DeviceAuthorization>::fail("device_authorization_failed"));
-  });
+  reply(Result<DeviceAuthorization>::fail("Device authorization is unavailable in the public Free-tier build."));
 }
 
 void Tone3000Client::pollDeviceToken(const juce::String& deviceCode, Reply<Tokens> reply) {
-  juce::StringPairArray form;
-  form.set("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
-  form.set("device_code", deviceCode);
-  form.set("client_id", key_);
-  postTokenForm(form, std::move(reply));
+  juce::ignoreUnused(deviceCode);
+  reply(Result<Tokens>::fail("Device authorization is unavailable in the public Free-tier build."));
 }
 
 void Tone3000Client::postForm(const juce::String& path, const juce::StringPairArray& form,
@@ -281,23 +268,45 @@ void Tone3000Client::getJson(const juce::String& path, juce::String label, Reply
   });
 }
 
-void Tone3000Client::getUser(Reply<juce::var> reply) { getJson("/api/v1/user", "getUser", std::move(reply)); }
+void Tone3000Client::getUser(Reply<juce::var> reply) {
+  reply(Result<juce::var>::fail("Account details are handled by TONE3000's hosted Select flow."));
+}
 
 void Tone3000Client::getTone(int toneId, Reply<juce::var> reply) {
   getJson("/api/v1/tones/" + juce::String(toneId), "getTone", std::move(reply));
 }
 
 void Tone3000Client::setFavorite(int toneId, bool favorite, Reply<bool> reply) {
-  const auto label = juce::String(favorite ? "favoriteTone" : "unfavoriteTone");
-  fetch("/api/v1/tones/" + juce::String(toneId) + "/favorite", favorite ? "PUT" : "DELETE", {},
-        [label, cb = std::move(reply)](Result<HttpResponse> r) {
-          if (!r) return cb(Result<bool>::fail(r.error));
-          if (!r->ok()) return cb(Result<bool>::fail(label + " failed: " + juce::String(r->status)));
-          cb(Result<bool>::ok(true));
-        });
+  juce::ignoreUnused(toneId, favorite);
+  reply(Result<bool>::fail("Catalog changes are managed on TONE3000."));
 }
 
 void Tone3000Client::listTones(const juce::String& path, Reply<juce::var> reply) {
+  const auto route = path.upToFirstOccurrenceOf("?", false, false);
+  const auto args = path.fromFirstOccurrenceOf("?", false, false);
+  const bool allowed = route == "/api/v1/tones/trending" || route == "/api/v1/tones/latest" ||
+                       route == "/api/v1/tones/favorited" || route == "/api/v1/tones/downloaded" ||
+                       route == "/api/v1/tones/created";
+  if (!allowed)
+    return reply(Result<juce::var>::fail("This catalog operation is not available in the Free-tier integration."));
+  bool pageSeen = false, sizeSeen = false, gearSeen = false;
+  if (args.isNotEmpty())
+    for (const auto& pair : juce::StringArray::fromTokens(args, "&", {})) {
+      const auto key = pair.upToFirstOccurrenceOf("=", false, false);
+      const auto value = pair.fromFirstOccurrenceOf("=", false, false);
+      if (key == "page" && !pageSeen && value.containsOnly("0123456789") && value.getIntValue() >= 1 &&
+          value.getIntValue() <= 100000) pageSeen = true;
+      else if (key == "page_size" && !sizeSeen && value.containsOnly("0123456789") && value.getIntValue() >= 1 &&
+               value.getIntValue() <= 100) sizeSeen = true;
+      else if (key == "gear" && !gearSeen && value.isNotEmpty() && value.length() <= 32 &&
+               value.containsOnly("abcdefghijklmnopqrstuvwxyz0123456789-")) gearSeen = true;
+      else return reply(Result<juce::var>::fail("The catalog request exceeds the Free-tier list limits."));
+    }
+  const bool trending = route == "/api/v1/tones/trending";
+  const bool latest = route == "/api/v1/tones/latest";
+  if ((trending && (pageSeen || sizeSeen)) || (latest && (pageSeen || sizeSeen || gearSeen)) ||
+      (!trending && !latest && (!pageSeen || !sizeSeen)))
+    return reply(Result<juce::var>::fail("The bounded catalog request uses unsupported parameters."));
   getJson(path, "listTones", std::move(reply));
 }
 
@@ -312,10 +321,8 @@ void Tone3000Client::listTrending(const juce::String& gear, Reply<juce::var> rep
 }
 
 void Tone3000Client::listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply) {
-  const char* endpoint = kind == Taxonomy::tags ? "tags" : kind == Taxonomy::makes ? "makes" : "users";
-  juce::String path = "/api/v1/" + juce::String(endpoint) + "?page=1&page_size=" + juce::String(pageSize);
-  if (query.isNotEmpty()) path << "&query=" << juce::URL::addEscapeChars(query, true);
-  getJson(path, "list " + juce::String(endpoint), std::move(reply));
+  juce::ignoreUnused(kind, query, pageSize);
+  reply(Result<juce::var>::fail("Custom catalog filters are unavailable in the Free-tier integration."));
 }
 
 void Tone3000Client::listModels(int toneId, int pageSize, int architecture, Reply<juce::var> reply) {
@@ -326,14 +333,8 @@ void Tone3000Client::listModels(int toneId, int pageSize, int architecture, Repl
 
 void Tone3000Client::fetchPluginVersion(const juce::String& deviceId, const juce::String& localVersion,
                                         Reply<juce::var> reply) {
-  juce::StringPairArray headers;
-  if (deviceId.isNotEmpty()) headers.set("X-Device-Id", deviceId);
-  if (localVersion.isNotEmpty()) headers.set("X-Plugin-Version", localVersion);
-  fetchOptionalAuth("/api/v1/plugin/version", headers, [cb = std::move(reply)](Result<HttpResponse> r) {
-    if (!r) return cb(Result<juce::var>::fail(r.error));
-    if (!r->ok()) return cb(Result<juce::var>::fail("version check failed: " + juce::String(r->status)));
-    cb(Result<juce::var>::ok(r->json()));
-  });
+  juce::ignoreUnused(deviceId, localVersion);
+  reply(Result<juce::var>::fail("Use the project's public release page for updates."));
 }
 
 }  // namespace t3k::ui

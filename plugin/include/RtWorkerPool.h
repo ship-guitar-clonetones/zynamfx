@@ -330,7 +330,7 @@ private:
   class Worker : public juce::Thread {
   public:
     Worker(RtWorkerPool& ownerPool, int index)
-        : juce::Thread("TONE3000 DSP Worker " + juce::String(index + 1)),
+        : juce::Thread("zynamfx DSP Worker " + juce::String(index + 1)),
           pool(ownerPool),
           parkedBit(1u << index) {}
 

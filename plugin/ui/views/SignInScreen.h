@@ -1,26 +1,6 @@
-// The sign-in takeover (Select Tone mockups 13342:46017 and 13342:46055):
-// the page the plugin shows from the moment a sign-in starts until the
-// session lands, whichever CTA started it (the account menu lands back on
-// the chain, the tone browser's on the browser). It covers everything under
-// the header as the tone browser does: a bare ← top-left that abandons the
-// sign-in, and in the middle the loading dots over "Sign in with your
-// browser".
-//
-// The browser is opened best effort, and there is no telling from here
-// whether it came up (when it did, it covers the plugin anyway), so the
-// page always offers the two ways round it under the title, both fed by the
-// session's AuthFlow:
-//   Copy Link       the authorize URL on the clipboard, to paste into any
-//                   browser on this machine (the loopback redirect works
-//                   from whichever browser completes it)
-//   Sign in on a different device
-//                   the device flow, on its own page: a QR code for the
-//                   phone's camera, or the code to type at
-//                   tone3000.com/activate for anyone who can't scan, polled
-//                   until approved or expired
-// The browser path stays live throughout, so finishing in the browser
-// still works from the device page. A failed flow shows its reason with Try
-// again / Dismiss in place of the dots.
+// Sign-in takeover for TONE3000's hosted OAuth Select experience. It remains
+// visible while the browser flow is active and offers a copy-link fallback
+// when the system browser does not open. Errors offer Retry and Dismiss.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -52,7 +32,7 @@ public:
   static constexpr float kCardCorner = 16;
   static constexpr int kQrSize = 192;
   static constexpr int kCopyMaxWidth = 256, kWideMaxWidth = 400;
-  static constexpr const char* kDefaultError = "Something went wrong completing TONE3000 sign-in.";
+  static constexpr const char* kDefaultError = "Something went wrong completing catalog sign-in.";
 
   explicit SignInScreen(Services& services);
   ~SignInScreen() override;

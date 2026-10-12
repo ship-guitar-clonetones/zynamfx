@@ -3,9 +3,9 @@
 namespace t3k::ui {
 
 namespace {
-const char* const kOfflineCopy = "No internet connection. Connect to browse and load tones from TONE3000.";
+const char* const kOfflineCopy = "No internet connection. Connect to browse and load catalog tones.";
 const char* const kInsecureCopy =
-    "Couldn't make a secure connection to TONE3000. If other sites work on this computer, the usual cause is a "
+    "Couldn't make a secure connection to the tone catalog. If other sites work on this computer, the usual cause is a "
     "wrong date & time; a firewall, VPN, or security software can also block the plugin.";
 }  // namespace
 

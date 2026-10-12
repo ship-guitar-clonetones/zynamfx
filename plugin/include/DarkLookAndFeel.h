@@ -15,14 +15,14 @@ class DarkLookAndFeel : public juce::LookAndFeel_V4 {
 public:
   DarkLookAndFeel()
       : juce::LookAndFeel_V4({
-            juce::Colour(0xff000000),  // windowBackground
-            juce::Colour(0xff1c1c1e),  // widgetBackground
-            juce::Colour(0xff151517),  // menuBackground
-            juce::Colour(0xff3a3a3c),  // outline
+            juce::Colour(0xff101115),  // windowBackground
+            juce::Colour(0xff232730),  // widgetBackground
+            juce::Colour(0xff191c23),  // menuBackground
+            juce::Colour(0xff4c5667),  // outline
             juce::Colour(0xffffffff),  // defaultText
             juce::Colour(0xff2c2c2e),  // defaultFill
-            juce::Colour(0xff000000),  // highlightedText
-            juce::Colour(0xffffff00),  // highlightedFill (brand yellow)
+            juce::Colour(0xff101115),  // highlightedText
+            juce::Colour(0xff8e98ff),  // highlightedFill (brand yellow)
             juce::Colour(0xffffffff),  // menuText
         }) {}
 

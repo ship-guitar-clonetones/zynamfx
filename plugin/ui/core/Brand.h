@@ -9,6 +9,8 @@ namespace t3k::ui {
 struct Brand {
   // The 210x32 wordmark (assets/t3k.svg).
   static const juce::Drawable& logo();
+  // Compact ZY monogram shown beside the zynamfx wordmark.
+  static const juce::Drawable& zyMark();
   // The 36x12 mark (assets/t3k-mark.svg).
   static const juce::Drawable& mark();
   // The A2-architecture badge (FormatBadge.tsx A2Mark): a white→#434343
@@ -19,6 +21,8 @@ struct Brand {
   static const juce::Drawable& verifiedBadge();
 
   static void drawLogo(juce::Graphics& g, juce::Rectangle<float> box);
+  static void drawZyMark(juce::Graphics& g, juce::Rectangle<float> box);
+  static void drawTone3000Logo(juce::Graphics& g, juce::Rectangle<float> box);
   static void drawMark(juce::Graphics& g, juce::Rectangle<float> box);
   static void drawA2Mark(juce::Graphics& g, juce::Rectangle<float> box);
   static void drawVerifiedBadge(juce::Graphics& g, juce::Rectangle<float> box);

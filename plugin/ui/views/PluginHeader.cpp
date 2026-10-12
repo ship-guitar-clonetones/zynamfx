@@ -1,6 +1,7 @@
 #include "PluginHeader.h"
 
 #include "core/Brand.h"
+#include "core/Fonts.h"
 #include "core/CustomIcons.h"
 #include "core/Design.h"
 #include "core/Help.h"
@@ -18,16 +19,18 @@ constexpr int kLogoWidth = 160;
 constexpr int kLogoHeight = 24;  // 160 * 32 / 210, rounded like the browser
 }  // namespace
 
-// The wordmark links to tone3000.com.
+// The wordmark links to the zynamfx project.
 class PluginHeader::LogoLink : public Clickable {
 public:
   LogoLink() : Clickable({}) {
-    setTitle("TONE3000");  // tone3000.com, to a screen reader
+    setTitle("zynamfx");
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
-    onClick = [] { juce::URL("https://www.tone3000.com").launchInDefaultBrowser(); };
+    onClick = [] { juce::URL("https://github.com/zackyusof/zynamfx").launchInDefaultBrowser(); };
   }
   void paintButton(juce::Graphics& g, bool, bool) override {
-    Brand::drawLogo(g, getLocalBounds().toFloat());
+    const auto bounds = getLocalBounds().toFloat();
+    Brand::drawLogo(g, bounds.withWidth(84.0f));
+    Brand::drawZyMark(g, {90.0f, 2.0f, 36.0f, 20.0f});
   }
 };
 
@@ -89,6 +92,7 @@ PluginHeader::~PluginHeader() {
 void PluginHeader::sessionChanged() {
   const auto& session = services_.session;
   account_.setAuthenticated(session.authenticated());
+  account_.setLocalOnly(services_.backend.localOnly());
   const auto user = session.user();
   const auto url = user ? user->avatarUrl : juce::String();
   if (url == avatarUrl_ && (url.isNotEmpty() || !session.authenticated())) return;
@@ -110,7 +114,15 @@ void PluginHeader::chainChanged(const ChainState& state) {
 }
 
 void PluginHeader::paint(juce::Graphics& g) {
-  g.fillAll(theme::kBlack);
+  g.setGradientFill(juce::ColourGradient::vertical(theme::kSurfaceRaised,0,theme::kSurface,static_cast<float>(getHeight())));
+  g.fillAll();
+  g.setColour(theme::kAccent);
+  g.fillRect(0,getHeight()-2,getWidth(),2);
+  g.setFont(Fonts::tracked(Fonts::mono(8),0.12f));g.setColour(theme::kMuted);
+  g.drawText("Powered by TONE3000",24,45,200,12,juce::Justification::centredLeft,false);
+  const auto presetBox=presetBar_.getBounds().expanded(8,5).toFloat();
+  paint::fill(g,presetBox,4.0f,theme::kBlack);
+  paint::border(g,presetBox,4.0f,theme::kBorder);
   paint::hairlineH(g, 0, static_cast<float>(getWidth()), static_cast<float>(getHeight() - 1),
                    theme::kBorder);
 }
@@ -127,7 +139,7 @@ void PluginHeader::resized() {
     return c.getX();
   };
 
-  logo_->setBounds(area.getX(), cy - kLogoHeight / 2, kLogoWidth, kLogoHeight);
+  logo_->setBounds(area.getX(), 14, kLogoWidth, kLogoHeight);
 
   // Right group, laid out from the right edge: account · undo/redo · tuner ·
   // stereo · presets, 40px apart (16px inside the undo/redo pair).

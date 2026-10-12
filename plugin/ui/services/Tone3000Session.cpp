@@ -3,22 +3,24 @@
 #include <juce_events/juce_events.h>
 
 #include "T3kConfig.h"
+#include "services/ForkKeyStore.h"  // fork-only: bring-your-own API key
 
 namespace t3k::ui {
 
 namespace {
 constexpr const char* kNoKeyMessage =
-    "TONE3000 publishable key not configured. Set T3K_PUBLISHABLE_KEY at build time.";
+    "TONE3000 API key not configured. Open Plugin Settings > TONE3000 API key, "
+    "follow the link to get your free key, paste it there, then reopen this window.";
 constexpr const char* kLoopbackFailed = "Could not start the local sign-in listener. Try again.";
 // The launcher itself refused (AuthFlow::browserProblem; the screen adds
 // what to do instead). A browser that starts and then dies reports nothing
 // here: that is what the always-on fallbacks are for.
 constexpr const char* kBrowserFailed = "Your browser couldn't be opened.";
 // The device flow's outcomes (AuthFlow::Device::error).
-constexpr const char* kDeviceCodeFailed = "Couldn't get a code from TONE3000.";
+constexpr const char* kDeviceCodeFailed = "Couldn't get a code from the catalog service.";
 constexpr const char* kDeviceExpired = "That code expired.";
 constexpr const char* kDeviceDenied = "Sign-in was declined on the other device.";
-constexpr const char* kDeviceFailed = "TONE3000 stopped waiting for that code.";
+constexpr const char* kDeviceFailed = "The catalog service stopped waiting for that code.";
 // RFC 8628 §3.5: slow_down adds 5 s to the poll interval.
 constexpr int kSlowDownMs = 5000;
 // Only the first model: native stores and loads the active model; the
@@ -34,11 +36,20 @@ Tone3000Session::Config Tone3000Session::Config::fromBuild() {
   return {config::kApiOrigin, config::kPublishableKey, config::kArchitecture};
 }
 
+// Fork-only: a personal key saved in settings (Plugin Settings > TONE3000 API key)
+// wins over the baked build key, so keyless public builds still sign in under
+// the user's own TONE3000 client_id.
+static Tone3000Session::Config withForkKey(UiPrefs& prefs, Tone3000Session::Config config) {
+  if (const auto custom = fork::customPublishableKey(prefs); custom.isNotEmpty())
+    config.publishableKey = custom;
+  return config;
+}
+
 Tone3000Session::Tone3000Session(Backend& backend, UiPrefs& prefs, HttpTransport& http, Config config)
     : backend_(backend),
       prefs_(prefs),
       http_(http),
-      config_(std::move(config)),
+      config_(withForkKey(prefs, std::move(config))),
       client_(http, prefs, config_.apiOrigin, config_.publishableKey) {
   // Every new or refreshed token set reaches native as it happens.
   client_.onTokensUpdated = [this](const Tokens& t) { pushToken(t.access); };
@@ -52,10 +63,7 @@ Tone3000Session::Tone3000Session(Backend& backend, UiPrefs& prefs, HttpTransport
 
   // A remembered login never fires the token listener, so native would sit
   // tokenless until the next refresh: sync once, and refresh the identity.
-  if (authenticated()) {
-    ensureNativeAuth({});
-    refreshUser();
-  }
+  if (authenticated()) ensureNativeAuth({});
 }
 
 Tone3000Session::~Tone3000Session() = default;
@@ -238,6 +246,9 @@ void Tone3000Session::login(LoginIntent intent) {
   redirectUri_ = loopback_.redirectUri();
   juce::StringPairArray extra;
   extra.set("menubar", "true");
+  extra.set("prompt", "select_tone");
+  extra.set("architecture", juce::String(config_.architecture));
+  extra.set("preview", "true");
   flow_.authorizeUrl = oauth::authorizeUrl(config_.apiOrigin, config_.publishableKey, redirectUri_, *pkce_, extra);
   // Best effort, whatever the platform: a browser that would not open is
   // no dead end, since the listener is up for a pasted link and the screen
@@ -276,13 +287,18 @@ void Tone3000Session::handleCallback(const juce::String& query) {
       break;
   }
   setFlow(AuthFlow::Phase::returning);
-  client_.exchangeCode(cb.code, pkce.verifier, redirectUri_, scope_.wrap([this](Result<Tokens> tokens) {
+  client_.exchangeCode(cb.code, pkce.verifier, redirectUri_, scope_.wrap([this, toneId = cb.toneId](Result<Tokens> tokens) {
     if (flow_.phase != AuthFlow::Phase::returning) return;  // cancelled meanwhile
     if (!tokens) {
       setFlow(AuthFlow::Phase::error, tokens.error);
       return;
     }
     finishSignIn(*tokens);
+    if (toneId > 0) {
+      selectTone(toneId, scope_.wrap([this](const juce::String& error) {
+        if (error.isNotEmpty()) setFlow(AuthFlow::Phase::error, error);
+      }));
+    }
   }));
 }
 
@@ -293,36 +309,15 @@ void Tone3000Session::finishSignIn(const Tokens& tokens) {
   stopDeviceFlow();
   client_.setTokens(tokens);
   notifySessionChanged();
-  refreshUser();
+  // The public build keeps catalog identity and browsing on TONE3000's
+  // hosted Select flow; it does not call the custom profile/search API.
   if (wantsBrowser && onAuthenticated) onAuthenticated();
   setFlow(AuthFlow::Phase::idle);
 }
 
 // Device flow
 void Tone3000Session::startDeviceFlow() {
-  if (flow_.phase != AuthFlow::Phase::leaving) return;
-  stopDeviceFlow();
-  flow_.device = AuthFlow::Device{};
-  notifyAuthFlowChanged();
-  client_.requestDeviceAuthorization(scope_.wrap([this](Result<DeviceAuthorization> r) {
-    if (flow_.phase != AuthFlow::Phase::leaving || !flow_.device ||
-        flow_.device->state != AuthFlow::Device::State::requesting)
-      return;  // cancelled, or superseded by a newer request
-    if (!r) {
-      failDevice(kDeviceCodeFailed);
-      return;
-    }
-    deviceCode_ = r->deviceCode;
-    devicePollMs_ = r->intervalS * 1000;
-    deviceDeadlineMs_ = juce::Time::currentTimeMillis() + static_cast<juce::int64>(r->expiresInS) * 1000;
-    auto& device = *flow_.device;
-    device.state = AuthFlow::Device::State::waiting;
-    device.userCode = r->userCode;
-    device.verificationUri = r->verificationUri;
-    device.verificationUriComplete = r->verificationUriComplete;
-    notifyAuthFlowChanged();
-    devicePoll_.start(devicePollMs_, [this] { pollDevice(); });
-  }));
+  // Device authorization is intentionally unavailable in the public Free-tier build.
 }
 
 void Tone3000Session::pollDevice() {

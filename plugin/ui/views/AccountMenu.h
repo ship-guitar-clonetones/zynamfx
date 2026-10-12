@@ -23,6 +23,7 @@ public:
   ~AccountMenu() override;
 
   void setAuthenticated(bool authenticated);
+  void setLocalOnly(bool local);
   void setAvatar(ImageLoader& images, const juce::String& url) { avatar_.setImage(images, url); }
   void openMenu();
 
@@ -35,6 +36,7 @@ private:
   class Menu : public Popover {
   public:
     Menu();
+    void setLocalOnly();
     void paint(juce::Graphics& g) override;
     void resized() override;
     MenuRow settings{"Settings", Icon::Settings};

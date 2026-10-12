@@ -70,7 +70,7 @@ void drawTinted(juce::Graphics& g, const char* svg, juce::Rectangle<float> box, 
 }  // namespace
 
 void Icons::draw(juce::Graphics& g, Icon icon, juce::Rectangle<float> box, juce::Colour colour) {
-  drawTinted(g, lucideSvg(icon), box, colour);
+  drawTinted(g, lucideSvg(icon), box, colour, 1.6f);
 }
 
 void Icons::draw(juce::Graphics& g, Icon icon, juce::Rectangle<float> box, juce::Colour colour,

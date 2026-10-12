@@ -65,6 +65,12 @@ juce::Image captureScenario(const Scenario& scenario, const juce::var& fixtures,
     driveMissing = true;
   }
   mm->runDispatchLoopUntil(scenario.settleMs());
+  // Keep settings captures focused on settings; the mock advertises an
+  // update independently of the screen being reviewed.
+  if(scenario.id.startsWith("settings-")) {
+    root.services().updates.remindLater(1);
+    mm->runDispatchLoopUntil(100);
+  }
   unnamed = drive::unnamedFocusables(root);
   return root.createComponentSnapshot(root.getLocalBounds(), true, 2.0f);
 }

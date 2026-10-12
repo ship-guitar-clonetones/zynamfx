@@ -1,0 +1,129 @@
+name: Upstream sync and macOS release
+
+on:
+  schedule:
+    - cron: "23 8 * * *"
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: Build the current version even when upstream has not changed
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v2.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: public-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync-upstream:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.sync.outputs.should_build }}
+      tag: ${{ steps.sync.outputs.tag }}
+      version: ${{ steps.sync.outputs.version }}
+      commit: ${{ steps.sync.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Find latest stable upstream release
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(curl --fail --silent --show-error https://api.github.com/repos/tone-3000/tone3000-plugin/releases/latest | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')"
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Unexpected upstream release tag: $tag" >&2; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Merge upstream release and prepare next zynamfx version
+        id: sync
+        env:
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+          FORCE_BUILD: ${{ inputs.force_build || 'false' }}
+        run: |
+          result="$(python3 script/sync-tone3000-release.py --tag "$UPSTREAM_TAG")"
+          echo "$result"
+          changed="$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["changed"]).lower())' <<< "$result")"
+          version="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])' <<< "$result")"
+          commit="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"])' <<< "$result")"
+          if [ "$changed" = true ]; then
+            git push origin HEAD:main
+          fi
+          if [ "$changed" = true ] || [ "$FORCE_BUILD" = true ]; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+  build-and-release:
+    needs: sync-upstream
+    if: >-
+      always() &&
+      ((needs.sync-upstream.result == 'success' && needs.sync-upstream.outputs.should_build == 'true') ||
+       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v2.')))
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.sync-upstream.outputs.commit || github.ref }}
+          submodules: recursive
+      - name: Install build tools
+        run: brew install cmake ninja
+      - name: Build Standalone, AU and VST3
+        run: python3 script/build-stadium-prototype.py
+      - name: Validate Audio Unit
+        run: |
+          au="build/plugin/TONE3000_artefacts/Release/AU/zynamfx.component"
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto "$au" "$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
+          auval -v aumf ZyFX ZYUS
+      - name: Package binaries and corresponding source
+        id: package
+        env:
+          VERSION: ${{ needs.sync-upstream.outputs.version }}
+          PUSHED_TAG: ${{ github.ref_name }}
+        run: |
+          version="${VERSION:-${PUSHED_TAG#v}}"
+          [ -n "$version" ] || { echo "Could not determine zynamfx version" >&2; exit 1; }
+          mkdir -p release
+          ditto -c -k --sequesterRsrc --keepParent build/plugin/TONE3000_artefacts/Release/Standalone/zynamfx.app "release/zynamfx-$version-macos-arm64-standalone.zip"
+          ditto -c -k --sequesterRsrc --keepParent build/plugin/TONE3000_artefacts/Release/AU/zynamfx.component "release/zynamfx-$version-macos-arm64-au.zip"
+          ditto -c -k --sequesterRsrc --keepParent build/plugin/TONE3000_artefacts/Release/VST3/zynamfx.vst3 "release/zynamfx-$version-macos-arm64-vst3.zip"
+          python3 script/package-local-source.py "release/zynamfx-$version-source.tar.gz"
+          cat > release/INSTALL.txt <<'EOF'
+          zynamfx macOS Apple Silicon test release
+
+          These builds are ad-hoc signed and not notarized. In Finder, open the
+          standalone app with Control-click > Open the first time. Install the AU
+          component under ~/Library/Audio/Plug-Ins/Components and VST3 under
+          ~/Library/Audio/Plug-Ins/VST3, then restart your audio host.
+          Matching corresponding source is included in the source archive.
+          EOF
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          git fetch origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || true
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+          gh release create "$tag" release/* --title "zynamfx $tag" \
+            --notes "Free, open-source zynamfx Version 2 for macOS Apple Silicon. Includes Standalone, AU and VST3 builds and the corresponding source archive. Builds are ad-hoc signed and not notarized. See README for features, installation and TONE3000 integration terms."

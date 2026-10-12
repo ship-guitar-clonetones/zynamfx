@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "core/Fonts.h"
+#include "core/Brand.h"
 #include "core/Help.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
@@ -16,7 +17,7 @@ namespace {
 constexpr const char* kTrendingFooterCopy = "Discover a zillion more tones.";
 constexpr const char* kSignInHeading = "Sign in to see your tones and discover a zillion new ones.";
 constexpr const char* kSignInLabel = "Sign in or create free account";
-constexpr const char* kFetchError = "Failed to load tones from TONE3000.";
+constexpr const char* kFetchError = "Failed to load catalog tones.";
 constexpr const char* kPickError = "Failed to load that tone. Please try again.";
 constexpr float kPickErrorPx = 12;
 constexpr float kEmptyPx = 13;
@@ -87,6 +88,10 @@ ToneBrowser::ToneBrowser(Services& services)
     if (onClose) onClose();
   };
   addAndMakeVisible(back_);
+  browseOfficial_.setTrailingMark(10);
+  browseOfficial_.onClick = [this] { if (onSignIn) onSignIn(); };
+  addAndMakeVisible(browseOfficial_);
+  addChildComponent(signedInAvatar_);
   signInBack_.onClick = [this] { setSignInPageShown(false); };
   addChildComponent(signInBack_);
   addAndMakeVisible(*body_);
@@ -116,6 +121,10 @@ ToneBrowser::ToneBrowser(Services& services)
   paginator_.onPageChange = [this](int page) { setPage(page); };
   body_->addChildComponent(paginator_);
 
+  if (const auto user = services_.session.user()) {
+    signedInAvatar_.setVisible(true);
+    signedInAvatar_.setImage(services_.images, user->avatarUrl);
+  }
   services_.session.addListener(this);
   services_.zoom.addListener(this);
   // Back to the page this screen was left on, so long as it is the same
@@ -140,6 +149,10 @@ void ToneBrowser::sessionChanged() {
   // Signed in from the sign-in page: it is done with; signed out: the
   // preview starts on its cards.
   signInPage_ = false;
+  const auto user = services_.session.user();
+  signedInAvatar_.setVisible(user.has_value());
+  if (user) signedInAvatar_.setImage(services_.images, user->avatarUrl);
+  repaint();
   fetch();
 }
 
@@ -257,9 +270,9 @@ const char* ToneBrowser::emptyCopy() const {
   if (state_.query.text.isNotEmpty()) return "No tones match. Try a different search or fewer filters.";
   switch (state_.query.profile) {
     case Profile::none: return "No tones match. Try fewer filters.";
-    case Profile::downloaded: return "Tones you download on TONE3000 will show up here.";
-    case Profile::favorited: return "Tones you favorite on TONE3000 will show up here.";
-    case Profile::created: return "Tones you upload to TONE3000 will show up here.";
+    case Profile::downloaded: return "Tones you download from the catalog will show up here.";
+    case Profile::favorited: return "Tones you favorite in the catalog will show up here.";
+    case Profile::created: return "Tones you upload to the catalog will show up here.";
   }
   return "";
 }
@@ -300,8 +313,10 @@ void ToneBrowser::rebuildBody() {
   // The search box exists only for a session; signed out the filter row is
   // the gear chips alone (the trending feed's one filter). A profile
   // filter's stream searches titles alone.
-  search_.setVisible(!previewing);
-  filters_.setGearOnly(previewing);
+  // Custom API search/taxonomy filters are outside the public Free tier.
+  // The full catalog is opened through TONE3000's hosted Select experience.
+  search_.setVisible(false);
+  filters_.setGearOnly(true);
   filters_.setVisible(!signInPage);
   search_.setHelpText(help::text(filters_.profileLocked() ? help::Key::browserSearchProfile : help::Key::browserSearch));
 
@@ -365,7 +380,14 @@ void ToneBrowser::rebuildBody() {
 }
 
 // Layout
-void ToneBrowser::paint(juce::Graphics& g) { g.fillAll(theme::kBlack); }
+void ToneBrowser::paint(juce::Graphics& g) {
+  g.fillAll(theme::kBlack);
+  Brand::drawTone3000Logo(g, {getWidth() / 2.0f - 68, 22, 136, 22});
+  if (const auto user = services_.session.user()) {
+    g.setColour(theme::kMuted); g.setFont(Fonts::sans(11));
+    g.drawText("@" + user->username, getWidth()/2-100, 46, 200, 16, juce::Justification::centred, false);
+  }
+}
 
 void ToneBrowser::resized() {
   // Design space: the ← row, and the box the body fills under it.
@@ -373,7 +395,9 @@ void ToneBrowser::resized() {
   const int colW = std::min(kColumnWidth, w);
   back_.setTopLeftPosition((w - colW) / 2, kPadTop);
   signInBack_.setTopLeftPosition((w - colW) / 2, kPadTop);
-  const int top = kPadTop + BackLink::kHeight;
+  browseOfficial_.setTopRightPosition(w - kPadX, kPadTop - 4);
+  signedInAvatar_.setBounds(w/2 - 118, 45, 18, 18);
+  const int top = juce::jmax(68, kPadTop + BackLink::kHeight);
   const int h = std::max(0, getHeight() - top);
 
   // The body holds 1x on screen: counter-scaled by the zoom and sized in

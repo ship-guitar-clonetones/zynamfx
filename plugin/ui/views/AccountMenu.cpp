@@ -72,6 +72,20 @@ void AccountMenu::setAuthenticated(bool authenticated) {
   menu_.logout.setVisible(authenticated);
 }
 
+void AccountMenu::setLocalOnly(bool local) {
+  if (!local) return;
+  menu_.setLocalOnly();
+  avatar_.setVisible(false);
+  setHelpText("Settings: local NAM/IR player. No online account is used.");
+
+}
+
+void AccountMenu::Menu::setLocalOnly() {
+  login.setVisible(false);
+  logout.setVisible(false);
+  setSize(kMenuMinWidth, kBorder * 2 + kMenuPad * 2 + MenuRow::kHeight);
+}
+
 void AccountMenu::openMenu() { menu_.open(*this, Popover::Align::right, kMenuGap); }
 
 void AccountMenu::paintButton(juce::Graphics& g, bool, bool) {

@@ -49,7 +49,7 @@ public:
   static constexpr int kBodyHeight = 275;
   static constexpr int kBodyPadding = 16;
   static constexpr int kHeight = kHeaderHeight + kBodyHeight;
-  static constexpr int kRadius = 16;
+  static constexpr int kRadius = 6;
 
   BlockCard(Services& services, const ChainItem& block, bool namDownstream);
   ~BlockCard() override;

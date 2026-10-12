@@ -45,7 +45,7 @@ std::vector<BannerRule> makeRules() {
        [](const AudioDeviceState& s) { return s.micPermission == MicPermission::denied; },
        [](const AudioDeviceState&) -> RichText {
          return {bold("Microphone access is off."),
-                 plain(" TONE3000 can\xe2\x80\x99t hear your instrument until you allow it in your privacy "
+                 plain(" zynamfx can\xe2\x80\x99t hear your instrument until you allow it in your privacy "
                        "settings, then relaunch.")};
        },
        "Allow Access", BannerAction::openMicSettings},
@@ -133,7 +133,7 @@ std::vector<BannerRule> makeRules() {
        },
        [](const AudioDeviceState& s) -> RichText {
          return {bold("Running at " + kHz(s.sampleRate) + " kHz."),
-                 plain(" TONE3000 runs lightest at 48 kHz. Any rate works fine, this one just uses a bit "
+                 plain(" zynamfx runs lightest at 48 kHz. Any rate works fine, this one just uses a bit "
                        "more CPU.")};
        },
        "Open Settings", BannerAction::openSettings},

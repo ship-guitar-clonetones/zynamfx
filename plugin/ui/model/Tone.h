@@ -40,6 +40,7 @@ struct Tone {
   int id = 0;
   juce::String title;
   juce::String description;
+  juce::String license;
   juce::String gear;
   juce::String format;
   std::vector<juce::String> images;

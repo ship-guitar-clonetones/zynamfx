@@ -26,10 +26,17 @@ if (NOT TARGET NativeUiAssets)
 endif()
 
 # TONE3000 configuration comes from the repo-root .env (and .env.local
-# overrides); a variable in the configure environment wins over both (CI
-# passes the publishable key that way). See .env.example for the keys.
+# overrides); a variable in the configure environment wins over both. An
+# explicit CMake value wins over files and environment (public builds force a
+# blank key). See .env.example for local development configuration.
 function(_t3k_read_env key default out)
     set(_value "${default}")
+    # An explicit CMake value (including an empty public-release key) wins
+    # over local .env files, so release builds cannot embed a maintainer key.
+    if (DEFINED ${key})
+        set(${out} "${${key}}" PARENT_SCOPE)
+        return()
+    endif()
     foreach(_file "${T3K_UI_DIR}/../../.env" "${T3K_UI_DIR}/../../.env.local")
         if (EXISTS "${_file}")
             set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_file}")
@@ -58,6 +65,7 @@ configure_file("${T3K_UI_DIR}/core/T3kConfig.h.in" "${CMAKE_BINARY_DIR}/t3k_ui/T
 
 file(GLOB_RECURSE T3K_UI_SOURCES CONFIGURE_DEPENDS
     "${T3K_UI_DIR}/core/*.cpp"    "${T3K_UI_DIR}/core/*.h"
+    "${T3K_UI_DIR}/core/*.mm"
     "${T3K_UI_DIR}/model/*.cpp"   "${T3K_UI_DIR}/model/*.h"
     "${T3K_UI_DIR}/backend/Backend.h"
     "${T3K_UI_DIR}/services/*.cpp" "${T3K_UI_DIR}/services/*.h"

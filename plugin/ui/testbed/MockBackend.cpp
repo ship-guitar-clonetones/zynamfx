@@ -131,6 +131,7 @@ MockBackend::MockBackend(const juce::var& scenario)
                                           : obj({{"frequency", 0}, {"confidence", 0}, {"level", -60}})),
       autoMeasure_(obj({{"state", "listening"}})),
       version_(scenario["version"].isVoid() ? "1.4.2" : scenario["version"].toString()) {
+  localOnlyMode = static_cast<bool>(scenario["localOnly"]);
   if (!chain_["revision"].isInt() && !chain_["revision"].isDouble())
     chain_.getDynamicObject()->setProperty("revision", 1);
 }

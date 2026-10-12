@@ -460,7 +460,7 @@ void PresetBar::BrowsePanel::rebuild() {
     }
   };
   addSection("Your Presets", false);
-  addSection("TONE3000", true);
+  addSection("Factory", true);
   if (filtered.empty())
     items_.push_back(std::make_unique<Label>(
         presets.empty() ? "No presets yet. Save one to get started." : "No matches.", Fonts::sans(13),

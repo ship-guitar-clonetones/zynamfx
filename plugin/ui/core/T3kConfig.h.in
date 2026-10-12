@@ -8,7 +8,7 @@ namespace t3k::ui::config {
 inline constexpr const char* kPublishableKey = "@T3K_PUBLISHABLE_KEY@";
 // API origin without trailing slash.
 inline constexpr const char* kApiOrigin = "@T3K_API_DOMAIN@";
-// Startup update check (`/api/v1/plugin/version`), off by default for forks.
+// Startup update notice, disabled in the public Free-tier build.
 inline constexpr bool kUpdateNoticeEnabled = @T3K_UPDATE_NOTICE@;
 // NAM model architecture the plugin loads: the search and `GET /api/v1/models`
 // filter.

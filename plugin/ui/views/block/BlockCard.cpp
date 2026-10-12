@@ -8,6 +8,7 @@
 #include "core/Paint.h"
 #include "T3kConfig.h"
 #include "core/Theme.h"
+#include "core/BlockArt.h"
 #include "core/EqMath.h"
 
 namespace t3k::ui {
@@ -356,7 +357,8 @@ void BlockCard::syncMeta() {
   counts.favorites = favoritesCount();
   counts.favorited = favorited();
   counts.models = block_.tone.catalogModelCount();
-  counts.favoriteToggle = authenticated();
+  // The public Free-tier integration does not write to the TONE3000 catalog.
+  counts.favoriteToggle = false;
   meta_.setCounts(counts);
 
   BlockInfoPanel::State state;
@@ -602,6 +604,11 @@ int BlockCard::layoutInfoBody(juce::Rectangle<int> body) {
 }
 
 void BlockCard::paint(juce::Graphics& g) {
+  g.setColour(theme::kSurface);g.fillRoundedRectangle(getLocalBounds().toFloat(),kRadius);
+  const auto accent=blockart::colour(block_.tone.gear,block_.isEffect);
+  g.setColour(accent.withAlpha(0.13f));
+  g.fillRect(1,1,getWidth()-2,kHeaderHeight-1);
+  g.setColour(accent);g.fillRect(1,1,3,kHeaderHeight-1);
   // Header hairline (inside the 45).
   g.setColour(theme::kBorder);
   g.fillRect(1, 1 + kHeaderHeight - 1, getWidth() - 2, 1);

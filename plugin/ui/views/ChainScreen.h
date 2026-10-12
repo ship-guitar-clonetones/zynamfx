@@ -18,7 +18,7 @@
 
 namespace t3k::ui {
 
-class ChainScreen : public juce::Component {
+class ChainScreen : public juce::Component, private ChainStore::Listener {
 public:
   explicit ChainScreen(Services& services);
   ~ChainScreen() override;
@@ -35,8 +35,10 @@ public:
   DragScroller& scroller() { return detail_ != nullptr ? detail_->scroller() : gallery_.scroller(); }
 
   void resized() override;
+  void paint(juce::Graphics&) override;
 
 private:
+  void chainChanged(const ChainState&) override { resized(); repaint(); }
   void openDetail(const std::string& blockId);
   void closeDetail();
 

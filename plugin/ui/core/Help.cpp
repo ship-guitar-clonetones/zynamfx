@@ -129,7 +129,7 @@ std::map<Key, String> buildTable() {
   t[Key::undo] = U("Undo: revert last chain edit.");
   t[Key::redo] = U("Redo: re-apply undone edit.");
   t[Key::settings] = U("Settings: plugin and audio options.");
-  t[Key::account] = U("Account: settings and TONE3000 sign-out.");
+  t[Key::account] = U("Account: settings and catalog sign-out.");
   t[Key::monoMode] = U("Mono: one chain, both outputs.");
   t[Key::stereoMode] = U("Stereo: independent Left/Right chains.");
 
@@ -148,7 +148,7 @@ std::map<Key, String> buildTable() {
   t[Key::presetPc] = U("PC: the MIDI program change number that loads this preset.");
 
   // Tone browser
-  t[Key::browserSearch] = U("Search: find tones on TONE3000 by title, gear, tags or creator.");
+  t[Key::browserSearch] = U("Search: find tones in the catalog by title, gear, tags or creator.");
   t[Key::browserSearchProfile] = U("Search: find tones in this list by title.");
   t[Key::browserMoreFilters] = U("Filters: sort, and narrow by format, tags, makes, creators or calibration.");
   t[Key::browserFewerFilters] = U("Fewer filters: fold these away. They stay applied.");
@@ -178,7 +178,7 @@ std::map<Key, String> buildTable() {
 
   // Chain gallery
   t[Key::addTile] =
-      U("Add Tone: browse TONE3000 for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.");
+      U("Add Tone: browse the catalog for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.");
   t[Key::closeToneBrowser] = U("Close: back to the chain.");
   t[Key::copyBlock] = U("Copy: copy this block (tone, model and all settings).");
   t[Key::pasteBlock] = U("Paste: add a copy of the copied block in this slot.");
@@ -222,18 +222,18 @@ std::map<Key, String> buildTable() {
       U("Calibration: active — levels set from this model’s calibration data.");
   t[Key::blockUncalibrated] = U("Calibration: inactive — this model has no calibration data.");
   t[Key::eqToggle] = U("EQ: 6-band EQ editor. Outline: EQ shaping the sound.");
-  t[Key::toneInfo] = U("Info: tone description, makes, and tags from TONE3000.");
-  t[Key::toneInfoLogin] = U("Log In: sign in to TONE3000 to see tone details.");
-  t[Key::viewOnT3k] = U("View on TONE3000: open this tone in your browser.");
-  t[Key::favoriteTone] = U("Favorite: save this tone to your TONE3000 favorites.");
-  t[Key::unfavoriteTone] = U("Favorited: click to remove from your TONE3000 favorites.");
+  t[Key::toneInfo] = U("Info: tone description, makes, and tags from the catalog.");
+  t[Key::toneInfoLogin] = U("Log In: sign in to the catalog to see tone details.");
+  t[Key::viewOnT3k] = U("View in catalog: open this tone in your browser.");
+  t[Key::favoriteTone] = U("Favorite: save this tone to your catalog favorites.");
+  t[Key::unfavoriteTone] = U("Favorited: click to remove from your catalog favorites.");
   t[Key::eqSlidersView] = U("Sliders: gain-only fader view.");
   t[Key::eqCurveView] = U("Curve: parametric freq/gain/Q editor.");
   t[Key::eqReset] = U("Reset EQ: all bands flat, position post.");
   t[Key::eqPre] = U("PRE: EQ before the model. Off: after the model (wet only).");
   t[Key::eqPower] = U("EQ Power: bypass EQ, keep settings.");
-  t[Key::shareTone] = U("Share: copy TONE3000 link.");
-  t[Key::modelSelectSignedOut] = U("Models: sign in to TONE3000 to switch models.");
+  t[Key::shareTone] = U("Share: copy catalog link.");
+  t[Key::modelSelectSignedOut] = U("Models: sign in to the catalog to switch models.");
   t[Key::backToChain] = U("Back: chain overview.");
 
   // EQ editor

@@ -168,7 +168,7 @@ juce::var TONE3000Processor::makeToneSummary(const juce::var& toneVar) {
   out->setProperty("models_count", tone->getProperty("models_count"));
   out->setProperty("a2_models_count", tone->getProperty("a2_models_count"));
   // Tone-info stats row: downloads, bookmarks, models (same order as the
-  // TONE3000 tone card).
+  // catalog tone card).
   out->setProperty("downloads_count", tone->getProperty("downloads_count"));
   out->setProperty("favorites_count", tone->getProperty("favorites_count"));
   // Signed-in /tones/{id} sync: whether this user has favorited the tone.
@@ -346,7 +346,11 @@ std::string TONE3000Processor::landToneBlock(std::unique_ptr<ChainBlock> block,
   alignBranchLaneLengths();
 
   bumpChainRevision();
-  queueActiveModelLoad(*findBlockById(newId));
+  if (auto* landed = findBlockById(newId);
+      landed != nullptr && landed->type != ChainBlockType::EFFECT)
+    queueActiveModelLoad(*landed);
+  else
+    triggerAsyncUpdate();
   return newId;
 }
 
@@ -379,6 +383,10 @@ std::string TONE3000Processor::duplicateChainBlock(const std::string& sourceBloc
   const std::string newId = juce::Uuid().toString().toStdString();
   auto clone = std::make_unique<ChainBlock>(newId, source->type);
   applyBlockSettings(*clone, serializeBlockSettings(*source));
+  if (source->type == ChainBlockType::EFFECT) {
+    restoreHostedEffect(*clone);
+    return landToneBlock(std::move(clone), side, index);
+  }
   setToneOnBlock(*clone, source->toneId, source->toneJson, source->toneVar);
   clone->activeModelId = source->activeModelId;
   clone->modelCache = source->modelCache;
@@ -439,6 +447,10 @@ std::string TONE3000Processor::pasteChainBlock(const juce::String& side, int ind
       chainBlockTypeFromString(blockClipboardSettings.getProperty("type").toString());
   auto block = std::make_unique<ChainBlock>(newId, type);
   applyBlockSettings(*block, blockClipboardSettings);
+  if (type == ChainBlockType::EFFECT) {
+    restoreHostedEffect(*block);
+    return landToneBlock(std::move(block), side, index);
+  }
   const juce::String toneJson = blockClipboardSettings.getProperty("toneJson").toString();
   setToneOnBlock(*block, blockClipboardSettings.getProperty("toneId", 0), toneJson,
                  juce::JSON::parse(toneJson));
@@ -457,7 +469,8 @@ bool TONE3000Processor::swapTone(const std::string& blockId, const juce::String&
   juce::ScopedLock lock(chainMutex);
 
   ChainBlock* block = findBlockById(blockId);
-  if (block == nullptr || block->type == ChainBlockType::INSERT) {
+  if (block == nullptr || block->type == ChainBlockType::INSERT ||
+      block->type == ChainBlockType::EFFECT) {
     DBG("swapTone: block not found or is insert block: " << blockId);
     return false;
   }
@@ -644,6 +657,8 @@ bool TONE3000Processor::removeChainBlock(const std::string& blockId) {
   }
 
   DBG("Removed chain block: " << blockId);
+  if (removed->type == ChainBlockType::EFFECT)
+    triggerAsyncUpdate();
   return true;
 }
 
@@ -976,6 +991,10 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   struct BlockRow {
     juce::String id;
     bool isInsert = false;
+    bool isEffect = false;
+    juce::String effectName;
+    juce::String effectPath;    // plugin bundle path
+    juce::String effectVendor;  // vendor label (for the tile badge)
     juce::var toneSummary;
     int toneId = 0;
     int activeModelId = 0;
@@ -1023,6 +1042,15 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
           row.isInsert = true;
           out.push_back(std::move(row));
           continue;
+        }
+        row.isEffect = block->type == ChainBlockType::EFFECT;
+        row.effectName = block->effectName;
+        if (row.isEffect) {
+          juce::PluginDescription desc;
+          if (auto xml = juce::XmlDocument::parse(block->effectDescriptionXml);
+              xml != nullptr && desc.loadFromXml(*xml))
+            row.effectPath = desc.fileOrIdentifier;
+          row.effectVendor = vendorForBundle(row.effectPath);
         }
         row.toneSummary = block->toneSummary;
         row.toneId = block->toneId;
@@ -1093,12 +1121,21 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
         continue;
       }
 
-      item->setProperty("kind", "tone");
+      item->setProperty("kind", row.isEffect ? "effect" : "tone");
 
       // Slim tone summary, nested (not spread) so runtime fields never
       // collide with tone fields. Built once when the tone was set (see
       // makeToneSummary) and shipped by reference.
       juce::var toneVar = row.toneSummary;
+      if (row.isEffect) {
+        item->setProperty("effectPath", row.effectPath);
+        item->setProperty("effectVendor", row.effectVendor);
+        juce::DynamicObject::Ptr effectTone = new juce::DynamicObject();
+        effectTone->setProperty("id", 0);
+        effectTone->setProperty("title", row.effectName);
+        effectTone->setProperty("models", juce::Array<juce::var>());
+        toneVar = juce::var(effectTone.get());
+      }
       if (!toneVar.isObject()) {
         // Corrupt toneJson: emit a minimal stand-in so the UI's `tone`
         // field is always an object.
@@ -1503,6 +1540,8 @@ bool TONE3000Processor::setBlockParam(const std::string& blockId, const juce::St
 
   if (param == "enabled") {
     block->enabled = value > 0.5;
+    if (block->type == ChainBlockType::EFFECT)
+      triggerAsyncUpdate();
   } else if (param == "normalize") {
     block->normalizeEnabled = value > 0.5;
   } else if (param == "inputGain") {
@@ -1686,7 +1725,7 @@ void TONE3000Processor::disableAllBlockSpectrums() {
 void TONE3000Processor::setAccessToken(const juce::String& token) {
   juce::ScopedLock lock(accessTokenMutex);
   accessToken = token;
-  DBG("TONE3000 access token updated (" << token.length() << " chars)");
+  DBG("catalog access token updated (" << token.length() << " chars)");
 }
 
 juce::String TONE3000Processor::getAccessToken() const {

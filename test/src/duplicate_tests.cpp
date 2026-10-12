@@ -63,7 +63,7 @@ TEST(ChainDuplicateTest, PasteFillsInsertSlotAndCarriesEverySetting) {
 
   const juce::var after = proc.getChainState(-1);
   const auto layout = laneLayout(after, "chain");
-  ASSERT_EQ(layout.size(), 5u);  // 2 tones + 3 inserts (kMinLaneSlots)
+  ASSERT_EQ(layout.size(), static_cast<size_t>(kMinLaneSlots));  // 2 tones + 5 inserts (kMinLaneSlots)
   EXPECT_EQ(layout[0], std::make_pair(juce::String("tone"), juce::String("blk-a")));
   EXPECT_EQ(layout[1], std::make_pair(juce::String("tone"), juce::String(newId)));
   for (size_t i = 2; i < layout.size(); ++i)
@@ -97,7 +97,7 @@ TEST(ChainDuplicateTest, SplicesBeforeToneBlockAndUndoesAsOneStep) {
   {
     const juce::var state = proc.getChainState(-1);
     const auto layout = laneLayout(state, "chain");
-    ASSERT_EQ(layout.size(), 5u);  // 3 tones + 2 inserts after normalization
+    ASSERT_EQ(layout.size(), static_cast<size_t>(kMinLaneSlots));  // 3 tones + 4 inserts after normalization
     EXPECT_EQ(layout[0].second, "blk-a");
     EXPECT_EQ(layout[1].second, juce::String(newId));
     EXPECT_EQ(layout[2].second, "blk-b");

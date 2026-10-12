@@ -19,13 +19,9 @@ inline float unit(float db) { return std::clamp((db - kMinDb) / (kMaxDb - kMinDb
 // Dot colour along the rail: 0 = bottom (blue), 0.5 = middle (yellow),
 // 1 = top (red). Channels are rounded to 8-bit like the CSS `rgb()` string.
 inline juce::Colour gradientColour(float position) {
-  const auto ch = [](float v) { return static_cast<juce::uint8>(juce::roundToInt(255.0f * v)); };
-  if (position <= 0.5f) {
-    const float t = position * 2.0f;
-    return juce::Colour(ch(t), ch(t), ch(1.0f - t));
-  }
-  const float t = (position - 0.5f) * 2.0f;
-  return juce::Colour(255, ch(1.0f - t), 0);
+  const juce::Colour green(0xff6bd98a), amber(0xffeeb650), red(0xfff06470);
+  if(position<0.75f) return green.interpolatedWith(amber,position/0.75f);
+  return amber.interpolatedWith(red,(position-0.75f)/0.25f);
 }
 
 // Gallery tile energy (BlockLed.tsx useBlockEnergy)
@@ -39,7 +35,7 @@ struct Energy {
 // while its intensity keeps tracking the full scale up to 0 dBFS.
 inline Energy energy(float db) {
   constexpr float kGateOffDb = -50.0f, kGateOnDb = -40.0f;
-  const juce::Colour dark(34, 34, 34), blue(0, 0, 255), yellow(255, 255, 0), red(255, 0, 0);
+  const juce::Colour dark(34, 34, 34), blue(107, 217, 138), yellow(238, 182, 80), red(240, 100, 112);
 
   const auto lerp = [](juce::Colour a, juce::Colour b, float t) {
     const auto mix = [t](juce::uint8 x, juce::uint8 y) {

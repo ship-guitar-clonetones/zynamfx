@@ -109,6 +109,9 @@ struct ToneSummary {
 struct ChainItem {
   std::string blockId;
   bool isInsert = true;
+  bool isEffect = false;
+  std::string effectPath;    // hosted plugin bundle path
+  std::string effectVendor;  // vendor label (for the tile badge)
 
   // Tone-block fields (unused for inserts).
   ToneSummary tone;
@@ -121,7 +124,7 @@ struct ChainItem {
   std::optional<double> outputLevelDbu;
   BlockParams params;
 
-  bool isTone() const { return !isInsert; }
+  bool isTone() const { return !isInsert && !isEffect; }
 };
 
 struct PresetInfo {

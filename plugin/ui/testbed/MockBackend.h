@@ -42,6 +42,8 @@ public:
   bool switchModel(const std::string&, int, const juce::var&) override { return true; }
   bool retryModelLoad(const std::string&) override { return true; }
   bool removeChainBlock(const std::string&) override { return true; }
+  bool localOnly() const override { return localOnlyMode; }
+  bool localOnlyMode = false;
   bool reorderChainBlocks(const std::vector<std::string>&) override { return true; }
   // Moves the block between lanes like the processor, and records the call
   // so self-tests can check what a cross-lane drop asked for.

@@ -358,39 +358,39 @@ TEST(ChainBranchTest, AlignsBranchLaneEndWithTrunk) {
   ChainTestProcessor proc;
   seedStereoChains(proc, {"blk-a", "blk-b"}, {});
 
-  // Baseline: trunk = 2 tones + 3 inserts, branch lane = 5 inserts.
+  // Baseline: trunk = 2 tones + 5 inserts, branch lane = 7 inserts.
   {
     const juce::var state = proc.getChainState(-1);
-    EXPECT_EQ(laneSize(state, "chain"), 5);
-    EXPECT_EQ(laneSize(state, "chainRight"), 5);
+    EXPECT_EQ(laneSize(state, "chain"), kMinLaneSlots);
+    EXPECT_EQ(laneSize(state, "chainRight"), kMinLaneSlots);
   }
 
-  // Tap after blk-a: the branch lane starts 1 column in, so it trims to 4.
+  // Tap after blk-a: the branch lane starts 1 column in, so it trims to 6.
   ASSERT_TRUE(proc.setChainBranch("left", "blk-a"));
   {
     const juce::var state = proc.getChainState(-1);
-    EXPECT_EQ(laneSize(state, "chain"), 5);
-    EXPECT_EQ(laneSize(state, "chainRight"), 4);
+    EXPECT_EQ(laneSize(state, "chain"), kMinLaneSlots);
+    EXPECT_EQ(laneSize(state, "chainRight"), kMinLaneSlots - 1);
   }
 
-  // Re-pointing deeper re-aligns from the baseline: 2 columns in, 3 slots.
+  // Re-pointing deeper re-aligns from the baseline: 2 columns in, 5 slots.
   ASSERT_TRUE(proc.setChainBranch("left", "blk-b"));
-  EXPECT_EQ(laneSize(proc.getChainState(-1), "chainRight"), 3);
+  EXPECT_EQ(laneSize(proc.getChainState(-1), "chainRight"), kMinLaneSlots - 2);
 
   // Structural trunk edits keep the ends even: removing the un-tapped tone
   // shortens the trunk's prefix (blk-b slides to index 0), so the branch
-  // lane grows back to 4.
+  // lane grows back to 6.
   ASSERT_TRUE(proc.removeChainBlock("blk-a"));
   {
     const juce::var state = proc.getChainState(-1);
     ASSERT_TRUE(state["branch"].isObject());
-    EXPECT_EQ(laneSize(state, "chain"), 5);
-    EXPECT_EQ(laneSize(state, "chainRight"), 4);
+    EXPECT_EQ(laneSize(state, "chain"), kMinLaneSlots);
+    EXPECT_EQ(laneSize(state, "chainRight"), kMinLaneSlots - 1);
   }
 
   // Clearing the branch restores the plain per-lane minimum.
   ASSERT_TRUE(proc.clearChainBranch());
-  EXPECT_EQ(laneSize(proc.getChainState(-1), "chainRight"), 5);
+  EXPECT_EQ(laneSize(proc.getChainState(-1), "chainRight"), kMinLaneSlots);
 }
 
 // Alignment is trim-only: it removes surplus trailing placeholders, never
@@ -398,30 +398,30 @@ TEST(ChainBranchTest, AlignsBranchLaneEndWithTrunk) {
 // just stays longer…
 TEST(ChainBranchTest, NeverGrowsBranchLanePastItsBaseline) {
   ChainTestProcessor proc;
-  seedStereoChains(proc, {"blk-a", "blk-b", "blk-c", "blk-d", "blk-e", "blk-f"}, {});
+  seedStereoChains(proc, {"blk-a", "blk-b", "blk-c", "blk-d", "blk-e", "blk-f", "blk-g", "blk-h"}, {});
 
-  // Trunk: 6 tones + 1 insert = 7 slots. Tapping 1 column in leaves the
-  // branch lane at its 5-slot baseline (ending on column 6, one short of
+  // Trunk: 8 tones + 1 insert = 9 slots. Tapping 1 column in leaves the
+  // branch lane at its 7-slot baseline (ending on column 8, one short of
   // the trunk) instead of padding it with an extra empty slot.
   ASSERT_TRUE(proc.setChainBranch("left", "blk-a"));
   const juce::var state = proc.getChainState(-1);
-  EXPECT_EQ(laneSize(state, "chain"), 7);
-  EXPECT_EQ(laneSize(state, "chainRight"), 5);
+  EXPECT_EQ(laneSize(state, "chain"), 9);
+  EXPECT_EQ(laneSize(state, "chainRight"), kMinLaneSlots);
 }
 
 // …and tone blocks never move and every lane keeps one insert, so a branch
 // lane whose content runs past the trunk's end stays uneven too.
 TEST(ChainBranchTest, KeepsLanesUnevenWhenTonesRequireIt) {
   ChainTestProcessor proc;
-  seedStereoChains(proc, {"blk-a"}, {"blk-b", "blk-c", "blk-d", "blk-e"});
+  seedStereoChains(proc, {"blk-a"}, {"blk-b", "blk-c", "blk-d", "blk-e", "blk-f", "blk-g"});
 
-  // Branch lane = 4 tones + 1 insert; the alignment target (trunk 5 slots,
-  // 1 column of indent = 4) would need a trim, but only the untrimmable
-  // last insert remains: the lane keeps all 5 slots.
+  // Branch lane = 6 tones + 1 insert; the alignment target (trunk 7 slots,
+  // 1 column of indent = 6) would need a trim, but only the untrimmable
+  // last insert remains: the lane keeps all 7 slots.
   ASSERT_TRUE(proc.setChainBranch("left", "blk-a"));
   const juce::var state = proc.getChainState(-1);
-  EXPECT_EQ(laneSize(state, "chain"), 5);
-  EXPECT_EQ(laneSize(state, "chainRight"), 5);
+  EXPECT_EQ(laneSize(state, "chain"), kMinLaneSlots);
+  EXPECT_EQ(laneSize(state, "chainRight"), kMinLaneSlots);
 }
 
 TEST(ChainBranchTest, SurvivesStateSaveRestore) {
@@ -444,8 +444,8 @@ TEST(ChainBranchTest, SurvivesStateSaveRestore) {
   EXPECT_EQ(restored["inputMode"].toString(), "left");
   // Restores re-align the branch lane's end (reconciliation re-pads lanes
   // to the baseline; the restore path trims them back).
-  EXPECT_EQ(laneSize(restored, "chain"), 5);
-  EXPECT_EQ(laneSize(restored, "chainRight"), 4);
+  EXPECT_EQ(laneSize(restored, "chain"), kMinLaneSlots);
+  EXPECT_EQ(laneSize(restored, "chainRight"), kMinLaneSlots - 1);
 }
 
 }  // namespace

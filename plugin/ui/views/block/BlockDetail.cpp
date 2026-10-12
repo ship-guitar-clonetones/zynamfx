@@ -37,7 +37,7 @@ BlockDetail::BlockDetail(Services& services, const std::string& blockId)
     : services_(services),
       blockId_(blockId),
       scroller_(std::make_unique<DragScroller>(DragScroller::Axis::vertical)),
-      back_(std::make_unique<BackLink>("BLOCK", help::Key::backToChain)) {
+      back_(std::make_unique<BackLink>("CLOSE EDITOR", help::Key::backToChain)) {
   back_->onClick = [this] {
     if (onBack) onBack();
   };
@@ -93,8 +93,8 @@ void BlockDetail::layout() {
   back_->setTopLeftPosition(x, top);
   card_->setTopLeftPosition(x, top + back_->getHeight() + kBackGap);
   const int contentH = card_->getBottom() + kPadY;
-  column_.setSize(getWidth(), infoOpen_ ? std::max(contentH, getHeight()) : getHeight());
-  if (!infoOpen_) scroller_->setViewPosition(0, 0);
+  column_.setSize(getWidth(), std::max(contentH, getHeight()));
+
 }
 
 }  // namespace t3k::ui

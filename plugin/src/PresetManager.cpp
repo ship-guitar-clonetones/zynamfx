@@ -18,7 +18,7 @@ juce::File presetsRootDir() {
 #if JUCE_MAC
   base = base.getChildFile("Application Support");
 #endif
-  return base.getChildFile("TONE3000").getChildFile("Presets");
+  return base.getChildFile(T3K_APP_DATA_DIR_NAME).getChildFile("Presets");
 }
 
 juce::String stripPrefix(const juce::String& id, const char* prefix) {
@@ -63,7 +63,7 @@ juce::File PresetManager::defaultSystemFactoryDir() {
   return juce::File::getSpecialLocation(juce::File::currentApplicationFile)
       .getChildFile("FactoryPresets");
 #elif JUCE_MAC
-  return juce::File("/Library/Application Support/TONE3000/Presets/Factory");
+  return juce::File("/Library/Application Support/zynamfx/Presets/Factory");
 #elif JUCE_WINDOWS
   // ProgramData; matches the Inno Setup {commonappdata} destination.
   return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)

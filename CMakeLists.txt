@@ -146,6 +146,9 @@ if (UNIX AND NOT APPLE AND NOT HEADLESS)
 endif()
 
 # Download JUCE using CPM
+if(EXISTS "${LIB_DIR}/juce/CMakeLists.txt" AND NOT EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    add_subdirectory("${LIB_DIR}/juce" "${CMAKE_BINARY_DIR}/vendored-juce")
+else()
 CPMAddPackage(
     NAME JUCE
     GIT_TAG 9.0.3
@@ -153,6 +156,7 @@ CPMAddPackage(
     GITHUB_REPOSITORY juce-framework/JUCE
     SOURCE_DIR ${LIB_DIR}/juce
 )
+endif()
 
 # JUCE source patches (idempotent, configure time; JUCE lives in the
 # gitignored libs/). Each one is anchored on a T3K_* marker so a re-run is a
@@ -903,6 +907,10 @@ void AccessibilityHandler::postAnnouncement (const String& announcementString, A
 endif()
 
 # Download GoogleTest Framework using CPM
+if(EXISTS "${LIB_DIR}/googletest/CMakeLists.txt" AND NOT EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    add_subdirectory("${LIB_DIR}/googletest" "${CMAKE_BINARY_DIR}/vendored-googletest" EXCLUDE_FROM_ALL)
+else()
 CPMAddPackage(
     NAME GOOGLETEST
     GITHUB_REPOSITORY google/googletest
@@ -912,6 +920,7 @@ CPMAddPackage(
     OPTIONS
         "INSTALL_GTEST OFF"
 )
+endif()
 
 enable_testing() # Allow running build tests
 

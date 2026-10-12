@@ -62,7 +62,7 @@ public:
   // wrapped title and the stats row. At the 960 column that is a window
   // zoom of about 1.1.
   static constexpr int kMinCardWidth = 340;
-  static constexpr int kPageSize = 12;
+  static constexpr int kPageSize = 10;
   static constexpr int kSearchHeight = 40;
 
   explicit ToneBrowser(Services& services);
@@ -132,6 +132,8 @@ private:
   std::optional<int> pickingId_;
   juce::String pickError_;
 
+  PillButton browseOfficial_{"Browse TONE3000", PillButton::Style::outline};
+  Avatar signedInAvatar_;
   BackLink back_;         // ← SELECT TONE: closes the browser
   BackLink signInBack_;   // the sign-in page's bare ←: back to the cards
 

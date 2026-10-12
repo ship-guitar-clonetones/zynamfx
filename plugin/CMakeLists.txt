@@ -35,6 +35,22 @@ endif()
 
 project(TONE3000 VERSION ${T3K_VERSION})   # Set version of the plugin
 
+# Fork distribution identity. cmake/ForkIdentity.cmake exists ONLY in the fork
+# (zackyusof/tone3000-plugin-effects); upstream this include is a no-op and
+# the defaults below — the upstream values — apply, keeping local builds and
+# pull requests back to tone-3000/tone3000-plugin identical. Public releases
+# configure with -DT3K_FORK_NAMESPACED=ON (see that file) so installed
+# AU/VST3/LV2/CLAP coexist with official TONE3000 builds instead of
+# colliding with them.
+set(T3K_DISPLAY_NAME "TONE3000")
+set(T3K_PRODUCT_NAME "${PROJECT_NAME}")
+set(T3K_COMPANY_NAME "TONE3000")
+set(T3K_MANUFACTURER_CODE "TFTF")
+set(T3K_LV2_URI "https://www.tone3000.com/plugin")
+set(T3K_CLAP_ID "com.tone3000.plugin")
+set(T3K_APP_DATA_DIR_NAME "TONE3000")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ForkIdentity.cmake" OPTIONAL)
+
 option(HEADLESS "Disable GUI (headless/embedded build)" OFF)
 # The UI's testbed app (plugin/ui/testbed: scenario captures, pixel compare,
 # --selftest, --bench) as part of this build; registers its self-tests with
@@ -43,7 +59,23 @@ option(T3K_BUILD_UI_TESTBED "Build the UI testbed (UiTestbed) and register its s
 option(BUILD_AAX "Build AAX (Avid) format" ON)
 option(BUILD_LV2 "Build LV2 format (native Linux plugin standard)" ON)
 option(BUILD_CLAP "Build CLAP format (via clap-juce-extensions)" ON)
-set(_plugin_formats "VST3") # Default plugin format
+option(BUILD_VST3 "Build VST3 format" ON)
+option(T3K_STANDALONE_ONLY "Generate only the desktop Standalone format" OFF)
+set(T3K_DESKTOP_BUNDLE_ID "" CACHE STRING "Optional desktop app bundle identifier")
+set(_t3k_desktop_args "")
+if(T3K_DESKTOP_BUNDLE_ID AND NOT T3K_IOS)
+    set(_t3k_desktop_args BUNDLE_ID "${T3K_DESKTOP_BUNDLE_ID}")
+endif()
+set(_plugin_formats "")
+if(BUILD_VST3)
+    list(APPEND _plugin_formats "VST3")
+endif()
+if(T3K_STANDALONE_ONLY)
+    set(_plugin_formats "")
+    set(BUILD_AAX OFF)
+    set(BUILD_LV2 OFF)
+    set(BUILD_CLAP OFF)
+endif()
 
 # iOS has no desktop plugin host, so none of the plugin formats apply: VST3,
 # AU (the desktop v2 wrapper), AAX, LV2 and CLAP are all macOS/Windows/Linux
@@ -60,7 +92,7 @@ endif()
 if (NOT HEADLESS)
     list(APPEND _plugin_formats "Standalone")   # Add Standalone format
     # Enable AU (Apple) format on macOS
-    if (APPLE AND NOT T3K_IOS)
+    if (APPLE AND NOT T3K_IOS AND NOT T3K_STANDALONE_ONLY)
         list(APPEND _plugin_formats "AU")
     endif()
     if (BUILD_AAX)
@@ -219,10 +251,15 @@ else()
     set(_t3k_plist_to_merge PLIST_TO_MERGE "<plist version=\"1.0\"><dict><key>LSMinimumSystemVersion</key><string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string></dict></plist>")
 endif()
 
+if(APPLE AND NOT T3K_IOS)
+    set(_t3k_host_au PLUGINHOST_AU TRUE)
+endif()
+
 juce_add_plugin(${PROJECT_NAME}
-    COMPANY_NAME TONE3000
+    COMPANY_NAME ${T3K_COMPANY_NAME}
     PLUGIN_NAME ${PLUGIN_NAME}
     IS_SYNTH FALSE
+    ${_t3k_host_au}
     # Pro Tools insert folders. Unset is None ("Other"). Harmonic is where
     # amp sims live; Effect is the generic folder. JUCE ORs the bits so the
     # plugin shows in both.
@@ -231,13 +268,13 @@ juce_add_plugin(${PROJECT_NAME}
     # hosts route their MIDI to us, standalone merges enabled MIDI inputs.
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
-    PLUGIN_MANUFACTURER_CODE TFTF
+    PLUGIN_MANUFACTURER_CODE ${T3K_MANUFACTURER_CODE}
     PLUGIN_CODE ${PLUGIN_CODE}
     FORMATS ${_plugin_formats}
     # The LV2 URI is the plugin's permanent identity in LV2 hosts (it keys
     # sessions and presets). Never change it once released.
-    LV2URI "https://www.tone3000.com/plugin"
-    PRODUCT_NAME ${PROJECT_NAME}
+    LV2URI "${T3K_LV2_URI}"
+    PRODUCT_NAME ${T3K_PRODUCT_NAME}
     VST3_AUTO_MANIFEST ${VST3_MANIFEST}
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "TONE3000 needs microphone access for audio input processing."
@@ -252,8 +289,13 @@ juce_add_plugin(${PROJECT_NAME}
     # Intel floor, since every arm64 Mac runs 11.0 or later anyway.
     ${_t3k_plist_to_merge}
     ${_t3k_ios_args}
+    ${_t3k_desktop_args}
     ICON_BIG "${_app_icon}"
 )
+
+# JUCE's CMake helper exposes PLUGINHOST_AU, while VST3 hosting is enabled
+# through the module option on the shared-code target.
+target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_PLUGINHOST_VST3=1)
 
 # What App Store Connect checks on upload. Nothing here changes how the app
 # behaves; without it the upload is rejected or the icon goes missing.
@@ -341,6 +383,7 @@ target_sources(${PROJECT_NAME}
         include/MidiMapper.h
         src/MidiMapper.cpp
         src/ProcessorChain.cpp
+        src/ProcessorHostedEffects.cpp
         src/ProcessorHistory.cpp
         src/ProcessorPresets.cpp
         src/ProcessorState.cpp
@@ -448,6 +491,13 @@ target_include_directories(${PROJECT_NAME}
 # Defined here too because NAM is linked as a whole-archive flag on
 # macOS/Linux, which doesn't propagate the NAM target's definitions.
 target_compile_definitions(${PROJECT_NAME} PRIVATE NAM_ENABLE_A2_FAST)
+
+# Fork-visible display + app-data names. The values default to the upstream
+# strings above, so default builds are byte-identical to upstream; a namespaced
+# build (-DT3K_FORK_NAMESPACED=ON) swaps them (see cmake/ForkIdentity.cmake).
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    "T3K_DISPLAY_NAME=\"${T3K_DISPLAY_NAME}\""
+    "T3K_APP_DATA_DIR_NAME=\"${T3K_APP_DATA_DIR_NAME}\"")
 
 # JUCE modules used
 target_link_libraries(${PROJECT_NAME}
@@ -593,9 +643,9 @@ if (NOT HEADLESS AND BUILD_CLAP)
         EXCLUDE_FROM_ALL YES
     )
     clap_juce_extensions_plugin(TARGET ${PROJECT_NAME}
-        CLAP_ID "com.tone3000.plugin"
+        CLAP_ID "${T3K_CLAP_ID}"
         CLAP_FEATURES audio-effect distortion)
 endif()
 
 # Visual Studio Only
-source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/..) 
+source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/..)

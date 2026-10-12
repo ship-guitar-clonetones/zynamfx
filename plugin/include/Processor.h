@@ -1,5 +1,14 @@
 #pragma once
 #include <juce_audio_processors/juce_audio_processors.h>
+// Fork distribution identity (cmake/ForkIdentity.cmake): host-visible display
+// name + app-data folder name. The CMake build always defines both; these
+// fallbacks keep any other build (e.g. the UI testbed) exactly on upstream.
+#ifndef T3K_DISPLAY_NAME
+#define T3K_DISPLAY_NAME "zynamfx"
+#endif
+#ifndef T3K_APP_DATA_DIR_NAME
+#define T3K_APP_DATA_DIR_NAME "zynamfx"
+#endif
 #include <juce_dsp/juce_dsp.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -84,6 +93,22 @@ public:
   // stale (undone away mid-flow), the active lane's first insert is used.
   std::string loadTone(const juce::String& toneJsonString,
                        const std::string& targetInsertId = {});
+  // Desktop plug-in hosting. Descriptions are JUCE PluginDescription XML;
+  // installed AU and VST3 effects are discovered on demand by the editor.
+  juce::var listHostedEffects() const;
+  // Fast, non-instantiating listing of installed effect bundles (just the two
+  // standard system dirs). Use this to build the add-effect menu on the message
+  // thread; listHostedEffects() scans/loads plugins and must not run on it.
+  juce::var listHostedEffectBundles() const;
+  // Vendor label for a plugin bundle (from its reverse-DNS id), e.g. FabFilter.
+  // Public so the chain state can tag effect blocks with their vendor.
+  static juce::String vendorForBundle(const juce::String& bundlePath);
+  std::string addHostedEffect(const juce::String& descriptionXml,
+                              const std::string& targetInsertId = {});
+  std::string addHostedEffectFromFile(const juce::File& bundle,
+                                      const std::string& targetInsertId = {});
+  std::shared_ptr<juce::AudioPluginInstance> hostedEffectInstance(
+      const std::string& blockId);
   // Load dropped local files (`files` = [{ name, data }], base64 bytes; one
   // entry for a single file, many for a folder) as one tone block, one model
   // per file. `targetInsertId` is either an insert slot (adds, consuming
@@ -408,13 +433,15 @@ public:
   // an unknown id, a non-NAM block, or a block still loading.
   int namEngineVoiceCount(const std::string& blockId) const;
 
-  // Editor window scale, 1.0 = the 1024x578 design size. Written by the
-  // editor whenever it is resized and read back when a new editor opens, so
-  // the chosen size survives editor teardown. Saved with the plugin/session
-  // state but deliberately not with presets: window size is a workstation
-  // preference, not tone. Atomic: hosts may call get/setStateInformation off
-  // the message thread.
+  // Fitted editor scale for legacy sessions plus independent editor window
+  // dimensions. Written when resized and restored when the editor reopens.
+  // Saved with plugin/session state but not presets. Atomic because hosts may
+  // call get/setStateInformation off the message thread.
   std::atomic<double> editorScale{1.0};
+  // Independent editor bounds. Zero means an older session only supplied
+  // editorScale, so NativeEditor falls back to the historical proportional size.
+  std::atomic<int> editorWidth{0};
+  std::atomic<int> editorHeight{0};
 
   // Extra window height (design px) for persistent chrome strips, currently
   // just the hint bar. Persisted like editorScale so the next editor opens at
@@ -731,6 +758,7 @@ private:
   // Prepare every engine in a chain for the current chain rate (see
   // chainSampleRate) and chain-domain block size. Holds no lock.
   void prepareChain(std::vector<std::unique_ptr<ChainBlock>>& blocks);
+  void restoreHostedEffect(ChainBlock& block);
 
   // (Re)design one block's rate-dependent linear stages (EQ biquads, spectrum
   // analyzer) for the current chain rate. prepareChain covers the blocks that

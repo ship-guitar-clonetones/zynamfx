@@ -131,7 +131,7 @@ juce::File localModelsDir() {
 #if JUCE_MAC
   base = base.getChildFile("Application Support");
 #endif
-  return base.getChildFile("TONE3000").getChildFile("LocalModels");
+  return base.getChildFile(T3K_APP_DATA_DIR_NAME).getChildFile("LocalModels");
 }
 
 // FNV-1a over the file bytes: stable across sessions and platforms without
@@ -237,7 +237,7 @@ juce::var stashLocalBytes(const juce::String& filename, juce::MemoryOutputStream
     // what it can; a folder that stays unwritable gets its own message so
     // the report names the disease, not the symptom.
     if (!TONE3000Processor::ensureWritableDir(stash.getParentDirectory()))
-      return fail("TONE3000's data folder isn't writable");
+      return fail("The zynamfx data folder isn't writable");
     if (!stash.replaceWithData(decoded.getData(), decoded.getDataSize()))
       return fail("Couldn't store the dropped file");
   } else {

@@ -82,8 +82,8 @@ public:
   void exchangeCode(const juce::String& code, const juce::String& codeVerifier, const juce::String& redirectUri,
                     Reply<Tokens> reply);
 
-  // Device flow (RFC 8628)
-  // POST /oauth/device_authorization: a fresh code pair for this client.
+  // Device-flow helpers remain for the shared interface, but are not invoked
+  // by the public Free-tier integration.
   void requestDeviceAuthorization(Reply<DeviceAuthorization> reply);
   // One poll of the token endpoint for the device code. Until the user
   // acts it fails with the server's code, which the caller acts on:
@@ -97,26 +97,23 @@ public:
   void fetch(const juce::String& path, const juce::String& method, const juce::String& jsonBody,
              Reply<HttpResponse> reply);
   // Bearer when a session exists, anonymous otherwise (and anonymous again
-  // when the session cannot be refreshed): the version check.
+  // when the session cannot be refreshed). Used by the public trending feed.
   void fetchOptionalAuth(const juce::String& path, juce::StringPairArray headers, Reply<HttpResponse> reply);
 
   // Typed endpoints
   void getUser(Reply<juce::var> reply);
   void getTone(int toneId, Reply<juce::var> reply);
   void setFavorite(int toneId, bool favorite, Reply<bool> reply);
-  // A tone listing by its ready-made path (ToneQuery::requestPath): the
-  // PaginatedResponse payload.
+  // Free-tier bounded list path, locally allowlisted and parameter-checked.
   void listTones(const juce::String& path, Reply<juce::var> reply);
   // /tones/trending[?gear=]: the homepage's top-10 feed, `{ data: Tone[] }`.
   // Needs no session (the signed-out preview), Bearer when there is one.
   void listTrending(const juce::String& gear, Reply<juce::var> reply);
-  // /tags, /makes or /users (creators), most-used first, one page of
-  // `pageSize`, narrowed by `query` when non-empty.
+  // Disabled for public Free-tier builds; custom taxonomy lookups are not sent.
   void listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply);
   // /models?tone_id&page_size[&architecture]; architecture < 0 omits it.
   void listModels(int toneId, int pageSize, int architecture, Reply<juce::var> reply);
-  // /plugin/version with X-Device-Id and X-Plugin-Version (the running
-  // build), each omitted when empty.
+  // Disabled in the public build; project releases provide updates.
   void fetchPluginVersion(const juce::String& deviceId, const juce::String& localVersion, Reply<juce::var> reply);
 
 private:

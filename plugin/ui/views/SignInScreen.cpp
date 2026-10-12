@@ -24,7 +24,7 @@ constexpr const char* kProblemHelp = "Copy link to sign in, then return here.";
 constexpr const char* kOtherDevice = "Sign in on a different device";
 constexpr const char* kPhoneTitle = "Sign in on your phone";
 constexpr const char* kScan = "Scan the QR code to sign in, then return here.";
-constexpr const char* kVisit = "Visit ", *kEnterCode = ", sign in, and enter this code:";
+constexpr const char* kVisit = "Open ", *kEnterCode = ", sign in, and enter this code:";
 constexpr const char* kOr = "OR";
 constexpr const char* kGettingCode = "Getting a code for your phone";
 // After AuthFlow::Device::error's sentence.
@@ -84,12 +84,12 @@ void SignInScreen::DeviceCards::setDevice(const ToneSession::AuthFlow::Device& d
   qr_.setText(device.verificationUriComplete);
   const float textW = kCardWidth - 2 * kCardPad;
   scan_ = std::make_unique<RichFlow>(RichText{TextRun::plain(kScan)}, kCopyPx, lineHeight(kCopyPx), textW);
-  TextRun uri = TextRun::plain(typedUri(device.verificationUri));
+  TextRun uri = TextRun::link("the activation page", device.verificationUri, theme::kLinkBlue);
   uri.underline = true;
   visit_ = std::make_unique<RichFlow>(RichText{TextRun::plain(kVisit), uri, TextRun::plain(kEnterCode)}, kCopyPx,
                                       lineHeight(kCopyPx), textW);
   code_ = device.userCode;
-  spoken_ = juce::String(kScan) + " Or visit " + uri.text + kEnterCode + " " + code_;
+  spoken_ = juce::String(kScan) + " Or open " + uri.text + kEnterCode + " " + code_;
   repaint();
 }
 
@@ -256,7 +256,7 @@ void SignInScreen::rebuild() {
     addText(RichText{TextRun::strong(kBrowserTitle)}, kTitlePx, theme::kWhite, kWideMaxWidth, kGap);
     addText(copy, kCopyPx, theme::kWhite, kWideMaxWidth, kGap);
     addButtons({&copyLink_}, kGap);
-    addComponent(otherDevice_, kSectionGap);
+    // Use TONE3000's hosted OAuth Select flow on this Mac.
   }
 
   columnHeight_ = 0;

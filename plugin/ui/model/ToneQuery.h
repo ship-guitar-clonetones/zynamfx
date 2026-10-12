@@ -1,11 +1,5 @@
-// What the tone browser asks the catalog for: the search text plus every
-// filter the filter bar exposes, and how that becomes a request.
-//
-// Two shapes of request hide behind one query. The catalog search
-// (GET /tones/search) takes all of it. A profile filter (Recently used,
-// Favorites, Created) instead pages one of the signed-in user's own streams
-// (GET /tones/{downloaded|favorited|created}), which filter by gear and a
-// title search only: the browser parks the other filters while one is set.
+// The catalog query state. Public builds send only bounded list requests;
+// free-form search and taxonomy filters are handled by the hosted Select flow.
 #pragma once
 
 #include <juce_core/juce_core.h>
@@ -80,10 +74,8 @@ struct ToneQuery {
   const std::vector<juce::String>& picked(Taxonomy kind) const;
   std::vector<juce::String>& picked(Taxonomy kind);
 
-  // The API path with its query string for one page. `architecture` is the
-  // NAM model architecture the plugin loads (< 0 omits the filter). It is
-  // always sent: omitting it falls back to the API's legacy A1 + Custom
-  // default, and the API ignores it for formats without one (IR).
+  // The public Free-tier bounded-list path. Search and rich filters are
+  // handled by TONE3000's hosted Select flow, never sent from this app.
   juce::String requestPath(int page, int pageSize, int architecture) const;
 
   bool operator==(const ToneQuery& o) const;
