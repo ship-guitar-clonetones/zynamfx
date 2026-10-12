@@ -90,7 +90,24 @@ jobs:
           au="build/plugin/TONE3000_artefacts/Release/AU/zynamfx.component"
           mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
           ditto "$au" "$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
-          auval -v aufx ZyFX ZYUS
+          export AU_BUNDLE="$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
+          auval -a
+          python3 - <<'PY'
+          import os
+          import plistlib
+          import subprocess
+          from pathlib import Path
+          plist = plistlib.loads((Path(os.environ["AU_BUNDLE"]) / "Contents/Info.plist").read_bytes())
+          components = plist.get("AudioComponents", [])
+          if len(components) != 1:
+              raise SystemExit(f"Expected exactly one AU component, found {len(components)}")
+          component = components[0]
+          codes = [component.get(key) for key in ("type", "subtype", "manufacturer")]
+          if any(not isinstance(code, str) or len(code) != 4 for code in codes):
+              raise SystemExit(f"Invalid AU component codes: {codes!r}")
+          print("Validating AU metadata:", *codes)
+          subprocess.run(["auval", "-v", *codes], check=True)
+          PY
       - name: Package binaries and corresponding source
         id: package
         env:
