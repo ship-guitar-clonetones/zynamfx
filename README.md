@@ -15,6 +15,18 @@ This is the public **Version 2** line. The earlier public project remains availa
 - **Resize the interface:** the editor window and its contents resize freely together.
 - **Use it standalone or in a DAW:** the Standalone app manages its own audio device; AU and VST3 run inside compatible macOS hosts.
 
+## macOS configuration and data locations
+
+Per-user zynamfx files are stored under `~/Library/Application Support/zynamfx/`:
+
+- `zynamfx.settings` — Standalone audio-device setup and related JUCE host settings.
+- `preferences.settings` — machine-wide plug-in defaults, including multi-core processing, the default NAM model size, input calibration, and oversampling. Shared by Standalone, AU, and VST3.
+- `ui-preferences.settings` — interface preferences, your optional TONE3000 publishable key, and the remembered TONE3000 sign-in session. Treat this file as private; it contains saved access and refresh tokens. Signing out clears the saved session.
+- `Presets/` — presets saved by the user. Factory presets installed for all users are in `/Library/Application Support/zynamfx/Presets/Factory/`.
+- `LocalModels/` — copies of local NAM and IR files imported into zynamfx, so rigs can still find them if the original files are moved.
+
+The diagnostic log is `~/Library/Logs/zynamfx/zynamfx.log`. AU and VST3 chain state is saved by the DAW in its project or session; user presets are separate files in `Presets/` and include the active model data needed to reopen them offline.
+
 ## Version 2 compared with Version 1
 
 Version 1 is the public [tone3000-plugin-effects](https://github.com/zackyusof/tone3000-plugin-effects) repository. Version 2 is the separate **zynamfx** product and public repository. It uses its own app name, icon, plug-in identifiers, configuration/settings folder (`zynamfx`), standalone bundle, graphics, and release artifacts. The TONE3000 NAM/IR processing foundation and required third-party notices remain credited and licensed under their applicable terms. The two repositories are related source lines, not interchangeable product names; Version 2 does not replace Version 1.
