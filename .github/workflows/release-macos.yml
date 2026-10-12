@@ -90,7 +90,7 @@ jobs:
           au="build/plugin/TONE3000_artefacts/Release/AU/zynamfx.component"
           mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
           ditto "$au" "$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
-          auval -v aumf ZyFX ZYUS
+          auval -v aufx ZyFX ZYUS
       - name: Package binaries and corresponding source
         id: package
         env:
