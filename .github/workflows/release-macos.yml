@@ -91,6 +91,7 @@ jobs:
           mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
           ditto "$au" "$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
           export AU_BUNDLE="$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
           auval -a
           python3 - <<'PY'
           import os
