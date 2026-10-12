@@ -144,11 +144,22 @@ jobs:
           Based on the TONE3000 plugin ${UPSTREAM_TAG} release
           (upstream commit ${UPSTREAM_SHA}). See UPSTREAM.txt for links.
 
-          These builds are ad-hoc signed and not notarized. In Finder, open the
-          standalone app with Control-click > Open the first time. Install the AU
-          component under ~/Library/Audio/Plug-Ins/Components and VST3 under
-          ~/Library/Audio/Plug-Ins/VST3, then restart your audio host.
-          Matching corresponding source is included in the source archive.
+          These builds are ad-hoc signed and not notarized. Download only from
+          the official zynamfx GitHub releases. If macOS blocks the Standalone
+          app with a developer-verification warning, try opening it once, then
+          go to System Settings > Privacy & Security > Security > Open Anyway
+          and confirm. This leaves Gatekeeper enabled. Stop if macOS reports
+          malware or a damaged app.
+
+          If your audio host specifically refuses to load an installed AU/VST3
+          because of quarantine, verify the bundle came from the official
+          release, then remove quarantine only from that bundle and restart the
+          host. Example for AU (use the VST3 path instead if applicable):
+          xattr -dr com.apple.quarantine "$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
+
+          Install the AU component under ~/Library/Audio/Plug-Ins/Components
+          and VST3 under ~/Library/Audio/Plug-Ins/VST3. Matching source is
+          included in the source archive.
           EOF
           cat > release/UPSTREAM.txt <<EOF
           zynamfx release: v$version
