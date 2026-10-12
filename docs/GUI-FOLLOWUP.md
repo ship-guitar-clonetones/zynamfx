@@ -6,4 +6,4 @@ The local build helper produces the standalone app and AU component only. It doe
 
 ## Build record — 2026-10-12
 
-Standalone and AU Release bundles built and installed on macOS arm64. The AU passed `auval -v aumf ZyFX ZYUS`. Both bundles passed strict ad-hoc signature verification. The generated Release directory contains only `Standalone` and `AU` artifacts.
+The public AU subtype is `Zyfx`, with manufacturer code `ZYUS`. JUCE requires exactly one uppercase letter in an AU plug-in code; keeping the initial letter uppercase also matches its GarageBand compatibility guidance. The GitHub release workflow reads the built AU metadata and validates the generated component code with `auval`.

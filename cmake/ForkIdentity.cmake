@@ -9,7 +9,7 @@ set(T3K_FORK_DISPLAY_NAME "zynamfx"
   CACHE STRING "Fork plugin display name (host menus, window titles)")
 set(T3K_FORK_PRODUCT_NAME "zynamfx"
   CACHE STRING "Fork bundle/file name (no spaces: .component/.vst3/.app)")
-set(T3K_FORK_PLUGIN_CODE "ZyFX"
+set(T3K_FORK_PLUGIN_CODE "Zyfx"
   CACHE STRING "Fork plugin type code, 4 chars (AU type + VST3/AAX UID seed)")
 set(T3K_FORK_MANUFACTURER_CODE "ZYUS"
   CACHE STRING "Fork manufacturer code, 4 chars")

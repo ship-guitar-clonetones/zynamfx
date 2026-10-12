@@ -105,6 +105,11 @@ jobs:
           codes = [component.get(key) for key in ("type", "subtype", "manufacturer")]
           if any(not isinstance(code, str) or len(code) != 4 for code in codes):
               raise SystemExit(f"Invalid AU component codes: {codes!r}")
+          subtype = codes[1]
+          if sum(char.isupper() for char in subtype) != 1 or not subtype[0].isupper() or not subtype[1:].islower():
+              raise SystemExit(f"JUCE AU subtype must be Uppercase + three lowercase letters: {subtype!r}")
+          if not any(char.isupper() for char in codes[2]):
+              raise SystemExit(f"JUCE AU manufacturer code needs an uppercase letter: {codes[2]!r}")
           print("Validating AU metadata:", *codes)
           subprocess.run(["auval", "-v", *codes], check=True)
           PY
