@@ -28,6 +28,18 @@ zynamfx is not bloated corporate software — it is a razor-focused, ultra-low-l
 - **Resize the interface:** the editor window and its contents resize freely together.
 - **Use it standalone or in a DAW:** the Standalone app manages its own audio device; AU and VST3 run inside compatible macOS hosts.
 
+## What hosting third-party effects unlocks
+
+Adding third-party AU and VST support completely changes what you can do with a neural amp player. It transforms a basic player into a fully professional, self-contained guitar rig. In practice, hosting gives you:
+
+1. **Studio-grade time effects, post-cabinet.** The built-in delays and reverbs in standard amp modelers often sound flat or generic. Hosting third-party plug-ins lets you run premium algorithmic or convolution reverbs — such as Valhalla VintageVerb or Eventide Blackhole — directly after your Neural Amp Modeler (NAM) cabinet impulse response, creating massive, cinematic ambient spaces right inside the standalone app.
+
+2. **Intelligent, dynamic problem solving.** Guitar pickups and high-gain amp models frequently create harsh resonant frequencies or unwanted string squeaks, and standard graphic EQs cannot fix that without destroying the tone. With VST hosting you can load a dynamic equalizer or frequency-dependent expander — like FabFilter Pro-Q 3 or TDR Nova — that notches out those ear-piercing frequencies only when you strike the strings hard, keeping the overall tone warm and natural.
+
+3. **True analogue character before the amp.** Real players often push the front end of a tube amplifier into saturation with a specific overdrive pedal. Instead of relying on digital simulations, you can load accurate analogue component-modeling plug-ins — Analog Obsession's free preamps, or Brainworx console emulations — right before the neural amp slot, adding authentic harmonic distortion, console saturation, and warmth to the digital capture.
+
+4. **Advanced dynamics control.** High-gain metal rhythm needs strict control to keep palm-mutes from clipping, while clean funk needs a fast, snappy attack — and the basic compressors in standard modelers rarely offer enough control. Hosting third-party VSTs lets you reach for legendary studio compressors: an 1176 for aggressive limiting, an LA-2A for smooth clean leveling, or a multiband compressor to tighten up only the muddy low-end frequencies.
+
 ## macOS configuration and data locations
 
 Per-user zynamfx files are stored under `~/Library/Application Support/zynamfx/`:
