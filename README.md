@@ -6,6 +6,19 @@
 
 This is the public **Version 2** line. The earlier Version 1 source line is archived privately. Version 1 follows the aesthetics of the original TONE3000 plug-in. Version 2 has its own design language, giving the project a distinct zynamfx interface, graphics, product identity, standalone application, settings location, and release line. It builds on the open-source TONE3000 codebase; it is not an official TONE3000 product and has no TONE3000 or Line 6 endorsement.
 
+## Stop choosing between amps and effects — do both
+
+The official TONE3000 plug-in puts thousands of hyper-realistic neural amp captures within reach, but it leaves you on an island when it comes to effects: a rigid chain that cannot host the third-party delays, reverbs, and modulations you already own. **zynamfx** is the free, open-source signal-chain app that does both.
+
+- **Native AU & VST3 hosting** — drop installed effects straight into the signal chain, with no DAW routing required.
+- **Infinite tone shaping** — load FabFilter, Analog Obsession, or any premium AU/VST3 EQ next to your NAM captures instead of settling for the built-in EQ.
+- **Two ways to run it** — standalone, or as AU/VST3 inside your DAW.
+- **Shareable rigs** — save the whole rig, including the exact state of each hosted AU/VST3 effect, into a single preset file.
+
+> "I mainly built it for my own needs." — zackyusof
+
+zynamfx is not bloated corporate software — it is a razor-focused, ultra-low-latency signal-chain app for a better workflow, whether a boutique chorus sits before the neural preamp or a pristine stereo delay follows the cabinet. Clone the repo and build your rig from source below.
+
 ## What it does
 
 - **Build guitar rigs:** arrange NAM amp/capture blocks and IR cabinet blocks in a signal chain. Each independent chain starts with seven slots; add, remove, reorder, duplicate, bypass, and save blocks in presets.
