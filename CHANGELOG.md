@@ -2,7 +2,7 @@
 
 All notable changes to zynamfx are recorded here. Dates are ISO (yyyy-mm-dd).
 
-## [2.0.3-beta.1] - 2026-10-17
+## [2.0.2-beta.2] - 2026-10-17
 
 Beta fix for v2.0.2-beta.1. Prerelease: never offered as an update.
 

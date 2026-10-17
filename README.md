@@ -37,7 +37,7 @@ Other tools make you choose: a capture player *or* a plugin host *or* a paid rig
 
 [Download](#install) · [Build from source](#build-from-source) · [Releases](https://github.com/zackyusof/zynamfx/releases) · [Documentation](#documentation) · [Version 2 compared with Version 1](#version-2-compared-with-version-1) · [License](#licensing-and-attribution)
 
-## What 2.0.3 beta 1 changes
+## What 2.0.2 beta 2 changes
 
 **This is a beta.** It is published as a GitHub *prerelease*: it is never offered as an update to anyone,
 and a beta build never checks for updates itself. Use it to test the fixes below and report back on the
