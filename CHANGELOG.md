@@ -2,6 +2,21 @@
 
 All notable changes to zynamfx are recorded here. Dates are ISO (yyyy-mm-dd).
 
+## [2.1.0-beta.1] - 2026-10-18
+
+Beta for v2.1.0. Prerelease: never offered as an update.
+
+### Added
+- **The TONE3000 browser opens inside the plugin.** Sign-in and the hosted
+  Select flow — catalog search, filters, audition and tone pick — now run in an
+  in-editor browser panel instead of the system browser, in the standalone app,
+  the AU and the VST3. Closing the panel abandons the flow; **Open in Browser**
+  stays as an escape hatch, and the sign-in screen keeps the copy-link and
+  device-code fallbacks. No engine is bundled: macOS uses the system WKWebView,
+  and the redirect back to the local listener is replayed by the app.
+- **The build label shows the prerelease.** The version beside the ZY monogram
+  and in Settings reads `2.1.0-beta.1`, and a beta never checks for updates.
+
 ## [2.0.2-beta.2] - 2026-10-17
 
 Beta fix for v2.0.2-beta.1. Prerelease: never offered as an update.

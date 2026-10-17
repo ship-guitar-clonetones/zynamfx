@@ -64,11 +64,18 @@ TONE3000Processor::TONE3000Processor()
 
   // Build identity next: every support report needs the version, OS and architecture, and asking for
   // them costs a round trip. Written at construction so it is the first line of any session.
+  // The DSP test target compiles this file without the plugin defines.
+#if defined(JucePlugin_VersionString)
+  #define ZYN_APP_VERSION JucePlugin_VersionString
+#else
+  #define ZYN_APP_VERSION "test"
+#endif
   juce::Logger::writeToLog(
-      juce::String("[Processor] zynamfx ") + JucePlugin_VersionString + " | " +
+      juce::String("[Processor] zynamfx ") + ZYN_APP_VERSION + " | " +
       juce::SystemStats::getOperatingSystemName() + " | " +
       juce::SystemStats::getCpuModel() + " | " +
       (juce::SystemStats::isOperatingSystem64Bit() ? "64-bit" : "32-bit"));
+#undef ZYN_APP_VERSION
 
   resolveParamRefs();
 

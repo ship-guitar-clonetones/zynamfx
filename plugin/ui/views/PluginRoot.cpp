@@ -155,9 +155,34 @@ void PluginRoot::authFlowChanged() {
     } else {
       self->signIn_.reset();
     }
+    self->syncAuthBrowser();
     self->syncTakeovers();
     self->resized();
   });
+}
+
+// The in-editor browser runs the hosted OAuth Select flow inside the window:
+// mounted while the session is sending the user to TONE3000 (`leaving`),
+// gone as soon as the flow returns or fails. The sign-in screen stays
+// underneath as the fallback surface (copy link, device code).
+void PluginRoot::syncAuthBrowser() {
+#if JUCE_WEB_BROWSER
+  const auto& flow = services_.session.authFlow();
+  const bool want = flow.phase == ToneSession::AuthFlow::Phase::leaving && flow.authorizeUrl.isNotEmpty();
+  if (want && authBrowser_ == nullptr) {
+    services_.hints.setHover({});
+    authBrowser_ = std::make_unique<AuthBrowserPanel>(flow.authorizeUrl, flow.redirectUri);
+    authBrowser_->setBounds(getLocalBounds());
+    authBrowser_->onClose = [this] { services_.session.cancelFlow(); };
+    authBrowser_->onOpenExternal = [url = flow.authorizeUrl] { juce::URL(url).launchInDefaultBrowser(); };
+    // The redirect is replayed from the panel; the session moves to
+    // `returning` and the next authFlowChanged unmounts us.
+    overlay_.addAndMakeVisible(*authBrowser_);
+  } else if (!want && authBrowser_ != nullptr) {
+    authBrowser_.reset();
+  }
+  if (authBrowser_ != nullptr) authBrowser_->setBounds(getLocalBounds());
+#endif
 }
 
 // Store changes arrive from inside a modal's own button handler, so the
@@ -407,6 +432,7 @@ void PluginRoot::setBrowserShown(bool shown) {
 // What a takeover covers is hidden, not left painting underneath: the meters
 // tick at 30 Hz and would otherwise repaint for nothing.
 void PluginRoot::syncTakeovers() {
+  if (authBrowser_ != nullptr) authBrowser_->setBounds(getLocalBounds());
   const bool tuner = tunerShown(), browser = browserShown(), signIn = signInShown();
   const bool column = browser || signIn;  // something covers the whole column
   main_.setVisible(!tuner && !column);
@@ -464,6 +490,7 @@ void PluginRoot::closeSettings() {
 
 void PluginRoot::resized() {
   overlay_.setBounds(getLocalBounds());
+  if (authBrowser_ != nullptr) authBrowser_->setBounds(getLocalBounds());
   if (settings_ != nullptr) settings_->setBounds(getLocalBounds());
   for (auto* modal : {static_cast<ModalLayer*>(updateNotice_.get()), static_cast<ModalLayer*>(connectionModal_.get())})
     if (modal != nullptr) modal->setBounds(getLocalBounds());

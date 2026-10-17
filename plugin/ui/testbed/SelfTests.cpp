@@ -38,6 +38,7 @@
 #include "views/browser/FilterChip.h"
 #include "views/browser/Paginator.h"
 #include "views/browser/ToneCard.h"
+#include "views/auth/AuthBrowserPanel.h"
 #include "views/browser/ToneBrowser.h"
 #include "views/gallery/GalleryGeometry.h"
 #include "views/gallery/GalleryTile.h"
@@ -370,6 +371,16 @@ struct LoopbackServerTests : juce::UnitTest {
     expectEquals(status.load(), 200);
     expect(page.contains("signed in.") && page.contains("return to zynamfx"));
     expectEquals(query, juce::String("code=abc&state=xyz"));
+
+    beginTest("the in-editor browser intercepts only the loopback redirect");
+    const juce::String redirect = "http://localhost:51234/";
+    expect(authbrowser::isRedirectNavigation("http://localhost:51234/?code=abc&state=xyz", redirect));
+    expect(!authbrowser::isRedirectNavigation("https://www.tone3000.com/select", redirect));
+    expect(!authbrowser::isRedirectNavigation("http://localhost:51234/", ""));
+    expectEquals(authbrowser::replayTarget("http://localhost:51234/?code=abc"),
+                 juce::String("http://127.0.0.1:51234/?code=abc"));
+    expectEquals(authbrowser::replayTarget("https://www.tone3000.com/"),
+                 juce::String("https://www.tone3000.com/"));
 
     beginTest("one redirect per flow: the listener is gone afterwards");
     const auto deadline2 = juce::Time::getMillisecondCounter() + 2000;

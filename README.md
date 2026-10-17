@@ -156,8 +156,9 @@ chain feeds extra buses silence instead of disabling them.
 
 **How does TONE3000 sign-in work, and should it stay signed in?**
 Set your own **publishable key** (client_id) in **Settings → Plugin → TONE3000 API key**, then restart
-and sign in. The sign-in opens TONE3000's hosted **Select** page; that page is the selection and consent
-surface, so there is no separate "Authorize" screen on this flow. Your selection is handed back to
+and sign in. The sign-in opens TONE3000's hosted **Select** page in an in-editor browser (standalone, AU
+and VST3); that page is the selection and consent surface, so there is no separate "Authorize" screen on
+this flow. If a host cannot host the panel, **Open in Browser** hands the same URL to the system browser. Your selection is handed back to
 zynamfx and loaded locally. Sign-in is meant to **persist** — the app stores its token set in its
 preferences, so a fresh browser round trip for every tone is *not* the intended behaviour. If you see
 that, it is tracked in [issue #8](https://github.com/zackyusof/zynamfx/issues/8); please add your build

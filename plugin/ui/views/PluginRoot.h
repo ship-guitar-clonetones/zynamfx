@@ -43,6 +43,7 @@
 #include "SignInScreen.h"
 #include "ToastView.h"
 #include "TunerView.h"
+#include "auth/AuthBrowserPanel.h"
 #include "browser/ToneBrowser.h"
 #include "core/DelayedCall.h"
 #include "modals/ConnectionModal.h"
@@ -89,6 +90,9 @@ public:
   // flight (it follows the session's AuthFlow), over the browser when that
   // is what started it, so the browser is there again on return.
   bool signInShown() const { return signIn_ != nullptr; }
+  // The in-editor browser (hosted OAuth Select) while the session is
+  // `leaving`; builds without a webview never mount one.
+  bool authBrowserShown() const { return authBrowser_ != nullptr; }
 
   // The Settings takeover covers the whole window (chrome strips included)
   // under the overlay layer; mounted only while open. Banner actions and the
@@ -133,6 +137,8 @@ private:
   // Which of main screen, faceplate, browser and sign-in screen show under
   // the takeovers.
   void syncTakeovers();
+  // Mount / unmount the in-editor browser against the session's AuthFlow.
+  void syncAuthBrowser();
   // The Settings page when it is open and nothing modal sits over it: the
   // Tab cycle to enter with nothing focused.
   SettingsScreen* settingsInFront() const;
@@ -148,6 +154,7 @@ private:
   MainScreen main_;  // meters + chain gallery
   std::unique_ptr<ToneBrowser> browser_;
   std::unique_ptr<SignInScreen> signIn_;
+  std::unique_ptr<AuthBrowserPanel> authBrowser_;
   std::unique_ptr<TunerView> tuner_;
   std::unique_ptr<SettingsScreen> settings_;
   Faceplate faceplate_;

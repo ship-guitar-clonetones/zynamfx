@@ -554,13 +554,16 @@ target_link_libraries(${PROJECT_NAME}
 # Ensure NAM is built before plugin (force_load path requires lib to exist)
 add_dependencies(${PROJECT_NAME} NAM)
 
-# No browser engine anywhere in the plugin: the UI is drawn by JUCE, so
-# juce_gui_extra's WebBrowserComponent (and its WebKitGTK / WebView2 runtime
-# dependencies) stays out of the build. Likewise the vendored libwebp
-# (JUCE 9.0.3+): nothing here reads or writes WebP.
+# The UI is drawn by JUCE, except the in-editor TONE3000 browser
+# (AuthBrowserPanel): the hosted OAuth Select flow runs in a
+# WebBrowserComponent so sign-in and catalog browsing never leave the
+# window. macOS uses the system WKWebView; no engine is bundled. The UI
+# testbed keeps JUCE_WEB_BROWSER=0 and compiles the panel as a notice.
+# Likewise the vendored libwebp (JUCE 9.0.3+): nothing here reads or writes
+# WebP.
 target_compile_definitions(${PROJECT_NAME}
     PUBLIC
-        JUCE_WEB_BROWSER=0
+        JUCE_WEB_BROWSER=1
         JUCE_USE_WEBP=0
         JUCE_VST3_CAN_REPLACE_VST2=0
 )

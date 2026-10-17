@@ -336,10 +336,20 @@ void Tone3000Session::login(LoginIntent intent) {
   extra.set("architecture", juce::String(config_.architecture));
   extra.set("preview", "true");
   flow_.authorizeUrl = oauth::authorizeUrl(config_.apiOrigin, config_.publishableKey, redirectUri_, *pkce_, extra);
+  flow_.redirectUri = redirectUri_;
+#if JUCE_WEB_BROWSER
+  // The editor's in-app browser loads authorizeUrl itself (PluginRoot opens
+  // AuthBrowserPanel while the phase is `leaving`). Nothing is launched
+  // externally, so there is no launcher problem to report; the panel still
+  // offers "Open in Browser" and the screen keeps the copy-link and device
+  // fallbacks.
+  flow_.browserProblem = {};
+#else
   // Best effort, whatever the platform: a browser that would not open is
   // no dead end, since the listener is up for a pasted link and the screen
   // offers the device flow either way.
   flow_.browserProblem = openBrowser(flow_.authorizeUrl);
+#endif
   authLog("login: browser flow started, redirect=" + redirectUri_ +
           (flow_.browserProblem.isEmpty() ? juce::String() : " (launcher refused: " + flow_.browserProblem + ")"));
   notifyAuthFlowChanged();

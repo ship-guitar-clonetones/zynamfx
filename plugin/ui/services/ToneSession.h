@@ -75,6 +75,10 @@ public:
     juce::String error;
     juce::String authorizeUrl;
     juce::String browserProblem;
+    // Where the hosted flow sends the code back (the loopback listener). The
+    // in-editor browser intercepts this navigation and replays it from the
+    // app, so WebKit never has to reach the local listener itself.
+    juce::String redirectUri;
 
     struct Device {
       enum class State { requesting, waiting, failed };
