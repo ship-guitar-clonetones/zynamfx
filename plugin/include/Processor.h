@@ -180,10 +180,17 @@ public:
   // owned, or a file squatting on the path) is renamed aside to a
   // "<name>.unwritable" sibling (kept for manual recovery, never deleted)
   // and recreated fresh, the parent folder being the user's own.
-  // Returns true when `dir` is a writable directory on exit; failures log
-  // their reason. No-op (two stats) on a healthy folder. Run once per
-  // process on the app-data root (see the constructor) and defensively from
-  // the stash and preset write paths.
+  // A DANGLING SYMLINK is the same class and is handled too: exists() is
+  // false for it (it stats through the link), so the node test is
+  // exists()-or-isSymbolicLink(). Without that, createDirectory() answered
+  // "File exists" forever and NOTHING persisted (settings, ui-preferences,
+  // the TONE3000 publishable key, the LocalModels stash).
+  // Returns true only when a real create/write/delete PROBE succeeds on
+  // exit — "writable" is never an access() guess (see AppDataPaths.h).
+  // Failures log their reason. Run once per process on the app-data root
+  // (see the constructor) and defensively from the stash and preset write
+  // paths. The implementation is t3k::appdata::ensureWritableDir, shared by
+  // every consumer of the app-data root.
   static bool ensureWritableDir(const juce::File& dir);
   // Resolve a persisted local-model `file://` URL to the stash file that
   // actually holds those bytes, given the current stash root. The URL stored

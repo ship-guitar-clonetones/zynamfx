@@ -2,6 +2,7 @@
 // For TONE3000Processor::ensureWritableDir: preset saves share the app-data
 // folder whose permissions a sudo'd install script can mangle (github
 // issue #76).
+#include "AppDataPaths.h"
 #include "Processor.h"
 #include <algorithm>
 #include <limits>
@@ -13,12 +14,12 @@ namespace {
 constexpr const char* kUserPrefix = "user:";
 constexpr const char* kFactoryPrefix = "factory:";
 
+// Same RESOLVED app-data root as the settings file and the LocalModels stash
+// (see AppDataPaths.h): the primary folder whenever it is writable, the shared
+// fallback when it isn't. Never derived independently — that is how the four
+// stores drift apart.
 juce::File presetsRootDir() {
-  juce::File base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-#if JUCE_MAC
-  base = base.getChildFile("Application Support");
-#endif
-  return base.getChildFile(T3K_APP_DATA_DIR_NAME).getChildFile("Presets");
+  return t3k::appdata::root().dir.getChildFile("Presets");
 }
 
 juce::String stripPrefix(const juce::String& id, const char* prefix) {

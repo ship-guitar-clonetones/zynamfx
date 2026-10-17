@@ -1,4 +1,5 @@
 #include "Processor.h"
+#include "AppDataPaths.h"
 #include "json.hpp"
 #include "NAM/wavenet/a2_fast.h"
 #include <algorithm>
@@ -123,15 +124,14 @@ bool namConfigIsA2(const nlohmann::json& modelJson) {
 // the stash path as its model_url, so a cache-lost reload (undo after
 // remove, undo across a tone swap) re-reads this copy even after the user's
 // original file moved. Content-addressed names dedupe re-drops of the same
-// file; stale entries age out (see cleanLocalModelStash). Same app-data
-// root as PresetManager. Persisted URLs are resolved back to this folder by
-// resolveLocalModelFile, which is what survives the iOS container rotating.
+// file; stale entries age out (see cleanLocalModelStash). Same RESOLVED
+// app-data root as the settings file and PresetManager (see
+// AppDataPaths.h): primary folder when writable, the shared fallback
+// otherwise, so settings and stash never split across two roots. Persisted
+// URLs are resolved back to this folder by resolveLocalModelFile, which is
+// what survives the iOS container rotating.
 juce::File localModelsDir() {
-  juce::File base = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
-#if JUCE_MAC
-  base = base.getChildFile("Application Support");
-#endif
-  return base.getChildFile(T3K_APP_DATA_DIR_NAME).getChildFile("LocalModels");
+  return t3k::appdata::root().dir.getChildFile("LocalModels");
 }
 
 // FNV-1a over the file bytes: stable across sessions and platforms without
@@ -616,53 +616,17 @@ void TONE3000Processor::cleanLeakedIrTempFiles() {
 }
 
 bool TONE3000Processor::ensureWritableDir(const juce::File& dir) {
-  if (dir.isDirectory() && dir.hasWriteAccess())
-    return true;
-
-  // A folder the user still owns with stripped write bits (restored backup)
-  // is fixable in place with a chmod, which keeps its contents where they
-  // are. chmod is owner-only, so this quietly does nothing to a root-owned
-  // folder, which falls through to the rename below. The owner's write bit
-  // only: juce::File::setReadOnly(false) would also grant group and world
-  // (0555 -> 0777), and the folder holds the user's sign-in tokens.
-  const auto restoreOwnerWrite = [&dir] {
-#if JUCE_WINDOWS
-    return dir.setReadOnly(false);
-#else
-    struct stat st {};
-    const juce::String path = dir.getFullPathName();
-    return ::stat(path.toRawUTF8(), &st) == 0 &&
-           ::chmod(path.toRawUTF8(), (st.st_mode & 07777) | S_IWUSR) == 0;
-#endif
-  };
-  if (dir.isDirectory() && restoreOwnerWrite() && dir.hasWriteAccess()) {
-    juce::Logger::writeToLog("[AppData] Restored write permission on " + dir.getFullPathName());
-    return true;
-  }
-
-  if (dir.exists()) {
-    // What chmod can't fix: a file squatting on the path, or a directory
-    // owned by someone else (root, after a sudo'd install script). chown-ing
-    // it back needs privileges we don't have, but the parent belongs to the
-    // user, so *renaming* the broken node aside works (though older macOS,
-    // seen on the macos-14 CI runner, refuses to rename an unwritable
-    // directory; current macOS allows it). Nothing is deleted: the sibling
-    // keeps whatever is inside for manual recovery, and the log names it.
-    const juce::File aside =
-        dir.getSiblingFile(dir.getFileName() + ".unwritable").getNonexistentSibling();
-    if (dir.moveFileTo(aside))
-      juce::Logger::writeToLog("[AppData] Moved unusable " + dir.getFullPathName() +
-                               " aside to " + aside.getFileName());
-    else
-      juce::Logger::writeToLog("[AppData] " + dir.getFullPathName() +
-                               " is not writable and couldn't be moved aside");
-  }
-
-  const juce::Result created = dir.createDirectory();
-  if (created.failed())
-    juce::Logger::writeToLog("[AppData] Couldn't create " + dir.getFullPathName() + ": " +
-                             created.getErrorMessage());
-  return dir.isDirectory() && dir.hasWriteAccess();
+  // The recovery logic lives in AppDataPaths.h so the settings file,
+  // ui-preferences, Presets and LocalModels all share one implementation
+  // (github issue #76). It handles one more case than the code that used to
+  // sit here: a DANGLING SYMLINK on the path (the app-data folder linked to
+  // an unmounted volume). exists() is false for such a link — it stats
+  // through it — so creating the directory reported "File exists" and every
+  // save failed silently. The resolver moves the link aside and recreates a
+  // real folder, then proves writability with a create/write/delete probe.
+  const bool ok = t3k::appdata::ensureWritableDir(dir);
+  t3k::appdata::logResolutionOnce();
+  return ok;
 }
 
 int TONE3000Processor::sweepLeakedIrTempFiles(const juce::File& tempDir) {

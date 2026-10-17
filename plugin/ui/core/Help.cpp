@@ -178,9 +178,11 @@ std::map<Key, String> buildTable() {
 
   // Chain gallery
   t[Key::addTile] =
-      U("Add Tone: browse the catalog for this slot, or drop a .nam or IR .wav file (or a folder of them). Right-click: paste / load file · drag: move.");
+      U("Add Tone: click: choose a tone / NAM profile for this slot, or drop a .nam or IR .wav "
+        "file (or a folder of them). Right-click: add an AU/VST3 effect · drag: move.");
   t[Key::closeToneBrowser] = U("Close: back to the chain.");
-  t[Key::copyBlock] = U("Copy: copy this block (tone, model and all settings).");
+  t[Key::copyBlock] = U("Copy: copy this block — tone, model and all settings (") +
+                      chord("\u2318", "Ctrl", "C") + U(").");
   t[Key::pasteBlock] = U("Paste: add a copy of the copied block in this slot.");
   t[Key::loadFileTile] =
       U("Load File: pick a local .nam or IR .wav file to load here. No account needed.");
@@ -189,7 +191,7 @@ std::map<Key, String> buildTable() {
   t[Key::blockPower] = U("Power: bypass this block.");
   t[Key::retryLoad] = U("Retry: re-download this model.");
   t[Key::swapTone] = U("Swap: replace this tone, keeping its slot.");
-  t[Key::removeBlock] = U("Remove: delete this block.");
+  t[Key::removeBlock] = U("Remove: delete this block (Delete or Backspace).");
   t[Key::panLeft] = knobDesktop("Pan L", "Left chain, hard left ↔ center.");
   t[Key::panRight] = knobDesktop("Pan R", "Right chain, center ↔ hard right.");
   t[Key::panLink] = U("Link Pans: mirror both pan knobs.");
@@ -276,9 +278,9 @@ const String& text(Key key) {
 }
 
 String toneTile(const String& title) {
-  return kTouch ? title + U(". Tap: open · drag: reorder · touch and hold: menu.")
+  return kTouch ? title + U(". Tap: open · drag: reorder · touch and hold: add an AU/VST3 effect.")
                 : title + U(". Click: open · drag: reorder · ") + alt("drag") +
-                      ": duplicate · right-click: copy / load file.";
+                      ": duplicate · right-click: add an AU/VST3 effect.";
 }
 
 String bandType(const String& label) { return label + ": band curve shape."; }

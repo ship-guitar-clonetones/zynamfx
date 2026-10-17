@@ -1,20 +1,29 @@
 #include "AddTile.h"
 
+#include <utility>
+
 #include "GalleryGeometry.h"
 #include "core/Help.h"
 #include "core/Icons.h"
 #include "core/Paint.h"
 #include "core/Theme.h"
 #include "core/Fonts.h"
-#include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_gui_extra/juce_gui_extra.h>
 
 #include <algorithm>
 #include <map>
 
-#include "widgets/HostedEffectWindow.h"
-
 namespace t3k::ui {
+
+namespace {
+// The chip row along the tile's top edge: the same 4px inset the tone tiles'
+// chrome uses, and the gap between chips (narrowed on the stereo tiles so all
+// three fit a 112px slot).
+constexpr int kChipPad = 4;
+constexpr int kChipGap = 6;
+constexpr int kChipY = 4;
+constexpr int kChipMinGap = 2;
+}  // namespace
 
 AddTile::Routing AddTile::routingFor(int index, int count) {
   if (count <= 1) return Routing::none;
@@ -24,9 +33,22 @@ AddTile::Routing AddTile::routingFor(int index, int count) {
 }
 
 AddTile::AddTile(Services& services, std::string blockId, int size)
-    : GalleryTile(services, std::move(blockId), size) {
+    : GalleryTile(services, std::move(blockId), size),
+      file_(Icon::File, ChromeIconButton::Tone::plain, help::Key::loadFileTile),
+      folder_(Icon::FolderClosed, ChromeIconButton::Tone::plain, help::Key::loadFolderTile),
+      paste_(Icon::ClipboardPaste, ChromeIconButton::Tone::plain, help::Key::pasteBlock) {
   setHelpText(help::text(help::Key::addTile));
   setTitle("Add Tone");
+
+  // Local loading stays one click from the slot: the tone loader (the primary
+  // click) is the catalog; these are the file pickers.
+  file_.onClick = [this] { loadLocalFile(); };
+  folder_.onClick = [this] { loadLocalFolder(); };
+  paste_.onClick = [this] {
+    if (onPaste) onPaste(this->blockId());
+  };
+  for (auto* chip : {&file_, &folder_, &paste_}) addAndMakeVisible(*chip);
+  updateChips();  // nothing to paste yet
 }
 
 void AddTile::setRouting(Routing routing) {
@@ -35,71 +57,44 @@ void AddTile::setRouting(Routing routing) {
   repaint();
 }
 
-void AddTile::setCanPaste(bool canPaste) { canPaste_ = canPaste; }
+void AddTile::setCanPaste(bool canPaste) {
+  if (canPaste_ == canPaste) return;
+  canPaste_ = canPaste;
+  updateChips();
+}
+
+// A file drag is hovering: the tile is a drop zone, so the chips step aside.
+void AddTile::dropArmedChanged(bool armed) {
+  juce::ignoreUnused(armed);
+  updateChips();
+}
+
+void AddTile::updateChips() {
+  const bool shown = !dropArmed();
+  file_.setVisible(shown);
+  folder_.setVisible(shown);
+  paste_.setVisible(shown && canPaste_);
+  resized();
+}
 
 void AddTile::open() {
-  // The plus is the discovery path: a plain click must reveal the same actions as a right-click.
-  // Hosted AU/VST3 insertion lives only in this sheet, and hiding it behind a right-click is why
-  // users concluded the feature did not exist.
-  showMenu(getLocalBounds().getCentre());
+  if (onAdd) onAdd(blockId());
 }
 
-std::vector<ContextMenu::Item> AddTile::menuItems() {
-  std::vector<ContextMenu::Item> items{
-      // The action the tile used to perform on a plain click, kept first so the sheet loses nothing.
-      {"Choose Tone...", Icon::File, help::Key::addTile,
-       [this] { if (onAdd) onAdd(blockId()); }},
-      {"Add AU/VST3 Effect", Icon::File, help::Key::loadFileTile,
-       [this] { chooseInstalledEffect(); }},
-      {"Paste", Icon::ClipboardPaste, help::Key::pasteBlock,
-       [this] { if (onPaste) onPaste(blockId()); }, /*disabled=*/!canPaste_},
-  };
-  for (auto& item : localLoadItems()) items.push_back(std::move(item));
-  return items;
-}
-
-void AddTile::chooseInstalledEffect() {
-  // The bundles come from a plain directory listing (no scan/instantiation), so
-  // this is instant. EffectMenu is our own two-column popover (vendors -> that
-  // vendor's plugins) rather than a native PopupMenu, which lets us blur the
-  // vendor column while the plugin column is active.
-  const auto listed = services().backend.listHostedEffectBundles();
-  const auto* array = listed.getArray();
-  if (array == nullptr || array->isEmpty()) {
-    services().toast.show("No AU/VST3 effects found in /Library/Audio/Plug-Ins");
-    return;
+void AddTile::resized() {
+  // Right-aligned along the top edge, clear of the plus circle.
+  const int box = theme::kIconBoxSize;
+  const int avail = getWidth() - 2 * kChipPad - box - kChipMinGap;
+  const int n = (paste_.isVisible() ? 3 : 2);
+  int gap = kChipGap;
+  if (n * box + (n - 1) * gap > avail)
+    gap = juce::jmax(0, (avail - n * box) / juce::jmax(1, n - 1));
+  int x = getWidth() - kChipPad - box;
+  for (auto* chip : {&paste_, &folder_, &file_}) {
+    if (!chip->isVisible()) continue;
+    chip->setBounds(x, kChipY, box, box);
+    x -= box + gap;
   }
-
-  std::vector<EffectMenu::Entry> entries;
-  entries.reserve(static_cast<size_t>(array->size()));
-  for (const auto& effect : *array)
-    entries.push_back({effect["vendor"].toString(), effect["name"].toString(),
-                       effect["format"].toString() == "VST3" ? juce::String("VST3")
-                                                             : juce::String("AU"),
-                       effect["path"].toString()});
-
-  effectMenu_ = std::make_unique<EffectMenu>(std::move(entries));
-  // Defer the load until after this click has fully unwound: adding the block
-  // triggers a chain resync that can rebuild the gallery (destroying the tiles and
-  // this menu) — doing it inline is a use-after-free while the button is still in
-  // its mouseUp. Services outlives the tiles, so capture it (not `this`).
-  Services* svc = &services();
-  const std::string target = blockId();
-  effectMenu_->onChoose = [svc, target](const juce::String& path, const juce::String& name) {
-    juce::MessageManager::callAsync([svc, target, path, name] {
-      const auto id = svc->backend.addHostedEffectFromFile(juce::File(path), target);
-      if (id.empty()) {
-        svc->toast.show("Could not load this effect");
-        return;
-      }
-      svc->chain.refresh(true);
-      // The effect block's detail embeds the plugin's GUI (open the tile to see it).
-      juce::ignoreUnused(name);
-    });
-  };
-  effectMenu_->open(*this, Popover::Align::left, 8);
-  effectMenu_->centreOn(*this);  // centre over the tile and keep inside the window
-  effectMenu_->focusSearch();    // the search field takes the keyboard on open
 }
 
 void AddTile::paint(juce::Graphics& g) {

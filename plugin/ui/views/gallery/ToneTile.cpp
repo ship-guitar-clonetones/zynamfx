@@ -109,20 +109,6 @@ void ToneTile::open() {
   if (onOpen) onOpen(blockId());
 }
 
-std::vector<ContextMenu::Item> ToneTile::menuItems() {
-  if (block_.isEffect)
-    return {{"Open Effect Editor", Icon::File, help::Key::loadFileTile,
-             [this] { open(); }},
-            {"Remove", Icon::Trash2, help::Key::removeBlock,
-             [this] { services().chain.removeBlock(blockId()); }}};
-  std::vector<ContextMenu::Item> items{
-      {"Copy", Icon::Copy, help::Key::copyBlock,
-       [this] { this->services().chain.copyBlock(blockId()); }},
-  };
-  for (auto& item : localLoadItems()) items.push_back(std::move(item));
-  return items;
-}
-
 void ToneTile::dropArmedChanged(bool) { syncState(); }
 
 void ToneTile::travellingChanged(bool) { setHovered(hovered_); }

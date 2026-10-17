@@ -60,6 +60,11 @@ public:
 
   Tone3000Client(HttpTransport& http, UiPrefs& prefs, juce::String apiOrigin, juce::String publishableKey);
 
+  // The OAuth client_id used by the token endpoints. The session updates it
+  // when a key saved in Settings changes at runtime.
+  void setPublishableKey(juce::String key) { key_ = key; }
+  const juce::String& publishableKey() const { return key_; }
+
   // Fires for setTokens() and every automatic refresh (native's Bearer
   // copy follows it).
   std::function<void(const Tokens&)> onTokensUpdated;

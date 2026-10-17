@@ -37,21 +37,26 @@ Other tools make you choose: a capture player *or* a plugin host *or* a paid rig
 
 [Download](#install) · [Build from source](#build-from-source) · [Releases](https://github.com/zackyusof/zynamfx/releases) · [Documentation](#documentation) · [Version 2 compared with Version 1](#version-2-compared-with-version-1) · [License](#licensing-and-attribution)
 
-## What 2.0.2 beta 1 changes
+## What 2.0.3 beta 1 changes
 
 **This is a beta.** It is published as a GitHub *prerelease*: it is never offered as an update to anyone,
 and a beta build never checks for updates itself. Use it to test the fixes below and report back on the
 issue that matches your symptom.
 
 ### Fixed
-- **Paste works in every text field.** The text menu had been disabled, so right-click -> Paste did
-  nothing in the TONE3000 API-key field (only Cmd+V worked).
+- **A click on a slot opens the tone browser (NAM profiles) again.** Version 2.0.2 beta 1 made the
+  plain click open an action sheet instead; that change is reverted. Right-click / ctrl-click now opens
+  the AU/VST3 effect chooser directly.
+- **Settings persist.** The app-data folder heal now handles a dangling symlink (it used to loop on
+  "File exists" and every write failed), probes writability with a real write, and falls back to a local
+  folder — saying so in the log — when the primary one cannot be made writable.
+- **TONE3000 browsing works after entering the key.** The publishable key is re-read when Settings
+  commits it rather than only at editor construction, so browsing no longer needs an app restart.
+- **Slot Copy/Remove** are reachable again as Cmd+C / Delete on a focused tile.
+- **Paste works in every text field.** The text menu is enabled, so right-click -> Paste works in the
+  TONE3000 API-key field as well as Cmd+V.
 - **A rejected API key now says why.** A secret key (`t3k_cs_...`) or a value without the `t3k_pub_`
-  prefix used to be dropped silently. The field now explains the problem and keeps your text so you can
-  correct it.
-- **Hosted effects are discoverable.** A plain click on the **+** tile now opens the action sheet:
-  *Choose Tone...*, **Add AU/VST3 Effect**, Paste, Load File, Load Folder. The AU/VST3 chooser used to
-  be reachable only by right-click, which made the feature look missing. Right-click is unchanged.
+  prefix is explained inline and your text is kept so you can correct it.
 
 ### Added
 - **Sign-in diagnostics in the log.** The listener port, the callback parameter names, the redirect URI,

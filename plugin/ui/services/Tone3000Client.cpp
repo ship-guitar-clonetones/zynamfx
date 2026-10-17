@@ -157,6 +157,8 @@ void Tone3000Client::postTokenForm(const juce::StringPairArray& form, Reply<Toke
     if (self == nullptr) return;
     if (!response.ok()) {
       const auto err = response.json()["error"].toString();
+      juce::Logger::writeToLog("[t3k] /oauth/token -> HTTP " + juce::String(response.status) +
+                               (err.isNotEmpty() ? " (" + err + ")" : juce::String()));
       cb(Result<Tokens>::fail(err.isNotEmpty() ? err : juce::String("token_refresh_failed")));
       return;
     }
@@ -255,12 +257,14 @@ void Tone3000Client::fetchOptionalAuth(const juce::String& path, juce::StringPai
 }
 
 void Tone3000Client::getJson(const juce::String& path, juce::String label, Reply<juce::var> reply) {
-  fetch(path, "GET", {}, [what = std::move(label), cb = std::move(reply)](Result<HttpResponse> r) {
+  fetch(path, "GET", {}, [path, what = std::move(label), cb = std::move(reply)](Result<HttpResponse> r) {
     if (!r) {
+      juce::Logger::writeToLog("[t3k] " + path + " failed: " + r.error);
       cb(Result<juce::var>::fail(r.error));
       return;
     }
     if (!r->ok()) {
+      juce::Logger::writeToLog("[t3k] " + path + " -> HTTP " + juce::String(r->status));
       cb(Result<juce::var>::fail(what + " failed: " + juce::String(r->status)));
       return;
     }

@@ -12,13 +12,17 @@
 namespace t3k::ui {
 
 namespace {
+// Support greppable, like the services' "[auth]" / "[t3k]" lines: the stage a
+// catalog or pick failure stopped at.
+void browserLog(const juce::String& message) { juce::Logger::writeToLog("[tonebrowser] " + message); }
+
 // The preview's copy (Select Tone mockups, signed out): the CTA under the
 // trending cards, and the page a card click lands on.
 constexpr const char* kTrendingFooterCopy = "Discover a zillion more tones.";
 constexpr const char* kSignInHeading = "Sign in to see your tones and discover a zillion new ones.";
 constexpr const char* kSignInLabel = "Sign in or create free account";
 constexpr const char* kFetchError = "Failed to load catalog tones.";
-constexpr const char* kPickError = "Failed to load that tone. Please try again.";
+constexpr const char* kPickErrorToast = "Couldn't load that tone";
 constexpr float kPickErrorPx = 12;
 constexpr float kEmptyPx = 13;
 constexpr float kSearchPx = 14;
@@ -153,12 +157,16 @@ void ToneBrowser::sessionChanged() {
   signedInAvatar_.setVisible(user.has_value());
   if (user) signedInAvatar_.setImage(services_.images, user->avatarUrl);
   repaint();
+  // The signed-in list differs from the signed-out preview even when the
+  // preview already left a result behind: refresh once the return clears.
+  pendingListRefresh_ = !signedOut();
   fetch();
 }
 
 void ToneBrowser::authFlowChanged() {
   // Held back during an OAuth return; the fetch goes out once it clears.
-  if (!authPending() && loading_ && !state_.result) fetch();
+  if (authPending()) return;
+  if (pendingListRefresh_ || (loading_ && !state_.result)) fetch();
 }
 
 void ToneBrowser::submit() {
@@ -183,6 +191,7 @@ void ToneBrowser::fetch() {
   // so we don't yet know whether to render the gate or fetch. Keep the
   // loading state; authFlowChanged reruns this once it clears.
   if (authPending()) return;
+  pendingListRefresh_ = false;
 
   // Signed out: the trending preview (a search would only fail with
   // not_authenticated and trip the client's re-auth callback).
@@ -194,13 +203,14 @@ void ToneBrowser::fetch() {
   fetchScope_.reset();  // a newer request supersedes anything in flight
   loading_ = true;
   error_ = false;
+  fetchError_.clear();
   rebuildBody();
   services_.session.searchTones(state_.query, state_.page, kPageSize, fetchScope_.wrap([this](ui::Result<TonePage> r) {
     if (r) {
       state_.resultIsTrending = false;
       pageLoaded(std::move(*r.value));
     } else {
-      pageFailed();
+      pageFailed(r.error);
     }
   }));
 }
@@ -211,9 +221,10 @@ void ToneBrowser::fetchTrending() {
   fetchScope_.reset();
   loading_ = true;
   error_ = false;
+  fetchError_.clear();
   rebuildBody();
   services_.session.listTrending(state_.query.gear, fetchScope_.wrap([this](ui::Result<std::vector<Tone>> r) {
-    if (!r) return pageFailed();
+    if (!r) return pageFailed(r.error);
     TonePage page;
     page.data = std::move(*r.value);
     state_.resultIsTrending = true;
@@ -236,9 +247,14 @@ void ToneBrowser::pageLoaded(TonePage page) {
                    juce::String(result.totalPages));
 }
 
-void ToneBrowser::pageFailed() {
+void ToneBrowser::pageFailed(const juce::String& why) {
   error_ = true;
   loading_ = false;
+  // Name the stage in the log; the prompt carries it for the user too. The
+  // old code dropped the reason entirely, so a missing key, a dead token and
+  // a 500 all looked like the same generic failure.
+  browserLog("catalog fetch failed: " + (why.isNotEmpty() ? why : juce::String("no reason given")));
+  fetchError_ = why.isNotEmpty() ? why : juce::String(kFetchError);
   rebuildBody();
   help::announce(kFetchError);
 }
@@ -248,12 +264,17 @@ void ToneBrowser::pick(const Tone& tone) {
   pickError_.clear();
   pickingId_ = tone.id;
   rebuildBody();
+  browserLog("pick: tone " + juce::String(tone.id) + " (\"" + tone.title + "\")");
   // On success the parent closes the browser; the scope guards the reply.
   services_.session.selectTone(tone.id, scope_.wrap([this](const juce::String& error) {
     if (error.isEmpty()) return;
-    pickError_ = kPickError;
+    browserLog("pick failed: " + error);
+    // Inline under the header (the scroller may be past it) and a toast, so
+    // the failure is never a silent no-op; the log carries the detail.
+    pickError_ = error;
     pickingId_.reset();
     rebuildBody();
+    services_.toast.show(kPickErrorToast);
   }));
 }
 
@@ -328,7 +349,9 @@ void ToneBrowser::rebuildBody() {
       if (onSignIn) onSignIn();
     };
   } else if (showError) {
-    bodyPrompt_ = std::make_unique<BrowserPrompt>(false, kFetchError, kErrorMaxWidth, makeFilledButton("Try again"));
+    bodyPrompt_ = std::make_unique<BrowserPrompt>(false,
+                                                  fetchError_.isNotEmpty() ? fetchError_ : juce::String(kFetchError),
+                                                  kErrorMaxWidth, makeFilledButton("Try again"));
     bodyPrompt_->button().onClick = [this] { fetch(); };
   }
   if (bodyPrompt_) content_->addAndMakeVisible(*bodyPrompt_);

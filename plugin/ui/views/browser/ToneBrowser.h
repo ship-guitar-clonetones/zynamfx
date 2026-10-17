@@ -109,7 +109,7 @@ private:
   void fetch();
   void fetchTrending();
   void pageLoaded(TonePage page);
-  void pageFailed();
+  void pageFailed(const juce::String& why);
   void pick(const Tone& tone);
   // The preview's card click: the sign-in page, and ← back to the cards.
   void setSignInPageShown(bool shown);
@@ -128,9 +128,14 @@ private:
   // This visit's state; the rest is in state_.
   bool loading_ = true;
   bool error_ = false;
+  // A sign-in from this screen: refetch even if the preview's result is still
+  // cached (the signed-in list is a different one).
+  bool pendingListRefresh_ = false;
   bool signInPage_ = false;  // the preview's card-click page
   std::optional<int> pickingId_;
   juce::String pickError_;
+  // The catalog request's own reason, shown in the error prompt.
+  juce::String fetchError_;
 
   PillButton browseOfficial_{"Browse TONE3000", PillButton::Style::outline};
   Avatar signedInAvatar_;

@@ -2,6 +2,16 @@
 
 All notable changes to zynamfx are recorded here. Dates are ISO (yyyy-mm-dd).
 
+## [2.0.3-beta.1] - 2026-10-17
+
+Beta fix for v2.0.2-beta.1. Prerelease: never offered as an update.
+
+### Fixed
+- **A click on a slot opens the tone browser (NAM profiles) again.** v2.0.2-beta.1 made the plain click open an action sheet instead; that change is reverted. Right-click / ctrl-click now opens the AU/VST3 effect chooser directly, as requested.
+- **Settings persist.** The app-data folder heal now handles a dangling symlink (it previously looped on "File exists" and every write failed), probes writability with a real write instead of guessing, falls back to a local folder when the primary one cannot be made writable, and says so in the log.
+- **TONE3000 browsing works after entering the key.** The publishable key is re-read when Settings commits it, instead of only at editor construction, so browsing no longer needs an app restart.
+- **Slot Copy/Remove** are reachable again as ⌘C / Delete on a focused tile (the context menu that held them is gone).
+
 ## [2.0.2-beta.1] - 2026-10-17
 
 Beta. Published as a GitHub **prerelease**; it is not offered as an update to anyone, and a beta build

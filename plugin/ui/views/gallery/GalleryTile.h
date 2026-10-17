@@ -1,19 +1,19 @@
 // Gesture base for the gallery's tiles (the useTileMenu / useSortable /
-// file-drop wiring of GalleryBlock.tsx): a primary click opens, a
-// right-click (or a held touch on coarse-pointer devices) opens the tile's
-// action sheet, travel past the drag distance hands the tile to the lane's
-// drag host, and an OS file drag arms the tile as a drop target.
+// file-drop wiring of GalleryBlock.tsx): a primary click opens the tile (the
+// tone loader / the block detail), a right-click or ctrl-click opens the
+// hosted AU/VST3 effect chooser directly — a held touch stands in for the
+// right-click on a touch screen. Travel past the drag distance hands the tile
+// to the lane's drag host, and an OS file drag arms the tile as a drop target.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "core/DelayedCall.h"
 #include "services/Services.h"
-#include "widgets/ContextMenu.h"
+#include "widgets/EffectMenu.h"
 
 namespace t3k::ui {
 
@@ -43,15 +43,12 @@ public:
   void setTravelling(bool travelling);
   bool travelling() const { return travelling_; }
 
-  // Tone tile: swap in place; insert slot: add. Shared menu rows.
-  std::vector<ContextMenu::Item> localLoadItems();
-
   void mouseDown(const juce::MouseEvent& e) override;
   void mouseDrag(const juce::MouseEvent& e) override;
   void mouseUp(const juce::MouseEvent& e) override;
   bool keyPressed(const juce::KeyPress& key) override;
-  // A button to screen readers: press opens, show-menu opens the action
-  // sheet. The subclass names it with setTitle().
+  // A button to screen readers: press opens, show-menu opens the hosted
+  // effect chooser. The subclass names it with setTitle().
   std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
   bool isInterestedInFileDrag(const juce::StringArray&) override { return true; }
@@ -62,16 +59,22 @@ public:
 protected:
   // Primary click (not a drag, not a swallowed post-menu click).
   virtual void open() = 0;
-  virtual std::vector<ContextMenu::Item> menuItems() = 0;
+  // The secondary click (right-click, ctrl-click, a touch hold, a screen
+  // reader's "show menu"): the hosted AU/VST3 chooser, opened directly over
+  // this tile and loading into this slot (blockId()).
+  virtual void openSecondaryMenu(juce::Point<int> at);
   // An OS file drag is hovering (upload glyph + green dashed border).
   virtual void dropArmedChanged(bool /*armed*/) {}
   virtual void travellingChanged(bool /*travelling*/) {}
 
   bool dropArmed() const { return dropArmed_; }
-  bool menuOpen() const { return menu_ != nullptr && menu_->isOpen(); }
-  // Show the tile's action sheet (the same sheet a right-click opens) from a primary click.
-  void showMenu(juce::Point<int> at) { openMenu(at); }
+  bool effectMenuOpen() const { return effectMenu_ != nullptr && effectMenu_->isOpen(); }
   Services& services() { return services_; }
+  void closeEffectMenu();
+  // The tile's own local-file affordances: the OS picker, loading into this
+  // slot (an insert slot adds, a tone tile swaps in place).
+  void loadLocalFile();
+  void loadLocalFolder();
 
 private:
   static constexpr int kLongPressMs = 500;
@@ -81,14 +84,11 @@ private:
   // only 40 px/s, so what separates the two is whether the finger paused
   // before it moved.
   static constexpr int kFlickMs = 150;
-  // Real px the menu drops below the touch point (the release must land
-  // outside it, and the sheet stays readable past the fingertip).
-  static constexpr int kLongPressMenuDrop = 24;
   // How long a set click suppression stays valid.
   static constexpr int kSuppressClickMs = 700;
 
-  void openMenu(juce::Point<int> at);
-  void closeMenu();
+  // The vendor -> effect two-column chooser (the same one the add tile had).
+  void openHostedEffectMenu();
   void setDropArmed(bool armed);
   TileDragHost* host();
 
@@ -100,9 +100,8 @@ private:
   bool dragging_ = false;
   juce::Point<int> pressAt_;
   juce::int64 suppressClickUntilMs_ = 0;
-  juce::int64 menuDismissedMs_ = 0;
   DelayedCall hold_;
-  std::unique_ptr<ContextMenu> menu_;
+  std::unique_ptr<EffectMenu> effectMenu_;
 };
 
 }  // namespace t3k::ui

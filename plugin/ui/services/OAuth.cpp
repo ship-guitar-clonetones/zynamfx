@@ -74,13 +74,21 @@ Callback Callback::parse(const juce::String& query, const juce::String& expected
     return cb;
   }
   if (params["error"].isNotEmpty()) return fail(params["error"]);
-  if (cb.code.isEmpty()) return fail("missing_code");
   const auto toneId = params["tone_id"];
   if (toneId.isNotEmpty()) {
     if (toneId.length() > 10 || !toneId.containsOnly("0123456789") ||
         toneId.getLargeIntValue() < 1 || toneId.getLargeIntValue() > 2147483647)
       return fail("invalid_tone_id");
     cb.toneId = static_cast<int>(toneId.getLargeIntValue());
+  }
+  // Select/Load without a code: the tone is the whole result. The session
+  // loads it when it already has a session, else it says sign-in didn't finish.
+  if (cb.code.isEmpty()) {
+    if (cb.toneId > 0) {
+      cb.kind = Kind::tone;
+      return cb;
+    }
+    return fail("missing_code");
   }
   cb.kind = Kind::code;
   return cb;

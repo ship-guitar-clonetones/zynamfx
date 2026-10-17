@@ -13,10 +13,13 @@ constexpr int kReadTimeoutMs = 3000;
 // "You're signed in." and the close-this-window copy, 24px apart inside
 // 32px padding. The mockup's account pill (avatar + username) is left out:
 // the page goes out the instant the redirect lands, before the code is
-// exchanged, so nobody knows yet who signed in. A redirect without a code
-// (the user backed out, or the server named an error) gets the same card
-// with no check and copy to match.
-juce::String landingPage(bool signedIn) {
+// exchanged, so nobody knows yet who signed in. A callback that carries the
+// selected tone but no code (the user closed the flow before signing in) says
+// so; a redirect with neither (an error, or a plain cancel) keeps the
+// didn't-finish card with no check.
+enum class Landing { signedIn, toneSelected, failed };
+
+juce::String landingPage(Landing state) {
   juce::String page;
   page << "<!doctype html><html><head><meta charset=\"utf-8\"><title>zynamfx</title>"
           "<style>"
@@ -28,11 +31,14 @@ juce::String landingPage(bool signedIn) {
           "h1{margin:0;font:bold 20px/1.4 Arial,sans-serif}"
           "p{margin:0}"
           "</style></head><body><div class=\"card\">";
-  if (signedIn)
+  if (state == Landing::signedIn)
     // Lucide `check`, 48px, Colors/Green.
     page << "<svg width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#00d13b\" stroke-width=\"2\""
             " stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>";
-  page << "<h1>" << (signedIn ? "You\xe2\x80\x99re signed in." : "Sign-in didn\xe2\x80\x99t finish.") << "</h1>"
+  const char* heading = state == Landing::signedIn     ? "You\xe2\x80\x99re signed in."
+                        : state == Landing::toneSelected ? "Tone selected."
+                                                         : "Sign-in didn\xe2\x80\x99t finish.";
+  page << "<h1>" << heading << "</h1>"
        << "<p>You can close this window and return to zynamfx.</p>"
           "</div><script>window.close()</script></body></html>";
   return page;
@@ -61,10 +67,12 @@ bool LoopbackServer::start() {
   // Port 0: the OS picks a free ephemeral port; read it back.
   if (!listener_->createListener(0, "127.0.0.1")) {
     listener_.reset();
+    juce::Logger::writeToLog("[auth] loopback: could not bind 127.0.0.1 (no port available)");
     return false;
   }
   port_ = listener_->getBoundPort();
   startThread();
+  juce::Logger::writeToLog("[auth] loopback: listening on " + redirectUri());
   return true;
 }
 
@@ -106,24 +114,26 @@ void LoopbackServer::serve(juce::StreamingSocket& client) {
   const auto target = requestLine.fromFirstOccurrenceOf(" ", false, false).upToFirstOccurrenceOf(" ", false, false);
   const auto path = target.upToFirstOccurrenceOf("?", false, false);
   if (!requestLine.startsWith("GET ") || path != "/") {
+    juce::Logger::writeToLog("[auth] loopback: ignored request for " + path);
     const auto reply = httpResponse(404, "Not Found", "");
     client.write(reply.toRawUTF8(), static_cast<int>(reply.getNumBytesAsUTF8()));
     return;
   }
   const auto query = target.fromFirstOccurrenceOf("?", false, false);
-  // The sign-in flow used to be silent end to end, so a browser that never came back left no trace.
-  // Parameter NAMES only: the values carry the code and state, which must never reach the log.
-  {
-    juce::StringArray present;
-    for (const auto& name : juce::URL("http://localhost/?" + query).getParameterNames())
-      if (name.isNotEmpty()) present.add(name);
-    juce::Logger::writeToLog("[auth] loopback callback on 127.0.0.1:" + juce::String(port_) +
-                             " | params=" + present.joinIntoString(","));
-  }
-  // A code means success as far as the page can tell (the state check and
-  // the exchange come after); the session judges the rest.
-  const bool signedIn = juce::URL("http://localhost/?" + query).getParameterNames().contains("code");
-  const auto reply = httpResponse(200, "OK", landingPage(signedIn));
+  // What the redirect carries decides the page (the state check and the
+  // exchange come after); the session judges the rest. Values are never
+  // logged, only which parameters arrived.
+  const auto names = juce::URL("http://localhost/?" + query).getParameterNames();
+  const bool hasCode = names.contains("code");
+  const bool hasTone = names.contains("tone_id");
+  const bool hasError = names.contains("error");
+  juce::Logger::writeToLog("[auth] loopback: redirect received (code=" + juce::String(hasCode ? "yes" : "no") +
+                           ", tone_id=" + juce::String(hasTone ? "yes" : "no") +
+                           ", error=" + juce::String(hasError ? "yes" : "no") + ")");
+  const auto landing = hasCode          ? Landing::signedIn
+                       : (hasTone && !hasError) ? Landing::toneSelected
+                                                : Landing::failed;
+  const auto reply = httpResponse(200, "OK", landingPage(landing));
   client.write(reply.toRawUTF8(), static_cast<int>(reply.getNumBytesAsUTF8()));
   juce::MessageManager::callAsync([self = juce::WeakReference<LoopbackServer>(this), query] {
     if (self != nullptr && self->onCallback) self->onCallback(query);

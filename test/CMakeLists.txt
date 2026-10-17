@@ -16,6 +16,7 @@ enable_language(C)
 juce_add_console_app(DspTests PRODUCT_NAME "DspTests")
 
 target_sources(DspTests PRIVATE
+    src/app_data_paths_tests.cpp
     src/auto_offset_tests.cpp
     src/branch_tests.cpp
     src/clipboard_tests.cpp
@@ -58,6 +59,10 @@ target_sources(DspTests PRIVATE
     ../plugin/src/Processor.cpp
     ../plugin/src/ProcessorChain.cpp
     ../plugin/src/ProcessorHistory.cpp
+    # ProcessorChain.cpp / ProcessorHistory.cpp call vendorForBundle() and
+    # restoreHostedEffect(), which live here. Omitting it left DspTests with
+    # two undefined symbols and no runnable test binary.
+    ../plugin/src/ProcessorHostedEffects.cpp
     ../plugin/src/ProcessorModelLoader.cpp
     ../plugin/src/ProcessorPresets.cpp
     ../plugin/src/ProcessorState.cpp

@@ -76,6 +76,10 @@ public:
 private:
   void setFlow(AuthFlow::Phase phase, juce::String error = {});
   void handleCallback(const juce::String& query);
+  // Pick up a publishable key saved in Settings since this session was built
+  // (the editor owns the session, so without this a key typed at runtime only
+  // took effect after reopening the editor).
+  void refreshCredentials();
   // Tokens landed (from either path): adopt them and close the flow.
   void finishSignIn(const Tokens& tokens);
   // Send the system browser to `url`; "" on success, else why not.
@@ -91,6 +95,8 @@ private:
   Backend& backend_;
   UiPrefs& prefs_;
   HttpTransport& http_;
+  // The build's baked key, kept so clearing the personal key falls back to it.
+  juce::String buildKey_;
   Config config_;
   Tone3000Client client_;
   LoopbackServer loopback_;

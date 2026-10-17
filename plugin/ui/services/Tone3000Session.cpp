@@ -8,10 +8,29 @@
 namespace t3k::ui {
 
 namespace {
+// Support greppable, like the editor's "[Editor]" and the processor's
+// "[Processor]" lines. Never log a key or a token — only whether one exists.
+void authLog(const juce::String& message) { juce::Logger::writeToLog("[auth] " + message); }
+
+const char* phaseName(ToneSession::AuthFlow::Phase phase) {
+  switch (phase) {
+    case ToneSession::AuthFlow::Phase::idle: return "idle";
+    case ToneSession::AuthFlow::Phase::leaving: return "leaving";
+    case ToneSession::AuthFlow::Phase::returning: return "returning";
+    case ToneSession::AuthFlow::Phase::error: return "error";
+  }
+  return "?";
+}
+
 constexpr const char* kNoKeyMessage =
     "TONE3000 API key not configured. Open Plugin Settings > TONE3000 API key, "
-    "follow the link to get your free key, paste it there, then reopen this window.";
+    "get your free key from the link there, paste it, then sign in again.";
 constexpr const char* kLoopbackFailed = "Could not start the local sign-in listener. Try again.";
+// A Select return that carried a tone but no code: the selection is known,
+// but nothing can be downloaded without a session.
+constexpr const char* kSignInUnfinished =
+    "TONE3000 didn't finish signing you in, so that tone can't be downloaded. "
+    "Sign in and choose the tone again.";
 // The launcher itself refused (AuthFlow::browserProblem; the screen adds
 // what to do instead). A browser that starts and then dies reports nothing
 // here: that is what the always-on fallbacks are for.
@@ -49,8 +68,12 @@ Tone3000Session::Tone3000Session(Backend& backend, UiPrefs& prefs, HttpTransport
     : backend_(backend),
       prefs_(prefs),
       http_(http),
+      buildKey_(config.publishableKey),
       config_(withForkKey(prefs, std::move(config))),
       client_(http, prefs, config_.apiOrigin, config_.publishableKey) {
+  authLog("session constructed: origin=" + config_.apiOrigin + " key=" +
+          (config_.publishableKey.isEmpty() ? "none" : "present") + " auth=" +
+          (authenticated() ? "yes" : "no"));
   // Every new or refreshed token set reaches native as it happens.
   client_.onTokensUpdated = [this](const Tokens& t) { pushToken(t.access); };
   client_.onAuthRequired = [this] {
@@ -133,13 +156,16 @@ void Tone3000Session::setToneFavorite(int toneId, bool favorite, Done done) {
 }
 
 void Tone3000Session::searchTones(const ToneQuery& query, int page, int pageSize, Reply<TonePage> reply) {
-  client_.listTones(query.requestPath(page, pageSize, config_.architecture), [cb = std::move(reply)](Result<juce::var> r) {
+  const auto path = query.requestPath(page, pageSize, config_.architecture);
+  authLog("catalog: list " + path);
+  client_.listTones(path, [cb = std::move(reply)](Result<juce::var> r) {
     if (!r) return cb(Result<TonePage>::fail(r.error));
     cb(Result<TonePage>::ok(TonePage::parse(*r)));
   });
 }
 
 void Tone3000Session::listTrending(const juce::String& gear, Reply<std::vector<Tone>> reply) {
+  authLog("catalog: trending" + (gear.isEmpty() ? juce::String() : " (gear=" + gear + ")"));
   client_.listTrending(gear, [cb = std::move(reply)](Result<juce::var> r) {
     if (!r) return cb(Result<std::vector<Tone>>::fail(r.error));
     std::vector<Tone> tones;
@@ -166,16 +192,40 @@ void Tone3000Session::listTaxonomy(Taxonomy kind, const juce::String& text, Repl
 }
 
 void Tone3000Session::fetchToneAndModels(int toneId, Reply<Tone> reply) {
+  authLog("tone: fetching metadata for " + juce::String(toneId));
   getTone(toneId, [this, toneId, cb = std::move(reply)](Result<Tone> tone) {
-    if (!tone) return cb(std::move(tone));
+    if (!tone) {
+      authLog("tone " + juce::String(toneId) + ": metadata failed: " + tone.error);
+      return cb(std::move(tone));
+    }
     // Only NAM tones take the architecture filter; IR and other formats
     // are not NAM architectures.
     const int architecture = tone->isNam() ? config_.architecture : -1;
     client_.listModels(toneId, kFirstModelOnly, architecture, [found = *tone, cb](Result<juce::var> models) {
-      if (!models) return cb(Result<Tone>::fail(models.error));
+      if (!models) {
+        authLog("tone " + juce::String(found.id) + ": model lookup failed: " + models.error);
+        return cb(Result<Tone>::fail("\"" + found.title + "\": " + models.error));
+      }
       std::vector<Model> rows;
       if (const auto* arr = (*models)["data"].getArray())
-        for (const auto& m : *arr) rows.push_back(Model::parse(m));
+        for (const auto& m : *arr) {
+          auto model = Model::parse(m);
+          if (model.id > 0 && model.modelUrl.isNotEmpty()) rows.push_back(std::move(model));
+          else if (model.id > 0)
+            authLog("tone " + juce::String(found.id) + ": model " + juce::String(model.id) +
+                    " has no download URL");
+        }
+      // A tone with nothing loadable used to reach native as an empty model
+      // list: the browser closed, native never made a block, and nothing said
+      // why. Refuse it here with the stage named, so the card can show it.
+      if (rows.empty()) {
+        authLog("tone " + juce::String(found.id) + ": no loadable " +
+                (found.isNam() ? "A2 NAM" : "downloadable") + " model");
+        return cb(Result<Tone>::fail(
+            found.isNam() ? "\"" + found.title + "\" has no A2 NAM model. Choose another tone."
+                          : "\"" + found.title + "\" has no downloadable model."));
+      }
+      authLog("tone " + juce::String(found.id) + ": loading model " + juce::String(rows.front().id));
       cb(Result<Tone>::ok(found.withModels(std::move(rows))));
     });
   });
@@ -184,6 +234,7 @@ void Tone3000Session::fetchToneAndModels(int toneId, Reply<Tone> reply) {
 void Tone3000Session::selectTone(int toneId, Done done) {
   // Both in flight together, like the web's Promise.all: the tone with its
   // first model, and a fresh token pushed to native before the load starts.
+  authLog("select: resolving tone " + juce::String(toneId));
   struct Pending {
     std::optional<Tone> tone;
     bool tokenReady = false;
@@ -198,6 +249,7 @@ void Tone3000Session::selectTone(int toneId, Done done) {
       return;
     }
     if (!pending->tone || !pending->tokenReady) return;
+    authLog("select: tone resolved, handing it to the chain");
     if (onToneSelected) onToneSelected(*pending->tone);
     if (done) done({});
   });
@@ -229,10 +281,42 @@ juce::String Tone3000Session::openBrowser(const juce::String& url) {
   return juce::URL(url).launchInDefaultBrowser() ? juce::String() : juce::String(kBrowserFailed);
 }
 
+void Tone3000Session::refreshCredentials() {
+  // A key saved by another host process (or by Settings in this one) is on
+  // disk; pull it in before deciding whether sign-in can start.
+  prefs_.sync();
+  const auto key = fork::effectivePublishableKey(prefs_, buildKey_);
+  if (key == config_.publishableKey) return;
+  authLog("publishable key changed since this session was built: " +
+          juce::String(config_.publishableKey.isEmpty() ? "none" : "present") + " -> " +
+          juce::String(key.isEmpty() ? "none" : "present"));
+  config_.publishableKey = key;
+  client_.setPublishableKey(key);
+  // The stored tokens were issued to the previous client id: they cannot be
+  // refreshed or used under the new one.
+  client_.clearTokens();
+  prefs_.remove(UiPrefs::kCachedUser);
+  pushToken({});
+  notifySessionChanged();
+}
+
 void Tone3000Session::login(LoginIntent intent) {
+  refreshCredentials();
+  const auto keyProblem = fork::checkPublishableKey(config_.publishableKey);
   if (config_.publishableKey.isEmpty()) {
-    juce::Logger::writeToLog("[auth] login refused: no publishable key configured");
+    // Say why the key isn't usable, when the last save told us.
+    if (fork::rejectedSecretKey(prefs_)) {
+      authLog("login refused: the saved key is a secret key (t3k_cs_)");
+      setFlow(AuthFlow::Phase::error, fork::keyProblemText(fork::KeyProblem::secret));
+      return;
+    }
+    authLog("login refused: no publishable key configured (Settings > TONE3000 API key)");
     setFlow(AuthFlow::Phase::error, kNoKeyMessage);
+    return;
+  }
+  if (keyProblem != fork::KeyProblem::none) {
+    authLog("login refused: saved publishable key rejected locally");
+    setFlow(AuthFlow::Phase::error, fork::keyProblemText(keyProblem));
     return;
   }
   lastIntent_ = intent;
@@ -240,15 +324,12 @@ void Tone3000Session::login(LoginIntent intent) {
   // The sign-in screen comes up at once; the browser takes a beat.
   setFlow(AuthFlow::Phase::leaving);
   if (!loopback_.start()) {
-    juce::Logger::writeToLog("[auth] login failed: no loopback port could be bound");
+    authLog("login failed: the local sign-in listener could not bind");
     setFlow(AuthFlow::Phase::error, kLoopbackFailed);
     return;
   }
   pkce_ = oauth::Pkce::generate();
   redirectUri_ = loopback_.redirectUri();
-  juce::Logger::writeToLog("[auth] login started: listener 127.0.0.1:" +
-                           juce::String(loopback_.port()) + " | redirect=" + redirectUri_ +
-                           " | prompt=select_tone (the catalogue page IS the consent screen)");
   juce::StringPairArray extra;
   extra.set("menubar", "true");
   extra.set("prompt", "select_tone");
@@ -259,6 +340,8 @@ void Tone3000Session::login(LoginIntent intent) {
   // no dead end, since the listener is up for a pasted link and the screen
   // offers the device flow either way.
   flow_.browserProblem = openBrowser(flow_.authorizeUrl);
+  authLog("login: browser flow started, redirect=" + redirectUri_ +
+          (flow_.browserProblem.isEmpty() ? juce::String() : " (launcher refused: " + flow_.browserProblem + ")"));
   notifyAuthFlowChanged();
 }
 
@@ -273,54 +356,82 @@ void Tone3000Session::cancelFlow() {
 }
 
 void Tone3000Session::handleCallback(const juce::String& query) {
-  // A callback after cancel (or a stale tab) has no PKCE state: ignore it.
-  if (!pkce_ || flow_.phase != AuthFlow::Phase::leaving) return;
+  authLog(juce::String("callback received (phase=") + phaseName(flow_.phase) + ")");
+  // No PKCE state means no flow is waiting (cancelled, finished, or a stale
+  // tab): the callback is dropped, never silently — one log line says why.
+  if (!pkce_) {
+    authLog("callback ignored: no sign-in is waiting for it (cancelled or already finished)");
+    return;
+  }
   const auto pkce = *pkce_;
+  const auto cb = oauth::Callback::parse(query, pkce.state);
   pkce_.reset();  // single use
   loopback_.stop();
   stopDeviceFlow();  // the browser won the race
 
-  const auto cb = oauth::Callback::parse(query, pkce.state);
-  juce::Logger::writeToLog(
-      juce::String("[auth] callback parsed: kind=") +
-      (cb.kind == oauth::Callback::Kind::code ? "code"
-                                             : cb.kind == oauth::Callback::Kind::canceled ? "canceled" : "error") +
-      (cb.error.isNotEmpty() ? " (" + cb.error + ")" : "") +
-      " | tone=" + juce::String(cb.toneId));
   switch (cb.kind) {
     case oauth::Callback::Kind::canceled:
+      authLog("callback: the user cancelled the flow");
       setFlow(AuthFlow::Phase::idle);
       return;
     case oauth::Callback::Kind::error:
-      setFlow(AuthFlow::Phase::error, cb.error);
+      authLog("callback: the flow failed at TONE3000 (" + cb.error + ")");
+      // The loopback listener serves one redirect, so a stale tab (an earlier
+      // attempt's state) ends this flow too; say what to do instead of
+      // echoing the OAuth error code.
+      setFlow(AuthFlow::Phase::error,
+              cb.error == "state_mismatch"
+                  ? juce::String("This sign-in link belongs to an earlier attempt. Close the browser tab, then try again.")
+                  : cb.error);
+      return;
+    case oauth::Callback::Kind::tone:
+      // A tone with no code: load it only if a session already exists.
+      authLog("callback: tone " + juce::String(cb.toneId) + " returned without an authorization code");
+      if (!client_.authenticated()) {
+        setFlow(AuthFlow::Phase::error, kSignInUnfinished);
+        return;
+      }
+      setFlow(AuthFlow::Phase::idle);
+      selectTone(cb.toneId, scope_.wrap([this](const juce::String& error) {
+        if (error.isNotEmpty()) {
+          authLog("selected tone failed to resolve: " + error);
+          setFlow(AuthFlow::Phase::error, error);
+        }
+      }));
       return;
     case oauth::Callback::Kind::code:
       break;
   }
   setFlow(AuthFlow::Phase::returning);
+  authLog("callback: exchanging the authorization code");
   client_.exchangeCode(cb.code, pkce.verifier, redirectUri_, scope_.wrap([this, toneId = cb.toneId](Result<Tokens> tokens) {
     if (flow_.phase != AuthFlow::Phase::returning) return;  // cancelled meanwhile
     if (!tokens) {
-      juce::Logger::writeToLog("[auth] token exchange failed: " + tokens.error);
+      authLog("token exchange failed: " + tokens.error);
       setFlow(AuthFlow::Phase::error, tokens.error);
       return;
     }
     finishSignIn(*tokens);
     if (toneId > 0) {
+      authLog("callback: loading the selected tone " + juce::String(toneId));
       selectTone(toneId, scope_.wrap([this](const juce::String& error) {
-        if (error.isNotEmpty()) setFlow(AuthFlow::Phase::error, error);
+        if (error.isNotEmpty()) {
+          authLog("selected tone failed to resolve: " + error);
+          setFlow(AuthFlow::Phase::error, error);
+        }
       }));
     }
   }));
 }
 
 void Tone3000Session::finishSignIn(const Tokens& tokens) {
-  juce::Logger::writeToLog("[auth] signed in: tokens stored");
   const bool wantsBrowser = lastIntent_ == LoginIntent::browse;
   loopback_.stop();
   pkce_.reset();
   stopDeviceFlow();
   client_.setTokens(tokens);
+  authLog("signed in: tokens stored (access " + juce::String(tokens.access.length()) + " chars, refresh " +
+          (tokens.refresh.isEmpty() ? "none" : "present") + ")");
   notifySessionChanged();
   // The public build keeps catalog identity and browsing on TONE3000's
   // hosted Select flow; it does not call the custom profile/search API.

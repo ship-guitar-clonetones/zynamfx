@@ -31,7 +31,11 @@ struct Callback {
   enum class Kind {
     code,      // exchange `code`
     canceled,  // the user backed out without signing in: back to idle
-    error      // `error` names it: state_mismatch, missing_code, or the server's
+    // The Select/Load flow returned the chosen tone with no code (the user
+    // closed the flow before finishing sign-in, or a tokenless retry). It is
+    // a selection, not a broken code exchange: load it if a session exists.
+    tone,
+    error  // `error` names it: state_mismatch, missing_code, or the server's
   };
   Kind kind = Kind::error;
   juce::String code;

@@ -2,7 +2,9 @@
 
 #include <atomic>
 #include <cstring>
+#include <mutex>
 
+#include "AppDataPaths.h"
 #include "LegacyParamIds.h"
 
 // #############################
@@ -47,17 +49,13 @@ juce::PropertiesFile::Options userSettingsOptions() {
   options.applicationName = "preferences";
   options.filenameSuffix = ".settings";
   options.osxLibrarySubFolder = "Application Support";
-#if JUCE_LINUX || JUCE_BSD
-  // PropertiesFile puts a bare folderName directly under ~ on Linux, so pass
-  // the XDG config location as an absolute path instead (same root as
-  // PresetManager and the logs).
-  options.folderName =
-      juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-          .getChildFile(T3K_APP_DATA_DIR_NAME)
-          .getFullPathName();
-#else
-  options.folderName = T3K_APP_DATA_DIR_NAME;
-#endif
+  // Absolute folderName on every platform: juce::File::getChildFile returns an
+  // absolute child unchanged, so the settings file lands in the RESOLVED
+  // app-data root — the primary folder whenever it is writable, the secondary
+  // one when it isn't (see AppDataPaths.h). Everything else that stores
+  // machine state (ui-preferences, Presets, LocalModels) follows the same
+  // resolver, so a fallback or a repair moves them together.
+  options.folderName = t3k::appdata::root().dir.getFullPathName();
   return options;
 }
 
@@ -75,7 +73,28 @@ void saveSettingsOrLog(juce::PropertiesFile& settings) {
 }  // namespace
 
 juce::File TONE3000Processor::getSettingsFile() {
-  return userSettingsOptions().getDefaultFile();
+  // Flush the app-data resolution/repair lines through whatever logger is
+  // current now. PresetManager is a processor member and resolves the root
+  // before the constructor body attaches the FileLogger, so those lines are
+  // buffered until this call (which the constructor makes right after).
+  t3k::appdata::logResolutionOnce();
+
+  // The path comes from the resolver, never from PropertiesFile::Options:
+  // reads and writes must not be able to split across two folders if a JUCE
+  // version resolves Options::folderName differently.
+  const juce::File resolved =
+      t3k::appdata::root().dir.getChildFile("preferences.settings");  // options' stem + suffix
+  const juce::File fromOptions = userSettingsOptions().getDefaultFile();
+  if (fromOptions.getParentDirectory() != resolved.getParentDirectory()) {
+    static std::once_flag warned;
+    std::call_once(warned, [&resolved, &fromOptions] {
+      juce::Logger::writeToLog("[AppData] PropertiesFile options resolved to " +
+                               fromOptions.getFullPathName() +
+                               " but the app-data resolver says " +
+                               resolved.getFullPathName() + "; using the resolver path");
+    });
+  }
+  return resolved;
 }
 
 juce::PropertiesFile::Options TONE3000Processor::uiPreferencesOptions() {
@@ -88,14 +107,15 @@ juce::PropertiesFile::Options TONE3000Processor::uiPreferencesOptions() {
 }
 
 bool TONE3000Processor::readPersistedMultiCoreEnabled() {
-  return juce::PropertiesFile(userSettingsOptions()).getBoolValue(kMultiCoreKey, true);
+  return juce::PropertiesFile(getSettingsFile(), userSettingsOptions())
+      .getBoolValue(kMultiCoreKey, true);
 }
 
 double TONE3000Processor::readPersistedNamSlimSizeDefault() {
   // 0.0 = lite, the shipped default (see ChainBlock::namSlimSize).
-  return juce::jlimit(
-      0.0, 1.0,
-      juce::PropertiesFile(userSettingsOptions()).getDoubleValue(kNamSlimSizeDefaultKey, 0.0));
+  return juce::jlimit(0.0, 1.0,
+                      juce::PropertiesFile(getSettingsFile(), userSettingsOptions())
+                          .getDoubleValue(kNamSlimSizeDefaultKey, 0.0));
 }
 
 void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {
@@ -106,7 +126,7 @@ void TONE3000Processor::setMultiCoreEnabled(bool enabled, bool persist) {
   // the next callback, and both schedules produce bit-identical audio.
   multiCoreEnabled.store(enabled);
   if (persist) {
-    juce::PropertiesFile settings(userSettingsOptions());
+    juce::PropertiesFile settings(getSettingsFile(), userSettingsOptions());
     settings.setValue(kMultiCoreKey, enabled);
     saveSettingsOrLog(settings);
   }
@@ -123,7 +143,7 @@ void TONE3000Processor::setNamSlimSizeDefault(double slimSize) {
   // No fade, no lock: loaded engines are untouched (each block owns its
   // size); this only decides what loadTone stamps on the next new block.
   namSlimSizeDefault.store(slimSize);
-  juce::PropertiesFile settings(userSettingsOptions());
+  juce::PropertiesFile settings(getSettingsFile(), userSettingsOptions());
   settings.setValue(kNamSlimSizeDefaultKey, slimSize);
   saveSettingsOrLog(settings);
 
@@ -175,7 +195,7 @@ void TONE3000Processor::persistParameterAsMachineDefault(const juce::String& par
     jassertfalse;
     return;
   }
-  juce::PropertiesFile settings(userSettingsOptions());
+  juce::PropertiesFile settings(getSettingsFile(), userSettingsOptions());
   writeMachineDefaultParameter(settings, paramId);
   saveSettingsOrLog(settings);
 }
@@ -186,7 +206,7 @@ void TONE3000Processor::seedMachineDefaultParameters() {
   // Nothing on disk yet: a fresh install runs on the parameter defaults.
   if (!getSettingsFile().existsAsFile())
     return;
-  applyMachineDefaultParameters(juce::PropertiesFile(userSettingsOptions()));
+  applyMachineDefaultParameters(juce::PropertiesFile(getSettingsFile(), userSettingsOptions()));
 }
 
 juce::ValueTree TONE3000Processor::serializeBlockSettings(const ChainBlock& block) {

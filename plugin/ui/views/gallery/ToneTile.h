@@ -43,7 +43,6 @@ public:
 
 protected:
   void open() override;
-  std::vector<ContextMenu::Item> menuItems() override;
   void dropArmedChanged(bool armed) override;
   void travellingChanged(bool travelling) override;
 

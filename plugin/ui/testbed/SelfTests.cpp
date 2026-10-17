@@ -28,6 +28,7 @@
 #include "model/Tone.h"
 #include "model/ToneQuery.h"
 #include "services/ConnectionGate.h"
+#include "services/ForkKeyStore.h"
 #include "services/LoopbackServer.h"
 #include "services/OAuth.h"
 #include "services/Pointer.h"
@@ -323,6 +324,19 @@ struct OAuthTests : juce::UnitTest {
     expectEquals(parse("?code=abc&state=ST&tone_id=-1").error, juce::String("invalid_tone_id"));
     expectEquals(parse("?code=abc&state=ST&tone_id=9999999999999").error, juce::String("invalid_tone_id"));
     expectEquals(parse("?code=abc&state=ST&tone_id=42oops").error, juce::String("invalid_tone_id"));
+
+    beginTest("a Select return with a tone but no code is a selection, not a failed exchange");
+    // The documented close-before-sign-in case, and the retry that carries a
+    // tone_id only: the session loads it when it already has a session, and
+    // otherwise says sign-in did not finish — it must not report missing_code.
+    const auto selection = parse("?state=ST&tone_id=42");
+    expect(selection.kind == K::tone);
+    expectEquals(selection.toneId, 42);
+    expectEquals(selection.error, juce::String());
+    expect(parse("?state=OTHER&tone_id=42").kind == K::error);  // state is checked first
+    expect(parse("?state=ST&tone_id=0").kind == K::error);
+    expect(parse("?canceled=true&state=ST&tone_id=42").kind == K::canceled);  // cancel wins over the id
+    expect(parse("?state=ST&tone_id=42&error=access_denied").kind == K::error);
   }
 };
 
@@ -468,6 +482,23 @@ struct UiPrefsTests : juce::UnitTest {
 struct Tone3000ClientTests : juce::UnitTest {
   Tone3000ClientTests() : juce::UnitTest("Tone3000Client", "ui") {}
   void runTest() override {
+    beginTest("a publishable key can change at runtime (Settings saves it after the session was built)");
+    {
+      UiPrefs keyPrefs;
+      ScriptedHttp keyHttp;
+      Tone3000Client changing(keyHttp, keyPrefs, "https://api.test", "pk_old");
+      changing.setPublishableKey("t3k_pub_new");
+      expectEquals(changing.publishableKey(), juce::String("t3k_pub_new"));
+      keyHttp.answer = [](const HttpRequest&) {
+        return jsonResponse(200, R"({"access_token":"A","refresh_token":"R","expires_in":3600})");
+      };
+      bool exchanged = false;
+      changing.exchangeCode("C", "V", "http://localhost:1/",
+                            [&](Result<Tokens> r) { exchanged = static_cast<bool>(r); });
+      expect(exchanged);
+      expectEquals(static_cast<int>(keyHttp.sent.size()), 1);
+      expect(keyHttp.sent[0].body.contains("client_id=t3k_pub_new"));
+    }
     beginTest("token payloads round-trip; expiry is absolute");
     const auto fromResponse = Tokens::fromTokenResponse(
         juce::JSON::parse(R"({"access_token":"A","refresh_token":"R","expires_in":3600})"), 1'000);
@@ -783,6 +814,33 @@ struct DragScrollerTests : juce::UnitTest {
       juce::Component loose;
       expect(!DragScroller::panning(loose));
     }
+  }
+};
+
+struct ForkKeyStoreTests : juce::UnitTest {
+  ForkKeyStoreTests() : juce::UnitTest("ForkKeyStore", "ui") {}
+  void runTest() override {
+    using fork::KeyProblem;
+    beginTest("classifies the values a user can paste");
+    expect(fork::checkPublishableKey("") == KeyProblem::none);  // empty = fall back to the build key
+    expect(fork::checkPublishableKey("  t3k_pub_0123456789abcdef  ") == KeyProblem::none);
+    expect(fork::checkPublishableKey("t3k_cs_0123456789abcdef") == KeyProblem::secret);
+    expect(fork::checkPublishableKey("0123456789abcdef") == KeyProblem::malformed);
+    expect(fork::checkPublishableKey("t3k_pub_short") == KeyProblem::malformed);
+    expect(fork::checkPublishableKey("https://www.tone3000.com/settings") == KeyProblem::malformed);
+
+    beginTest("a publishable key is stored and a secret key never is");
+    UiPrefs prefs;  // memory only
+    expect(fork::setCustomPublishableKey(prefs, "t3k_cs_secretsecret") == KeyProblem::secret);
+    expect(fork::customPublishableKey(prefs).isEmpty());
+    expect(fork::rejectedSecretKey(prefs));  // the sign-in screen can name the reason
+    expect(fork::setCustomPublishableKey(prefs, " t3k_pub_0123456789abcdef ") == KeyProblem::none);
+    expect(!fork::rejectedSecretKey(prefs));
+    expectEquals(fork::customPublishableKey(prefs), juce::String("t3k_pub_0123456789abcdef"));
+    // The saved key wins; clearing it falls back to the build's.
+    expectEquals(fork::effectivePublishableKey(prefs, "t3k_pub_build"), juce::String("t3k_pub_0123456789abcdef"));
+    fork::setCustomPublishableKey(prefs, "");
+    expectEquals(fork::effectivePublishableKey(prefs, "t3k_pub_build"), juce::String("t3k_pub_build"));
   }
 };
 
@@ -2960,6 +3018,7 @@ PaginatorTests paginatorTests;
 DragScrollerTests dragScrollerTests;
 UiPrefsTests uiPrefsTests;
 Tone3000ClientTests tone3000ClientTests;
+ForkKeyStoreTests forkKeyStoreTests;
 ToneModelTests toneModelTests;
 ToneQueryTests toneQueryTests;
 ReadoutTests readoutTests;
