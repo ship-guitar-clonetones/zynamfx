@@ -34,6 +34,16 @@ inline bool isRedirectNavigation(const juce::String& url, const juce::String& re
 inline juce::String replayTarget(const juce::String& url) {
   return url.replace("://localhost:", "://127.0.0.1:");
 }
+// JUCE 9's macOS goToURL runs the whole string through
+// stringByAddingPercentEncodingWithAllowedCharacters (URLQueryAllowedCharacterSet),
+// which has no '%' in it: an already-escaped URL becomes %25-escaped and
+// TONE3000 rejects redirect_uri ("redirect_uri must be a valid URL", received
+// "http%3A%2F%2Flocalhost%3A51589%2F"). Hand the webview the decoded form; the
+// authorize parameters are URL-safe once decoded (no '&' or '=' inside a value),
+// so CoreFoundation re-encodes exactly the URL the system browser used to get.
+inline juce::String webviewUrl(const juce::String& url) {
+  return juce::URL::removeEscapeChars(url);
+}
 }  // namespace authbrowser
 
 class AuthBrowserPanel : public juce::Component {

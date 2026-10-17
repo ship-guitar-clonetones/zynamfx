@@ -4,7 +4,7 @@ This document describes the public zynamfx integration as of 2026-10-12. zynamfx
 
 ## User flow
 
-- The in-app **Browse TONE3000** action starts the hosted OAuth `select_tone` flow. TONE3000 presents its own sign-in, full catalog search, filters, creator pages, audition and tone selection under its own branding.
+- The in-app **Browse TONE3000** action starts the hosted OAuth `select_tone` flow inside an in-editor browser panel (standalone, AU, VST3; the system WKWebView, no bundled engine). TONE3000 presents its own sign-in, full catalog search, filters, creator pages, audition and tone selection under its own branding. **Open in Browser** hands the same URL to the system browser, and the sign-in screen keeps the copy-link and device-code fallbacks.
 - The app validates the OAuth state and callback, exchanges the returned code, and fetches metadata/models only for the tone the user selected. The API docs' Select flow example uses this same tone/model resolution step.
 - The optional in-app preview is limited to the unpaginated, maximum-10 trending list, optionally filtered by gear. Custom search, taxonomy lookups, profile browsing, catalog favorite/unfavorite writes, account-profile fetches and device authorization are disabled.
 - A model download starts only to load the user's selected tone. The app does not scrape, mirror, bundle, or redistribute catalog models. Creator metadata and license information are preserved in tone state and the details view.

@@ -21,7 +21,8 @@ class AuthBrowserPanel::Browser final : public juce::WebBrowserComponent {
 public:
   Browser(const juce::String& url, juce::String redirectUri, std::function<void()> onRedirected)
       : redirect_(std::move(redirectUri)), onRedirected_(std::move(onRedirected)) {
-    goToURL(url);
+    // Decoded first: JUCE's macOS goToURL escapes the whole string again.
+    goToURL(authbrowser::webviewUrl(url));
   }
 
   bool pageAboutToLoad(const juce::String& newURL) override {

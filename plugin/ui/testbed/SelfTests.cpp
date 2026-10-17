@@ -382,6 +382,18 @@ struct LoopbackServerTests : juce::UnitTest {
     expectEquals(authbrowser::replayTarget("https://www.tone3000.com/"),
                  juce::String("https://www.tone3000.com/"));
 
+    beginTest("the webview gets a decoded URL: JUCE's macOS goToURL escapes it again");
+    // The escaped form CoreFoundation produces when handed the decoded one is
+    // the single-encoded URL TONE3000 accepts; handing it the escaped form
+    // yields %253A and the server rejects redirect_uri.
+    const auto escaped = juce::String(
+        "https://www.tone3000.com/api/v1/oauth/authorize?client_id=t3k_pub_x"
+        "&redirect_uri=http%3A%2F%2Flocalhost%3A51589%2F&response_type=code");
+    expectEquals(authbrowser::webviewUrl(escaped),
+                 juce::String("https://www.tone3000.com/api/v1/oauth/authorize?client_id=t3k_pub_x"
+                              "&redirect_uri=http://localhost:51589/&response_type=code"));
+    expectEquals(authbrowser::webviewUrl(escaped), authbrowser::webviewUrl(authbrowser::webviewUrl(escaped)));
+
     beginTest("one redirect per flow: the listener is gone afterwards");
     const auto deadline2 = juce::Time::getMillisecondCounter() + 2000;
     while (server.running() && juce::Time::getMillisecondCounter() < deadline2)

@@ -2,6 +2,17 @@
 
 All notable changes to zynamfx are recorded here. Dates are ISO (yyyy-mm-dd).
 
+## [2.1.0-beta.2] - 2026-10-18
+
+Beta fix for v2.1.0-beta.1. Prerelease: never offered as an update.
+
+### Fixed
+- **In-app sign-in no longer fails with "redirect_uri must be a valid URL".** JUCE's
+  macOS browser percent-encodes the whole URL it is given, so the already-escaped
+  authorize URL reached TONE3000 double-encoded (`http%253A%2F%2Flocalhost…`) and the
+  server rejected the redirect. The panel now hands the webview the decoded URL, which
+  CoreFoundation re-encodes to exactly the redirect the system browser used to send.
+
 ## [2.1.0-beta.1] - 2026-10-18
 
 Beta for v2.1.0. Prerelease: never offered as an update.
