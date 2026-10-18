@@ -15,6 +15,8 @@
 #include "services/Services.h"
 #include "widgets/EffectMenu.h"
 
+namespace t3k::ui { class SlotPan; }
+
 namespace t3k::ui {
 
 class GalleryTile;
@@ -50,6 +52,12 @@ public:
   // A button to screen readers: press opens, show-menu opens the hosted
   // effect chooser. The subclass names it with setTitle().
   std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
+
+  // The lane balance, shown only on a lane's last real slot (stereo mode):
+  // 0 = hard left, 0.5 = centre, 1 = hard right. Bound to chainPanLeft/Right.
+  void showSlotPan(const juce::String& paramId);
+  void hideSlotPan();
+  bool hasSlotPan() const { return slotPan_ != nullptr; }
 
   bool isInterestedInFileDrag(const juce::StringArray&) override { return true; }
   void fileDragEnter(const juce::StringArray&, int, int) override { setDropArmed(true); }
@@ -102,6 +110,7 @@ private:
   juce::int64 suppressClickUntilMs_ = 0;
   DelayedCall hold_;
   std::unique_ptr<EffectMenu> effectMenu_;
+  std::unique_ptr<SlotPan> slotPan_;
 };
 
 }  // namespace t3k::ui

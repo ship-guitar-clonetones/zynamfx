@@ -167,9 +167,13 @@ void ChainView::applyLanes() {
   left_.setItems(lanes_.left, tile);
   right_.setItems(lanes_.right, tile);
   right_.setVisible(stereo());
+  const bool balance = stereo() && state.stereoOutput;  // pan is bypassed in the mono fold
   for (auto* l : {&left_, &right_}) {
     l->setBranch(stereo(), stereo() ? state.branch : std::nullopt, stereo() && !dragging_);
     l->setCanPaste(state.canPasteBlock);
+    // A rejoined branch keeps its own channel through the shared tail, so
+    // both lanes keep a balance control.
+    l->setSlotPan(balance);
   }
   layoutColumn();
 }

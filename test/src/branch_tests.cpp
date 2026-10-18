@@ -14,9 +14,10 @@
 //   - it survives a full plugin state save/restore round trip,
 //   - setting a branch forces the input mode off "stereo" (a branched chain
 //     has a single mono source),
-//   - the rejoin junction (setChainMerge/clearChainMerge) sums the branch
+//   - the rejoin junction (setChainMerge/clearChainMerge) brings the branch
 //     lane back into the trunk at an optional merge anchor, after which the
-//     trunk continues serially and both channels carry the merged signal,
+//     trunk's remaining blocks process BOTH channels (each lane keeps its own
+//     channel and pan) — no sum, so no correlated level jump,
 //   - the branch lane's surplus trailing insert placeholders trim so its
 //     indented rail ends level with the trunk where possible (trim-only,
 //     see alignBranchLaneLengths), and clearing restores the baseline.
@@ -453,8 +454,8 @@ TEST(ChainBranchTest, SurvivesStateSaveRestore) {
 
 // The rejoin junction: the branch lane sums back into the trunk at an
 // optional merge anchor (a trunk block after the tap) and the trunk then
-// continues serially. Both output channels carry the merged signal.
-TEST(ChainBranchTest, MergeSumsBranchBackIntoTrunk) {
+// continues serially, processing both channels — the two lanes stay separate.
+TEST(ChainBranchTest, MergeKeepsBothChannels) {
   ChainTestProcessor proc;
   proc.setPlayConfigDetails(2, 2, kFs, kBlock);
   proc.prepareToPlay(kFs, kBlock);
@@ -472,14 +473,19 @@ TEST(ChainBranchTest, MergeSumsBranchBackIntoTrunk) {
     EXPECT_EQ(state["branch"]["mergeAfterBlockId"].toString(), "blk-b");
   }
 
-  // The branch lane is empty, but it still carries the tapped signal; after
-  // the merge both channels must carry the one merged trunk signal.
+  // The branch lane is empty, but it still carries the tapped signal. After
+  // the merge the trunk's suffix processes both channels: channel 0 holds the
+  // trunk path, channel 1 the branch path. Neither is silent and they are no
+  // longer forced to match (no sum, so no dual-mono collapse).
   {
     const auto [l, r] = processStereo(proc, makeNoise(240 * kBlock, 2468, 0.1f));
-    float peak = 0.0f;
-    for (size_t i = 48000; i < l.size(); ++i) peak = std::max(peak, std::abs(l[i]));
-    EXPECT_GT(peak, 1e-3f) << "merged output should not be silent";
-    EXPECT_LT(settledMaxChannelDiff(l, r), 1e-4f) << "merged output should be dual mono";
+    float peakL = 0.0f, peakR = 0.0f;
+    for (size_t i = 48000; i < l.size(); ++i) {
+      peakL = std::max(peakL, std::abs(l[i]));
+      peakR = std::max(peakR, std::abs(r[i]));
+    }
+    EXPECT_GT(peakL, 1e-3f) << "trunk channel should not be silent";
+    EXPECT_GT(peakR, 1e-3f) << "branch channel should not be silent";
   }
 
   // Clearing the merge keeps the branch tap; the chain is branched but the

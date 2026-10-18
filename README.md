@@ -49,10 +49,15 @@ Other tools make you choose: a capture player *or* a plugin host *or* a paid rig
 - **Full catalog browsing in the tone browser.** Search, sort, format, tags, makes, creators,
   verified/calibrated filters, your downloaded/favorited/created lists, and favourite writes — the
   same TONE3000 API calls the upstream plugin makes, under your own key.
-- **Parallel chains can rejoin.** In stereo mode a branch splits at a tone block and a second
-  junction sums the branch lane back into the first at a chosen block; the chain then continues
-  serially through the merged signal. The two paths are latency-compensated before summing, and the
-  branch row ends at the join instead of offering empty slots past it.
+- **Parallel chains can rejoin — per channel, not summed.** In stereo mode a branch splits at a tone
+  block and a second junction rejoins the branch lane at a chosen block. The two paths are not
+  summed: each lane keeps its own output channel and pan, and the main lane's remaining blocks
+  process both as a shared tail — no correlated +6 dB and no comb filtering. A NAM block in the
+  shared tail still runs a single voice and feeds both channels, so place amps before the merge.
+  The branch row ends at the join instead of offering empty slots past it.
+- **Lane balance on a lane's last slot.** A compact L↔R control on the last real slot of each lane
+  in stereo mode: full travel runs hard left to hard right, and the rail knobs use the same range
+  with an arc that grows out of centre. Hidden in mono and mono-sum, where pan is bypassed.
 
 ### Fixed
 - **In-app sign-in** no longer fails with `redirect_uri must be a valid URL` (the authorize URL was
@@ -108,7 +113,7 @@ These commands target the specific user-installed bundle; do not use a wildcard 
 ## What it does
 
 - **Build guitar rigs:** arrange NAM amp/capture blocks and IR cabinet blocks in a signal chain. Each independent chain starts with seven slots; add, remove, reorder, duplicate, bypass, and save blocks in presets.
-- **Run parallel chains that rejoin:** in stereo mode a branch splits off at a tone block, and a second junction merges the branch lane back into the main lane at a chosen block. The chain continues serially through the joined signal; the two paths are latency-compensated before summing, and the branch row ends at the merge point.
+- **Run parallel chains that rejoin:** in stereo mode a branch splits off at a tone block, and a second junction rejoins the branch lane to the main lane at a chosen block. The paths are not summed: each lane keeps its own channel and pan while the main lane's remaining blocks process both as a shared tail, so there is no correlated boost and no combing. The branch row ends at the merge point, and a balance control on each lane's last slot places that lane in the stereo image.
 - **Load models:** browse and select tones in the built-in tone browser, which signs in through TONE3000's hosted OAuth **Select** page in an in-editor browser panel and searches the full catalog — search, sort, filters, and your own downloaded/favorited/created lists. You can also load your own local `.nam` captures and IR `.wav` files. Models are downloaded only after you choose them; creator attribution and model-license information are retained.
 - **Shape the sound:** use per-block level, mix, and six-band EQ, plus global input/output, gate, pitch shift, bass/middle/treble, and stereo spread controls. Presets and session state keep the rig ready for the next session.
 - **Host installed effects:** add separately installed AU or VST3 effects to the chain. zynamfx lists installed plug-ins without bundling them; opening an effect displays that plug-in's own editor window.

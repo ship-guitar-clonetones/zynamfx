@@ -22,9 +22,9 @@ Knob::Options panOptions(bool left) {
   o.label = left ? "Pan L" : "Pan R";
   o.size = theme::kKnobSizeSecondary;
   o.thumb = Knob::Thumb::secondary;
-  o.variant = left ? Knob::Variant::panLeft : Knob::Variant::panRight;
-  o.min = left ? 0.0f : 0.5f;
-  o.max = left ? 0.5f : 1.0f;
+  o.variant = Knob::Variant::bipolar;
+  o.min = 0.0f;
+  o.max = 1.0f;
   o.scale = &scales::pan(left);
   o.defaultValue = left ? 0.0f : 1.0f;
   o.help = left ? help::Key::panLeft : help::Key::panRight;

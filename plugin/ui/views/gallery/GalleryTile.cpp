@@ -1,5 +1,7 @@
 #include "GalleryTile.h"
 
+#include "SlotPan.h"
+
 #include <utility>
 #include <vector>
 
@@ -116,6 +118,21 @@ void GalleryTile::openHostedEffectMenu() {
   effectMenu_->open(*this, Popover::Align::left, 8);
   effectMenu_->centreOn(*this);  // centre over the tile and keep inside the window
   effectMenu_->focusSearch();    // the search field takes the keyboard on open
+}
+
+void GalleryTile::showSlotPan(const juce::String& paramId) {
+  if (slotPan_ == nullptr) {
+    slotPan_ = std::make_unique<SlotPan>(services_, paramId);
+    addAndMakeVisible(*slotPan_);
+  }
+  // Bottom strip of the slot, inside the artwork's padding.
+  const int pad = 6;
+  slotPan_->setBounds(pad, size_ - SlotPan::kHeight - pad, size_ - 2 * pad, SlotPan::kHeight);
+  slotPan_->setVisible(true);
+}
+
+void GalleryTile::hideSlotPan() {
+  if (slotPan_ != nullptr) slotPan_->setVisible(false);
 }
 
 void GalleryTile::closeEffectMenu() {

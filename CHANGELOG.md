@@ -14,10 +14,16 @@ First stable release since 2.0.1. Everything below ships together.
 - **Full catalog browsing in the tone browser.** Search, sort, format, tags, makes, creators,
   verified/calibrated filters, the signed-in user's downloaded/favorited/created lists, and
   favourite writes — the same TONE3000 API calls the upstream plugin makes, under your own key.
-- **Parallel chains can rejoin.** In stereo mode a branch splits at a tone block; a second junction
-  now sums the branch lane back into the first at a chosen block, and the chain continues serially
-  through the merged signal. The two paths are latency-compensated before summing, and both output
-  channels carry the joined result.
+- **Parallel chains can rejoin — per channel, not summed.** In stereo mode a branch splits at a tone
+  block; a second junction rejoins the branch lane at a chosen block. The two paths are **not
+  summed**: after the split each lane keeps its own output channel, and the trunk's remaining blocks
+  process both — a shared tail that still lets each lane keep its own pan. No correlated +6 dB and no
+  comb filtering. A NAM block inside the shared tail still runs one voice and fans ch0 to ch1, so put
+  amps before the merge.
+- **Lane balance on the last slot.** In stereo mode the last real slot of each lane carries a compact
+  L↔R control: full travel 0..1 runs hard left to hard right. The rail knobs use the same full range,
+  with a bipolar arc that grows out of noon. Hidden in mono and mono-sum, where the image matrix
+  bypasses pan.
 - **The branch row ends at the join.** With a rejoin active, the second row no longer offers empty
   slots past the merge point, and the return elbow is drawn at the merge column.
 

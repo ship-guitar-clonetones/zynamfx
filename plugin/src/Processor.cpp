@@ -1709,13 +1709,12 @@ void TONE3000Processor::processChainStage(float** inputs, float** outputs, int n
                   sizeof(float) * static_cast<size_t>(numFrames));
 
       if (rtBranchMergeIndex > rtBranchTapIndex) {
-        // Rejoin: the branch lane is summed back into the trunk after the
-        // merge anchor, and the trunk carries the sum serially to the end.
-        //   tap+1 .. merge  trunk section  ∥  the whole branch lane
-        //   merge .. end    trunk suffix over the merged signal
-        // Both sections carry their lane's full hosted-effect latency; the
-        // faster one is delayed by the difference before the sum so the
-        // junction stays phase-aligned.
+        // Rejoin, per-channel (the Element model): the branch lane is NOT
+        // summed into the trunk. After the parallel section each lane keeps
+        // its own channel, and the trunk's remaining blocks process BOTH —
+        // a shared tail that still lets each lane keep its own pan at the
+        // image matrix. No sum means no correlated +6 dB and no comb, so the
+        // latency line is unnecessary here.
         const int mergeIdx = rtBranchMergeIndex;
         const int branchEnd = static_cast<int>(lane(branchSide).size());
         const int trunkEnd = static_cast<int>(trunk.size());
@@ -1723,21 +1722,11 @@ void TONE3000Processor::processChainStage(float** inputs, float** outputs, int n
         processLanePair(lane(branchSide), branchBuf, branchScratch, 0, trunk, trunkBuf,
                         trunkScratch, rtBranchTapIndex + 1, branchEnd, mergeIdx);
 
-        if (branchMergeDelaySamples > 0) {
-          if (branchMergeDelayBranch)
-            applyBranchMergeDelay(branchBuf, numFrames, branchMergeDelaySamples);
-          else
-            applyBranchMergeDelay(trunkBuf, numFrames, branchMergeDelaySamples);
-        }
-
-        trunkBuf.addFrom(0, 0, branchBuf, 0, 0, numFrames);
-
-        processChainOnBuffer(trunk, trunkBuf, trunkScratch, mergeIdx, trunkEnd);
-
-        // The joined signal leaves on the trunk's channel only; mirror it to
-        // the branch channel so both outputs carry the same merged audio.
-        std::memcpy(outputs[branchCh], outputs[trunkCh],
-                    sizeof(float) * static_cast<size_t>(numFrames));
+        // Both channels in lane order (ch0 = Left lane, ch1 = Right lane);
+        // the channels already hold the two paths' parallel-section output.
+        juce::AudioBuffer<float> joined(outputs, 2, numFrames);
+        auto& joinedScratch = laneDryScratch[static_cast<size_t>(laneIndex(branchSourceSide))];
+        processChainOnBuffer(trunk, joined, joinedScratch, mergeIdx, trunkEnd);
       } else {
         // No rejoin: exactly the original split, bit-identical (no extra
         // copies, no latency line, no sum).

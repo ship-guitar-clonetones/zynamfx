@@ -236,6 +236,20 @@ void GalleryLane::rebuildBranchGaps() {
   }
 }
 
+void GalleryLane::setSlotPan(bool show) {
+  for (const auto& entry : tiles_)
+    if (entry.second != nullptr) entry.second->hideSlotPan();
+  if (!show) return;
+  // Last real block: inserts are the empty add slots, not audio.
+  for (auto it = items_.rbegin(); it != items_.rend(); ++it) {
+    if (it->isInsert) continue;
+    if (auto* tile = tileFor(it->blockId)) {
+      tile->showSlotPan(side_ == ChainSide::left ? "chainPanLeft" : "chainPanRight");
+      return;
+    }
+  }
+}
+
 void GalleryLane::resized() {
   for (size_t i = 0; i < items_.size(); ++i)
     if (auto* tile = tileFor(items_[i].blockId))
