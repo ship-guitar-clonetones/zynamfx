@@ -20,8 +20,7 @@ constexpr int kLogoWidth = 176;  // wordmark + ZY monogram + the version string
 constexpr int kLogoHeight = 24;  // 160 * 32 / 210, rounded like the browser
 }  // namespace
 
-// The wordmark links to the project repository for THIS build: a development
-// build opens private repository, a public build opens GitHub (see core/BuildIdentity.h).
+// The wordmark links to the public project repository (see core/BuildIdentity.h).
 class PluginHeader::LogoLink : public Clickable {
 public:
   LogoLink() : Clickable({}) {

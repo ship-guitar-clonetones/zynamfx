@@ -50,7 +50,7 @@ set(T3K_LV2_URI "https://www.tone3000.com/plugin")
 set(T3K_CLAP_ID "com.tone3000.plugin")
 set(T3K_APP_DATA_DIR_NAME "TONE3000")
 set(T3K_REPO_URL "https://github.com/zackyusof/zynamfx")
-set(T3K_BUILD_CHANNEL "development")
+set(T3K_BUILD_CHANNEL "public")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ForkIdentity.cmake" OPTIONAL)
 
 option(HEADLESS "Disable GUI (headless/embedded build)" OFF)
@@ -497,8 +497,8 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE NAM_ENABLE_A2_FAST)
 # Fork-visible display + app-data names. The values default to the upstream
 # strings above, so default builds are byte-identical to upstream; a namespaced
 # build (-DT3K_FORK_NAMESPACED=ON) swaps them (see cmake/ForkIdentity.cmake).
-# T3K_REPO_URL / T3K_BUILD_CHANNEL carry the build's repository identity (private repository
-# development vs GitHub public) into the in-app logo link and Settings footer.
+# T3K_REPO_URL / T3K_BUILD_CHANNEL carry the public repository identity into
+# the in-app logo link and Settings footer.
 # Pre-release label (e.g. "beta.1"), kept out of VERSION because CMake's
 # project(VERSION ...) accepts only numeric components. Absent file -> empty label, so a stable
 # build is unchanged.

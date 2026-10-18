@@ -21,13 +21,11 @@ set(T3K_FORK_CLAP_ID "net.zyusof.zynamfx"
   CACHE STRING "Fork CLAP ID (permanent once released)")
 set(T3K_FORK_DATA_DIR "zynamfx"
   CACHE STRING "Fork app-data folder name (presets, settings, logs, models)")
-# Which repository this build came from, and its channel. Development builds
-# come from private repository; public builds are cloned to GitHub. These drive the in-app
-# logo link and the Settings build-identity line, so the two never mix.
+# Public builds link to the public project and identify their channel in-app.
 set(T3K_FORK_REPO_URL "https://github.com/zackyusof/zynamfx"
   CACHE STRING "Repository URL the in-app logo and build identity point to")
-set(T3K_FORK_BUILD_CHANNEL "development"
-  CACHE STRING "Build channel: development (private repository) or public (GitHub)")
+set(T3K_FORK_BUILD_CHANNEL "public"
+  CACHE STRING "Build channel for public distribution")
 
 if(T3K_FORK_NAMESPACED)
   set(T3K_DESKTOP_BUNDLE_ID "net.zyusof.zynamfx"

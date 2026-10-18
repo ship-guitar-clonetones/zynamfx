@@ -21,19 +21,11 @@ def prune_old_backups(destination):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--install", action="store_true", help="install app, AU, and VST3 to their standard user locations")
-    parser.add_argument("--public", action="store_true",
-                        help="public (GitHub) channel: the in-app logo and Settings footer point to "
-                             "github.com/zackyusof/zynamfx. Default is the development (private repository) channel.")
     parser.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 4))
     args = parser.parse_args()
     source = Path(__file__).resolve().parent.parent
-    # Which repository this build belongs to. Development is built from private repository and
-    # points there; the public build is cloned to GitHub and points there. The
-    # URL is baked in (logo link + Settings footer) so the two never mix.
-    if args.public:
-        repo_url, channel = "https://github.com/zackyusof/zynamfx", "public"
-    else:
-        repo_url, channel = "https://github.com/zackyusof/zynamfx", "development"
+    # This public repository always builds with its public identity.
+    repo_url, channel = "https://github.com/zackyusof/zynamfx", "public"
     print(f"Building the {channel} channel from {repo_url}")
     # Keep the build underneath source: JUCE generated AppIcon.icns otherwise
     # falls outside plugin/CMakeLists.txt source_group(TREE ...) and configure fails.
