@@ -124,17 +124,126 @@ Installation:
         Copy-Item (Join-Path $PresetsSrc "*.t3kpreset") -Destination $CompletePresetsDir
     }
 
+    # Add install.cmd and uninstall.cmd for one-click setup from the ZIP bundle
+    $InstallCmdContent = @"
+@echo off
+setlocal EnableDelayedExpansion
+title zynamfx Installer
+
+echo ====================================================
+echo  zynamfx v$Version - Windows Quick Installer
+echo ====================================================
+echo.
+
+:: Check for administrative rights
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [Notice] Administrator permissions are required to install plugins
+    echo          into Common Files and ProgramData.
+    echo.
+    echo Requesting elevation...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+cd /d "%~dp0"
+
+:: 1. VST3 Installation
+if exist "zynamfx.vst3" (
+    echo [1/3] Installing VST3 plugin...
+    set "VST3_DIR=%CommonProgramFiles%\VST3"
+    if not exist "!VST3_DIR!" mkdir "!VST3_DIR!"
+    if exist "!VST3_DIR!\zynamfx.vst3" rmdir /s /q "!VST3_DIR!\zynamfx.vst3"
+    xcopy /E /I /Q /Y "zynamfx.vst3" "!VST3_DIR!\zynamfx.vst3" >nul
+    echo       Installed to: !VST3_DIR!\zynamfx.vst3
+) else (
+    echo [1/3] Skipping VST3 (not found)
+)
+
+:: 2. CLAP Installation
+if exist "zynamfx.clap" (
+    echo [2/3] Installing CLAP plugin...
+    set "CLAP_DIR=%CommonProgramFiles%\CLAP"
+    if not exist "!CLAP_DIR!" mkdir "!CLAP_DIR!"
+    copy /Y "zynamfx.clap" "!CLAP_DIR!\" >nul
+    echo       Installed to: !CLAP_DIR!\zynamfx.clap
+) else (
+    echo [2/3] Skipping CLAP (not present)
+)
+
+:: 3. Factory Presets
+if exist "Factory Presets" (
+    echo [3/3] Installing Factory Presets...
+    set "PRESET_DIR=%ProgramData%\zynamfx\Presets\Factory"
+    if not exist "!PRESET_DIR!" mkdir "!PRESET_DIR!"
+    xcopy /E /I /Q /Y "Factory Presets\*.t3kpreset" "!PRESET_DIR!\" >nul
+    echo       Installed to: !PRESET_DIR!
+) else (
+    echo [3/3] Skipping Presets (not found)
+)
+
+echo.
+echo ====================================================
+echo  Installation successful!
+echo ====================================================
+echo - Standalone can be run directly from the 'Standalone' folder.
+echo - In your DAW (Reaper, Cubase, Ableton, FL Studio, etc.),
+echo   run a plugin rescan to load 'zynamfx'.
+echo.
+pause
+"@
+    Set-Content -Path (Join-Path $StageComplete "install.cmd") -Value $InstallCmdContent
+
+    $UninstallCmdContent = @"
+@echo off
+setlocal
+title zynamfx Uninstaller
+
+echo ====================================================
+echo  zynamfx - Quick Uninstaller
+echo ====================================================
+echo.
+
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Requesting elevation...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
+if exist "%CommonProgramFiles%\VST3\zynamfx.vst3" (
+    rmdir /s /q "%CommonProgramFiles%\VST3\zynamfx.vst3"
+    echo Removed %CommonProgramFiles%\VST3\zynamfx.vst3
+)
+
+if exist "%CommonProgramFiles%\CLAP\zynamfx.clap" (
+    del /f /q "%CommonProgramFiles%\CLAP\zynamfx.clap"
+    echo Removed %CommonProgramFiles%\CLAP\zynamfx.clap
+)
+
+echo.
+echo Uninstallation complete!
+pause
+"@
+    Set-Content -Path (Join-Path $StageComplete "uninstall.cmd") -Value $UninstallCmdContent
+
     $CompleteReadme = @"
 zynamfx v$Version - Complete Windows x64 Bundle
 ===============================================
 
+Quick Install:
+- Double click 'install.cmd' to automatically copy VST3, CLAP and Presets
+  to their standard Windows system locations (works on all language editions).
+- To uninstall, double click 'uninstall.cmd'.
+
 Included components:
+- install.cmd            : Automated 1-click installer script
+- uninstall.cmd          : Automated uninstaller script
 - Standalone\zynamfx.exe : Standalone application (with ASIO audio driver support)
-- zynamfx.vst3           : VST3 plugin (copy to C:\Program Files\Common Files\VST3\)
-- zynamfx.clap           : CLAP plugin (copy to C:\Program Files\Common Files\CLAP\)
+- zynamfx.vst3           : VST3 plugin (destination: %CommonProgramFiles%\VST3\)
+- zynamfx.clap           : CLAP plugin (destination: %CommonProgramFiles%\CLAP\)
 - Factory Presets\       : Shipped factory presets (.t3kpreset)
-                           Optional manual install: %ProgramData%\zynamfx\Presets\Factory\
-                           or user presets: %APPDATA%\zynamfx\Presets\
+                           destination: %ProgramData%\zynamfx\Presets\Factory\
 
 License: MIT
 Repository: https://github.com/zackyusof/zynamfx
