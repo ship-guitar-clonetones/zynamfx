@@ -91,6 +91,7 @@ BlockParams parseParams(const juce::var& v) {
   p.inputGain = num(v, "inputGain", 0.5);
   p.outputGain = num(v, "outputGain", 0.5);
   p.mix = num(v, "mix", 1);
+  p.pan = num(v, "pan", -1);
   const auto& eq = v["eq"];
   p.eq.enabled = boolean(eq, "enabled", false);
   p.eq.pre = boolean(eq, "pre", false);
@@ -171,6 +172,8 @@ ChainState ChainState::parse(const juce::var& v) {
   s.namSlimSizeDefault = num(v, "namSlimSizeDefault", 0);
   s.multiCore = boolean(v, "multiCore", true);
   s.sampleRate = num(v, "sampleRate", 48000);
+  s.panLeft = num(v, "panLeft", 0.0);
+  s.panRight = num(v, "panRight", 1.0);
   s.chain = list<ChainItem>(v, "chain", parseItem);
   if (v["chainRight"].isArray())
     s.chainRight = list<ChainItem>(v, "chainRight", parseItem);

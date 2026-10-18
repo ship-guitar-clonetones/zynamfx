@@ -1004,6 +1004,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
     bool enabled = true, normalize = true;
     double slimSize = 0.0;
     float inputGain = 0.5f, outputGain = 0.5f, mix = 1.0f;
+    float pan = -1.0f;  // -1 = unset (the slot inherits the lane's placement)
     juce::var eq;
     bool rtFailed = false;
   };
@@ -1013,6 +1014,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   bool stereo = false, canUndo = false, canRedo = false, branched = false;
   bool canPaste = false, atDefault = false;
   juce::String presetId, presetName, branchSide, activeSide, branchAfter, branchMerge;
+  float panLeft = 0.0f, panRight = 1.0f;
 
   {
     juce::ScopedLock lock(chainMutex);
@@ -1080,6 +1082,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
         row.inputGain = block->inputGainNormalized;
         row.outputGain = block->outputGainNormalized;
         row.mix = block->mixNormalized;
+        row.pan = block->panSet ? block->panNormalized : -1.0f;
         row.eq = block->eq.toVar();
         out.push_back(std::move(row));
       }
@@ -1089,6 +1092,12 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
     stereo = stereoEnabled.load();
     if (stereo)
       copyLane(lane(ChainSide::Right), right);
+
+    // The lane's resolved placement (last placed block along the lane's path,
+    // else the rail): the UI's inherited display for unset slots. Read here
+    // because resolveLanePan requires chainMutex; the payload is built below.
+    panLeft = resolveLanePan(ChainSide::Left);
+    panRight = resolveLanePan(ChainSide::Right);
 
     canUndo = chainHistory.canUndo();
     canRedo = chainHistory.canRedo();
@@ -1168,6 +1177,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
       params->setProperty("inputGain", row.inputGain);
       params->setProperty("outputGain", row.outputGain);
       params->setProperty("mix", row.mix);
+      params->setProperty("pan", row.pan);
       params->setProperty("eq", row.eq);
       item->setProperty("params", juce::var(params.get()));
 
@@ -1199,6 +1209,10 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
     state->setProperty("preset", juce::var(preset.get()));
   }
   state->setProperty("stereoEnabled", stereo);
+  // Resolved per-lane placement (0 = hard left, 1 = hard right): an unset
+  // slot renders dimmed at this value; a set slot at its own.
+  state->setProperty("panLeft", panLeft);
+  state->setProperty("panRight", panRight);
   // Active branch (stereo mode only): which lane is the trunk and which of
   // its tone blocks feeds the other lane. Absent when the chains are
   // independent, and while mono, where a set branch lies dormant.
@@ -1671,7 +1685,8 @@ bool TONE3000Processor::setBlockParam(const std::string& blockId, const juce::St
     return false;
 
   // Validate before recording history, so failed calls never leave an entry.
-  const bool isContinuous = param == "inputGain" || param == "outputGain" || param == "mix";
+  const bool isContinuous =
+      param == "inputGain" || param == "outputGain" || param == "mix" || param == "pan";
   const bool isKnown = isContinuous || param == "enabled" || param == "normalize";
   if (!isKnown) {
     DBG("setBlockParam: unknown param: " << param);
@@ -1694,6 +1709,11 @@ bool TONE3000Processor::setBlockParam(const std::string& blockId, const juce::St
     block->outputGainNormalized = juce::jlimit(0.0f, 1.0f, static_cast<float>(value));
   } else if (param == "mix") {
     block->mixNormalized = juce::jlimit(0.0f, 1.0f, static_cast<float>(value));
+  } else if (param == "pan") {
+    // 0..1 places the lane from this slot on; a negative value clears it
+    // (the slot then inherits whatever is upstream, or the rail).
+    block->panSet = value >= 0.0;
+    block->panNormalized = juce::jlimit(0.0f, 1.0f, static_cast<float>(value));
   }
 
   // Continuous drags settle into one bump after the gesture ends; discrete

@@ -765,6 +765,35 @@ static ImageGains imageMatrixGains(bool panActive, bool foldToMono, float balanc
   return {balL * pLtoL, balL * pLtoR, balR * pRtoL, balR * pRtoR};
 }
 
+float TONE3000Processor::resolveLanePan(ChainSide side) const {
+  float pan = side == ChainSide::Left ? cacheChainPanLeft : cacheChainPanRight;
+  auto scan = [&pan](const Lane& blocks, int begin, int end) {
+    const int stop = juce::jmin(end, static_cast<int>(blocks.size()));
+    for (int i = juce::jmax(0, begin); i < stop; ++i) {
+      const auto& b = *blocks[static_cast<size_t>(i)];
+      if (b.type == ChainBlockType::INSERT || !b.enabled || !b.panSet) continue;
+      pan = b.panNormalized;
+    }
+  };
+
+  if (!rtStereoChains || rtBranchTapIndex < 0) {
+    scan(lane(side), 0, static_cast<int>(lane(side).size()));
+    return pan;
+  }
+
+  const ChainSide trunkSide = branchSourceSide;
+  const ChainSide branchSide = trunkSide == ChainSide::Left ? ChainSide::Right : ChainSide::Left;
+  const int trunkEnd = static_cast<int>(lane(trunkSide).size());
+  if (side == trunkSide) {
+    scan(lane(trunkSide), 0, trunkEnd);
+  } else {
+    scan(lane(branchSide), 0, static_cast<int>(lane(branchSide).size()));
+    if (rtBranchMergeIndex > rtBranchTapIndex)
+      scan(lane(trunkSide), rtBranchMergeIndex, trunkEnd);
+  }
+  return pan;
+}
+
 // Stereo input = stereo main bus, minus the standalone case where it isn't
 // really: a mono input device. Pure capability; the input-mode selection
 // doesn't affect it (the UI needs the button to stay visible so the user can
@@ -1844,7 +1873,8 @@ void TONE3000Processor::processImageStage(float* chL, float* chR, int numFrames,
     const bool applyBalance = rtStereoChains || spreadActive || rtDualMono;
     const auto g = imageMatrixGains(rtStereoChains && !monoFold, monoFold,
                                     applyBalance ? cacheOutputBalance : 0.5f,
-                                    cacheChainPanLeft, cacheChainPanRight,
+                                    resolveLanePan(ChainSide::Left),
+                                    resolveLanePan(ChainSide::Right),
                                     rtStereoChains && cacheChainSoloLeft,
                                     rtStereoChains && cacheChainSoloRight,
                                     rtStereoChains && cacheChainInvertLeft,

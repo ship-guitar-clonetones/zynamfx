@@ -40,8 +40,8 @@ public:
   // drag is in flight (gap hit targets would fight drops).
   void setBranch(bool stereo, const std::optional<ChainBranch>& branch, bool interactive);
   void setCanPaste(bool canPaste);
-  // The lane balance rides the last real (non-insert) slot; hidden when the
-  // lane has none or the caller says balance does not apply.
+  // Every populated (non-insert) slot carries its own placement control.
+  // Hidden when the lane has none or the caller says pan does not apply.
   void setSlotPan(bool show);
   // The travelling tile's slot: hidden so the rail shows through.
   void setPlaceholder(const std::string& blockId);

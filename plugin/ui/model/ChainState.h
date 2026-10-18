@@ -69,6 +69,10 @@ struct BlockParams {
   double inputGain = 0.5;
   double outputGain = 0.5;
   double mix = 1;
+  // Per-slot stereo placement: 0 = hard left, 0.5 = centre, 1 = hard right.
+  // <0 = unset: the slot places nothing and inherits the lane's resolved
+  // placement instead (see ChainState::panLeft / panRight).
+  double pan = -1;
   BlockEqParams eq;
 };
 
@@ -166,6 +170,11 @@ struct ChainState {
   double namSlimSizeDefault = 0;
   bool multiCore = true;
   double sampleRate = 48000;
+  // The lane's resolved placement (native's resolveLanePan): the last enabled
+  // block with a pan set along that lane's signal path, else the rail
+  // fallback. A slot that has no pan of its own displays this dimmed.
+  double panLeft = 0.0;
+  double panRight = 1.0;
   std::vector<ChainItem> chain;
   std::optional<std::vector<ChainItem>> chainRight;
   std::optional<ChainBranch> branch;

@@ -267,6 +267,16 @@ struct ChainBlock {
   float mixNormalized{1.0f};  // 0 = dry, 1 = wet
   juce::LinearSmoothedValue<float> mixSmoother;
 
+  // Per-block stereo placement: 0 = hard left, 0.5 = centre, 1 = hard right.
+  // `panSet` marks a slot that actually places something; an unset slot leaves
+  // the lane's placement alone. A serial lane holds one placement, so the last
+  // placed (enabled) block in a lane's path wins; a block in the shared rejoin
+  // tail places both lanes. Split across parallel paths (branch vs trunk) is
+  // what makes two of these independent. Resolved in
+  // Processor::resolveLanePan and applied by the post-chain image matrix.
+  float panNormalized{0.5f};
+  bool panSet{false};
+
   // Per-block meter levels (dB, -60 floor). Written by the audio thread every
   // block, read by the UI via getMeterLevels(). Input is measured post
   // input-gain (what the model actually receives), output post mix + Out

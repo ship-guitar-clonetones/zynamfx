@@ -240,13 +240,18 @@ void GalleryLane::setSlotPan(bool show) {
   for (const auto& entry : tiles_)
     if (entry.second != nullptr) entry.second->hideSlotPan();
   if (!show) return;
-  // Last real block: inserts are the empty add slots, not audio.
-  for (auto it = items_.rbegin(); it != items_.rend(); ++it) {
-    if (it->isInsert) continue;
-    if (auto* tile = tileFor(it->blockId)) {
-      tile->showSlotPan(side_ == ChainSide::left ? "chainPanLeft" : "chainPanRight");
-      return;
-    }
+  // Every populated slot carries its own placement, so either row can be
+  // panned from wherever the pointer already is instead of only from the
+  // lane's last block. A slot that has its own pan shows it bright; an unset
+  // slot shows the lane's resolved placement dimmed and inherits. Inserts are
+  // the empty add slots, not audio.
+  const double lanePan = side_ == ChainSide::left ? services_.chain.state().panLeft
+                                                  : services_.chain.state().panRight;
+  for (const auto& item : items_) {
+    if (item.isInsert) continue;
+    const bool set = item.params.pan >= 0.0;
+    const float v = static_cast<float>(set ? item.params.pan : lanePan);
+    if (auto* tile = tileFor(item.blockId)) tile->showSlotPan(item.blockId, side_, v, set);
   }
 }
 

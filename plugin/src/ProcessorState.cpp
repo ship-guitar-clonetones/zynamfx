@@ -220,6 +220,8 @@ juce::ValueTree TONE3000Processor::serializeBlockSettings(const ChainBlock& bloc
   blockState.setProperty("inputGain", block.inputGainNormalized, nullptr);
   blockState.setProperty("outputGain", block.outputGainNormalized, nullptr);
   blockState.setProperty("mix", block.mixNormalized, nullptr);
+  if (block.panSet)
+    blockState.setProperty("pan", block.panNormalized, nullptr);
 
   if (block.type == ChainBlockType::EFFECT) {
     blockState.setProperty("effectDescription", block.effectDescriptionXml, nullptr);
@@ -246,6 +248,9 @@ void TONE3000Processor::applyBlockSettings(ChainBlock& block, const juce::ValueT
   block.inputGainNormalized = static_cast<float>(blockState.getProperty("inputGain", 0.5f));
   block.outputGainNormalized = static_cast<float>(blockState.getProperty("outputGain", 0.5f));
   block.mixNormalized = static_cast<float>(blockState.getProperty("mix", 1.0f));
+  block.panSet = blockState.hasProperty("pan");
+  block.panNormalized =
+      juce::jlimit(0.0f, 1.0f, static_cast<float>(blockState.getProperty("pan", 0.5f)));
 
   if (block.type == ChainBlockType::EFFECT) {
     block.effectDescriptionXml = blockState.getProperty("effectDescription").toString();

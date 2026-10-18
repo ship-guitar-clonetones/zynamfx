@@ -789,6 +789,12 @@ private:
   // slice loop).
   void processImageStage(float* chL, float* chR, int numFrames, bool stereoRig);
 
+  // The lane's effective placement: the last enabled block with a pan set
+  // along that lane's signal path (a block in the shared rejoin tail places
+  // both lanes), else the rail fallback chainPanLeft/Right. Caller holds
+  // chainMutex. See ChainBlock::panNormalized.
+  float resolveLanePan(ChainSide side) const;
+
   // Prepare every engine in a chain for the current chain rate (see
   // chainSampleRate) and chain-domain block size. Holds no lock.
   void prepareChain(std::vector<std::unique_ptr<ChainBlock>>& blocks);

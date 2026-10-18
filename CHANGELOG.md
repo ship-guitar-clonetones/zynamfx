@@ -20,10 +20,13 @@ First stable release since 2.0.1. Everything below ships together.
   process both — a shared tail that still lets each lane keep its own pan. No correlated +6 dB and no
   comb filtering. A NAM block inside the shared tail still runs one voice and fans ch0 to ch1, so put
   amps before the merge.
-- **Lane balance on the last slot.** In stereo mode the last real slot of each lane carries a compact
-  L↔R control: full travel 0..1 runs hard left to hard right. The rail knobs use the same full range,
-  with a bipolar arc that grows out of noon. Hidden in mono and mono-sum, where the image matrix
-  bypasses pan.
+- **Every populated slot places the lane, independently.** In stereo mode each populated (non-insert)
+  slot carries its own compact L↔R placement, stored per block and shown on the slot: 0..1 runs hard
+  left to hard right, and a double-click clears it so the slot inherits whatever is upstream (or the
+  rail). A serial lane holds one placement, so the last placed block along a lane's path wins — which
+  is what makes the two lanes independent; a slot in a shared rejoin tail places both. The rail knobs
+  keep the same full range, with a bipolar arc that grows out of noon. Hidden in mono and mono-sum,
+  where the image matrix bypasses pan.
 - **The branch row ends at the join.** With a rejoin active, the second row no longer offers empty
   slots past the merge point, and the return elbow is drawn at the merge column.
 

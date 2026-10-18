@@ -9,9 +9,11 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "core/DelayedCall.h"
+#include "model/ChainState.h"
 #include "services/Services.h"
 #include "widgets/EffectMenu.h"
 
@@ -53,9 +55,11 @@ public:
   // effect chooser. The subclass names it with setTitle().
   std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override;
 
-  // The lane balance, shown only on a lane's last real slot (stereo mode):
-  // 0 = hard left, 0.5 = centre, 1 = hard right. Bound to chainPanLeft/Right.
-  void showSlotPan(const juce::String& paramId);
+  // The slot's own placement, shown on every populated slot of the lane
+  // (stereo mode): 0 = hard left, 0.5 = centre, 1 = hard right. Bound to the
+  // slot's own block, so each slot places independently; `set` false means
+  // the slot inherits (and displays dimmed) the lane's resolved placement.
+  void showSlotPan(const std::string& blockId, ChainSide side, float value, bool set);
   void hideSlotPan();
   bool hasSlotPan() const { return slotPan_ != nullptr; }
 
@@ -111,6 +115,11 @@ private:
   DelayedCall hold_;
   std::unique_ptr<EffectMenu> effectMenu_;
   std::unique_ptr<SlotPan> slotPan_;
+  // Which slot the pan strip belongs to: a tile can change lanes (tap /
+  // re-point a branch) and is reused across resyncs, so a reused tile must
+  // not keep the old block's or lane's control.
+  std::string slotPanBlockId_;
+  std::optional<ChainSide> slotPanSide_;
 };
 
 }  // namespace t3k::ui

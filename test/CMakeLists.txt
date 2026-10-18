@@ -36,6 +36,7 @@ target_sources(DspTests PRIVATE
     src/multicore_tests.cpp
     src/outgain_tests.cpp
     src/padless_wav_tests.cpp
+    src/pan_tests.cpp
     src/pitch_shift_tests.cpp
     src/preset_tests.cpp
     src/processor_tests.cpp
