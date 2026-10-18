@@ -561,9 +561,14 @@ add_dependencies(${PROJECT_NAME} NAM)
 # testbed keeps JUCE_WEB_BROWSER=0 and compiles the panel as a notice.
 # Likewise the vendored libwebp (JUCE 9.0.3+): nothing here reads or writes
 # WebP.
+if (APPLE)
+    set(_t3k_web_browser 1)
+else()
+    set(_t3k_web_browser 0)
+endif()
 target_compile_definitions(${PROJECT_NAME}
     PUBLIC
-        JUCE_WEB_BROWSER=1
+        JUCE_WEB_BROWSER=${_t3k_web_browser}
         JUCE_USE_WEBP=0
         JUCE_VST3_CAN_REPLACE_VST2=0
 )
