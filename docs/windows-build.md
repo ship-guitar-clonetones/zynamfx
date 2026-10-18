@@ -93,3 +93,19 @@ Upon a successful build, the output binaries are located in:
 ### Installing / Using the Plugin:
 - **Standalone**: Run `zynamfx.exe` directly. Open **Settings → System Settings → Audio Driver** to choose **ASIO** and select your interface.
 - **VST3**: Copy the `zynamfx.vst3` folder to your system VST3 directory (typically `C:\Program Files\Common Files\VST3\`).
+
+---
+
+## 7. Packaging & Distribution
+
+To create distributable release packages (`.zip` and optional Inno Setup installer `.exe`), run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\script\package-windows-release.ps1
+```
+
+This generates in `release/`:
+- `zynamfx-<version>-windows-x64-standalone.zip` (Portable standalone app)
+- `zynamfx-<version>-windows-x64-vst3.zip` (VST3 bundle + installation notes)
+- `zynamfx-<version>-windows-x64-complete.zip` (Standalone + VST3 + CLAP + Factory Presets)
+- `zynamfx-v<version>-windows-x64-setup.exe` (if [Inno Setup 6](https://jrsoftware.org/isinfo.php) is installed)
