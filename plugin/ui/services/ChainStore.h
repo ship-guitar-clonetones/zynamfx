@@ -60,6 +60,9 @@ public:
   bool swapChains();
   bool setBranch(ChainSide side, const std::string& afterBlockId);
   bool clearBranch();
+  // Rejoin the branch lane into the trunk after `afterBlockId` (a trunk block).
+  bool setMerge(const std::string& afterBlockId);
+  bool clearMerge();
   // Fire-and-forget (safe at drag rates); no resync.
   void setBlockParam(const std::string& blockId, const juce::String& param, double value);
   void setBlockParam(const std::string& blockId, const juce::String& param, bool value) {

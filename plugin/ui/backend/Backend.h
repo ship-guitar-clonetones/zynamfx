@@ -75,6 +75,9 @@ public:
   virtual bool swapChains() = 0;
   virtual bool setChainBranch(const juce::String& side, const std::string& afterBlockId) = 0;
   virtual bool clearChainBranch() = 0;
+  // Rejoin the branch lane into the trunk after a trunk-lane block.
+  virtual bool setChainMerge(const juce::String& afterBlockId) = 0;
+  virtual bool clearChainMerge() = 0;
   virtual void setStereoMode(bool enabled) = 0;
   virtual void setInputMode(const juce::String& mode) = 0;
   virtual void setActiveEditChain(const juce::String& side) = 0;

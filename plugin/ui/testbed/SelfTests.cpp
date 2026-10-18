@@ -564,40 +564,33 @@ struct Tone3000ClientTests : juce::UnitTest {
     expect(http.sent[0].body.contains("grant_type=refresh_token") && http.sent[0].body.contains("refresh_token=R1"));
     expectEquals(client.tokens()->access, juce::String("A2"));
 
-    beginTest("custom profile lookup is refused without making a request");
+    beginTest("catalog requests reach the API the way upstream sends them");
     http.sent.clear();
-    Result<juce::var> profileResult = Result<juce::var>::ok({});
-    client.getUser([&](Result<juce::var> r) { profileResult = std::move(r); });
-    expect(!profileResult);
-    bool writeRejected = false;
-    client.setFavorite(9, true, [&](Result<bool> r) { writeRejected = !r; });
-    expect(writeRejected);
+    http.answer = [](const HttpRequest&) { return jsonResponse(200, R"({"data":[]})"); };
+    Result<juce::var> listResult = Result<juce::var>::ok({});
+    client.listTones("/api/v1/tones/search?page=1&page_size=12&query=marshall",
+                     [&](Result<juce::var> r) { listResult = std::move(r); });
+    expect(static_cast<bool>(listResult));
+    expectEquals(static_cast<int>(http.sent.size()), 1);
+    expect(http.sent[0].url.contains("/api/v1/tones/search"));
+
+    beginTest("taxonomy lookups and favorites reach the API");
+    http.sent.clear();
     Result<juce::var> taxonomyResult = Result<juce::var>::ok({});
     client.listTaxonomy(Taxonomy::tags, "metal", 25, [&](Result<juce::var> r) { taxonomyResult = std::move(r); });
-    expect(!taxonomyResult);
+    expect(static_cast<bool>(taxonomyResult));
+    expect(http.sent[0].url.contains("/api/v1/tags"));
+
+    http.sent.clear();
+    bool favorited = false;
+    client.setFavorite(9, true, [&](Result<bool> r) { favorited = static_cast<bool>(r); });
+    expect(favorited);
+    expectEquals(http.sent[0].method, juce::String("PUT"));
+
+    beginTest("the update check stays on the project's release page");
     Result<juce::var> updateResult = Result<juce::var>::ok({});
     client.fetchPluginVersion("device", "0.0.14", [&](Result<juce::var> r) { updateResult = std::move(r); });
     expect(!updateResult);
-    expect(http.sent.empty());
-
-    beginTest("non-Free-tier catalog routes and oversized list requests are refused locally");
-    Result<juce::var> listResult = Result<juce::var>::ok({});
-    client.listTones("/api/v1/tones/search?page=1&page_size=12", [&](Result<juce::var> r) { listResult = std::move(r); });
-    expect(!listResult);
-    client.listTones("/api/v1/tones/favorited?page=1&page_size=101", [&](Result<juce::var> r) { listResult = std::move(r); });
-    expect(!listResult);
-    client.listTones("/api/v1/tones/latest?page=1", [&](Result<juce::var> r) { listResult = std::move(r); });
-    expect(!listResult);
-    expect(http.sent.empty());
-
-    beginTest("a bounded tone list permits only documented parameters");
-    http.answer = [](const HttpRequest&) { return jsonResponse(200, R"({"data":[]})"); };
-    client.listTones("/api/v1/tones/favorited?page=1&page_size=20&gear=amp", [&](Result<juce::var> r) {
-      listResult = std::move(r);
-    });
-    expect(static_cast<bool>(listResult));
-    expectEquals(static_cast<int>(http.sent.size()), 1);
-    http.sent.clear();
 
     beginTest("401 refreshes once and retries with the new token");
     http.sent.clear();
@@ -647,15 +640,51 @@ struct Tone3000ClientTests : juce::UnitTest {
     expectEquals(static_cast<int>(http.sent.size()), 1);
     expect(http.sent[0].authorization.isEmpty());
 
-    beginTest("device authorization is refused without a network request");
+    beginTest("device authorization: the code pair, with the defaults the response leaves out");
     http.sent.clear();
-    bool deviceRejected = false;
-    client.requestDeviceAuthorization([&](Result<DeviceAuthorization> r) { deviceRejected = !r; });
-    expect(deviceRejected);
+    http.answer = [](const HttpRequest&) {
+      return jsonResponse(200, R"({"device_code":"D1","user_code":"BCDF-GHJK",
+        "verification_uri":"https://www.tone3000.com/activate",
+        "verification_uri_complete":"https://www.tone3000.com/activate?user_code=BCDF-GHJK",
+        "expires_in":600,"interval":5})");
+    };
+    std::optional<DeviceAuthorization> device;
+    client.requestDeviceAuthorization([&](Result<DeviceAuthorization> r) {
+      if (r) device = *r;
+    });
+    expect(device.has_value());
+    expectEquals(device->deviceCode, juce::String("D1"));
+    expectEquals(device->userCode, juce::String("BCDF-GHJK"));
+    expectEquals(device->verificationUriComplete, juce::String("https://www.tone3000.com/activate?user_code=BCDF-GHJK"));
+    expectEquals(device->intervalS, 5);
+    expect(http.sent[0].url.endsWith("/api/v1/oauth/device_authorization"));
+    expect(http.sent[0].body == "client_id=pk_test");
+    const auto bare = DeviceAuthorization::fromVar(
+        juce::JSON::parse(R"({"device_code":"D","user_code":"U","verification_uri":"https://t/activate"})"));
+    expect(bare && bare->verificationUriComplete == "https://t/activate" && bare->intervalS == 5 &&
+           bare->expiresInS == 600);
+    expect(!DeviceAuthorization::fromVar(juce::JSON::parse(R"({"user_code":"U"})")).has_value());
+
+    beginTest("device poll: the grant, the server's pending codes as errors, tokens on approval");
+    http.sent.clear();
+    http.answer = [](const HttpRequest&) { return jsonResponse(400, R"({"error":"authorization_pending"})"); };
     juce::String pollError;
-    client.pollDeviceToken("D1", [&](Result<Tokens> r) { pollError = r.error; });
-    expect(pollError.contains("unavailable"));
-    expect(http.sent.empty());
+    client.pollDeviceToken("D1", [&](Result<Tokens> r) { pollError = r ? juce::String() : r.error; });
+    expectEquals(pollError, juce::String("authorization_pending"));
+    expect(http.sent[0].url.endsWith("/api/v1/oauth/token"));
+    expect(http.sent[0].body.contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code"));
+    expect(http.sent[0].body.contains("device_code=D1") && http.sent[0].body.contains("client_id=pk_test"));
+    http.answer = [](const HttpRequest&) { return jsonResponse(400, R"({"error":"slow_down"})"); };
+    client.pollDeviceToken("D1", [&](Result<Tokens> r) { pollError = r ? juce::String() : r.error; });
+    expectEquals(pollError, juce::String("slow_down"));
+    http.answer = [](const HttpRequest&) {
+      return jsonResponse(200, R"({"access_token":"A6","refresh_token":"R6","expires_in":3600})");
+    };
+    std::optional<Tokens> granted;
+    client.pollDeviceToken("D1", [&](Result<Tokens> r) {
+      if (r) granted = *r;
+    });
+    expect(granted && granted->access == "A6" && granted->refresh == "R6");
   }
 };
 
@@ -894,6 +923,41 @@ struct ToneModelTests : juce::UnitTest {
   }
 };
 
+struct ChainStateParseTests : juce::UnitTest {
+  ChainStateParseTests() : juce::UnitTest("ChainState", "ui") {}
+  void runTest() override {
+    beginTest("a branch carries its tap and optional rejoin anchor");
+    const auto branched = ChainState::parse(juce::JSON::parse(
+        R"({"revision":4,"canUndo":true,"stereoEnabled":true,"activeSide":"left","chain":[],)"
+        R"("branch":{"side":"left","afterBlockId":"blk-1","mergeAfterBlockId":"blk-2"}})"));
+    expect(branched.branch.has_value());
+    if (branched.branch.has_value()) {
+      expect(branched.branch->side == ChainSide::left);
+      expectEquals(juce::String(branched.branch->afterBlockId), juce::String("blk-1"));
+      expectEquals(juce::String(branched.branch->mergeAfterBlockId), juce::String("blk-2"));
+    }
+    // The fields around the branch keep parsing as before.
+    expectEquals(branched.revision, 4);
+    expect(branched.canUndo);
+    expect(branched.stereoEnabled);
+    expect(branched.activeSide == ChainSide::left);
+
+    beginTest("an absent or empty rejoin anchor parses to empty");
+    const auto absent = ChainState::parse(juce::JSON::parse(
+        R"({"chain":[],"branch":{"side":"right","afterBlockId":"blk-1"}})"));
+    expect(absent.branch.has_value());
+    if (absent.branch.has_value()) {
+      expectEquals(juce::String(absent.branch->afterBlockId), juce::String("blk-1"));
+      expect(absent.branch->mergeAfterBlockId.empty());
+    }
+    const auto empty = ChainState::parse(juce::JSON::parse(
+        R"({"chain":[],"branch":{"side":"left","afterBlockId":"blk-1","mergeAfterBlockId":""}})"));
+    expect(empty.branch.has_value());
+    if (empty.branch.has_value())
+      expect(empty.branch->mergeAfterBlockId.empty());
+  }
+};
+
 struct ReadoutTests : juce::UnitTest {
   ReadoutTests() : juce::UnitTest("Readouts", "ui") {}
   void runTest() override {
@@ -964,18 +1028,18 @@ struct ToneQueryTests : juce::UnitTest {
   void runTest() override {
     beginTest("an empty query is the trending catalog page, scoped to the plugin's architecture");
     ToneQuery q;
-    expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/trending"));
+    expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/search?page=1&page_size=12&architecture=2"));
     expect(q.effectiveSort() == ToneSort::trending);
     expect(!q.hasAdvancedFilters());
 
     beginTest("text defaults the sort to best match; an explicit sort wins and counts as a filter");
     q.text = " fender twin ";
     expect(q.effectiveSort() == ToneSort::bestMatch);
-    expectEquals(q.requestPath(2, 12, 2), juce::String("/api/v1/tones/trending"));
+    expect(q.requestPath(2, 12, 2).contains("query=fender%20twin&"));
     expect(!q.requestPath(2, 12, 2).contains("sort="));
     q.sort = ToneSort::popular;
     expect(q.effectiveSort() == ToneSort::popular);
-    expect(!q.requestPath(2, 12, 2).contains("sort="));
+    expect(q.requestPath(2, 12, 2).contains("&sort=downloads-all-time&"));
     expect(q.hasAdvancedFilters());
 
     beginTest("picking the default sort is no pick; an explicit one stops being explicit when the text makes it the default");
@@ -999,9 +1063,11 @@ struct ToneQueryTests : juce::UnitTest {
     q.calibrated = true;
     q.verified = true;
     const auto path = q.requestPath(1, 12, 2);
-    expectEquals(path, juce::String("/api/v1/tones/trending?gear=amp-cab"));
-    expect(!path.contains("tags=") && !path.contains("makes=") && !path.contains("creators="));
-    expect(!path.contains("calibrated=") && !path.contains("verified=") && !path.contains("architecture="));
+    expect(path.contains("&gears=amp-cab&"));
+    expect(path.contains("&tags=metal_high%20gain&"));
+    expect(path.contains("&makes=Fender%20Twin%20Reverb_1965%20Vox%20AC30&"));
+    expect(path.contains("&creators=tone3000,amalgam_audio&"));
+    expect(path.contains("&calibrated=true&verified=true&architecture=2"));
 
     beginTest("calibrated is parked, not sent, under IR gear or the IR format; it comes back with amps");
     q = {};
@@ -1013,17 +1079,17 @@ struct ToneQueryTests : juce::UnitTest {
       expect(!q.requestPath(1, 12, 2).contains("calibrated"));
     }
     q.gear = "amp";
-    expect(q.calibratedInForce() && !q.requestPath(1, 12, 2).contains("calibrated="));
+    expect(q.calibratedInForce() && q.requestPath(1, 12, 2).contains("&calibrated=true"));
     q.format = "ir";
     expect(!q.calibratedApplies() && !q.requestPath(1, 12, 2).contains("calibrated"));
 
     beginTest("the architecture rides along with every format (the API ignores it for IR); < 0 omits it");
     q = {};
     q.format = "ir";
-    expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/trending"));
+    expectEquals(q.requestPath(1, 12, 2), juce::String("/api/v1/tones/search?page=1&page_size=12&format=ir&architecture=2"));
     q.format = "nam";
-    expect(!q.requestPath(1, 12, 2).contains("format="));
-    expect(!q.requestPath(1, 12, -1).contains("architecture="));
+    expect(q.requestPath(1, 12, 2).endsWith("&format=nam&architecture=2"));
+    expect(q.requestPath(1, 12, -1).endsWith("&format=nam"));
 
     beginTest("a profile filter pages the user's own stream, by title search and gear alone");
     q = {};
@@ -1033,7 +1099,7 @@ struct ToneQueryTests : juce::UnitTest {
     q.gear = "pedal";
     q.profile = Profile::favorited;
     expectEquals(q.requestPath(3, 12, 2),
-                 juce::String("/api/v1/tones/favorited?page=3&page_size=12&gear=pedal"));
+                 juce::String("/api/v1/tones/favorited?page=3&page_size=12&query=plexi&gear=pedal"));
     q.profile = Profile::downloaded;
     q.text.clear();
     q.gear.clear();
@@ -3044,6 +3110,7 @@ Tone3000ClientTests tone3000ClientTests;
 ForkKeyStoreTests forkKeyStoreTests;
 ToneModelTests toneModelTests;
 ToneQueryTests toneQueryTests;
+ChainStateParseTests chainStateParseTests;
 ReadoutTests readoutTests;
 EffectSearchTests effectSearchTests;
 EffectMenuSearchTests effectMenuSearchTests;

@@ -126,7 +126,7 @@ public:
   // architecture filter, which is all the plugin loads).
   virtual void listToneModels(int toneId, const juce::String& format,
                               Reply<std::vector<Model>> reply) = 0;
-  // Catalog writes are disabled in public Free-tier builds.
+  // Catalog writes (favorite / unfavorite) go to the API.
   virtual void setToneFavorite(int toneId, bool favorite, Done done) = 0;
   // One page from a permitted bounded list endpoint. Custom search is not
   // issued by the public integration.
@@ -161,7 +161,7 @@ public:
   virtual void cancelFlow() = 0;
   // Drop the error without restarting.
   virtual void clearAuthError() = 0;
-  // Device authorization is disabled in public Free-tier builds.
+  // Device authorization (RFC 8628): a code entered on another device.
   virtual void startDeviceFlow() = 0;
 
   // Reachability (useConnectionGate.ts)

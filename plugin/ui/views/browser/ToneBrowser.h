@@ -137,7 +137,6 @@ private:
   // The catalog request's own reason, shown in the error prompt.
   juce::String fetchError_;
 
-  PillButton browseOfficial_{"Browse TONE3000", PillButton::Style::outline};
   Avatar signedInAvatar_;
   BackLink back_;         // ← SELECT TONE: closes the browser
   BackLink signInBack_;   // the sign-in page's bare ←: back to the cards

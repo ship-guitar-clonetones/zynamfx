@@ -2,7 +2,11 @@
 // joined by connector lines sit behind the (opaque) tiles and show through
 // a slot vacated mid-drag; only the line runs inside the gaps are visible
 // otherwise. In stereo, hover-revealed branch dots live on the connector
-// gaps (set / re-point the branch; the active tap gap's dot clears it).
+// gaps (set / re-point the branch; the active tap gap's dot clears it), and
+// on the trunk lane the gaps after the tap carry rejoin rings (merge the
+// branch back in; the active merge gap's ring clears it). A rejoin ends the
+// branch lane at the merge column: no add slot is drawn past it (real tiles
+// there stay — they still process in the parallel section).
 // Tiles are keyed by block id and reused across resyncs.
 #pragma once
 
@@ -38,6 +42,10 @@ public:
   void setCanPaste(bool canPaste);
   // The travelling tile's slot: hidden so the rail shows through.
   void setPlaceholder(const std::string& blockId);
+  // Rejoin: end this (branch) lane at `localX` in the lane's own coordinates —
+  // no add tile or ghost plus slot is drawn at or past the merge column. Real
+  // tiles there are untouched: they still process before the sum.
+  void setMergeCutoff(std::optional<float> localX);
 
   // Hand a tile between lanes: the leaving lane releases it (still parented
   // there until adopted), the entering lane reparents it and reuses it on
@@ -53,6 +61,9 @@ public:
   std::function<void(int index)> onPaste;
   std::function<void(const std::string& afterBlockId)> onSetBranch;
   std::function<void()> onClearBranch;
+  // Rejoin the branch lane into the trunk after `afterBlockId` (trunk lane).
+  std::function<void(const std::string& afterBlockId)> onSetMerge;
+  std::function<void()> onClearMerge;
 
   void paint(juce::Graphics& g) override;
   void resized() override;
@@ -61,6 +72,12 @@ private:
   class BranchGap;
 
   void rebuildBranchGaps();
+  // Past a rejoin the branch lane offers no more slots: the item at `index` is
+  // an insert anchor that fell at or beyond the merge column.
+  bool slotHidden(int index) const;
+  // Show every tile that is neither the travelling tile's slot nor a hidden
+  // add slot.
+  void applyVisibility();
   // Point a tile's callbacks at this lane (re-done on adoption).
   void wire(GalleryTile& tile);
 
@@ -75,6 +92,9 @@ private:
   std::optional<ChainBranch> branch_;
   bool branchInteractive_ = false;
   std::vector<std::unique_ptr<BranchGap>> gaps_;
+  // Rejoin column in this lane's own coordinates; empty while the lanes run
+  // separately to the output.
+  std::optional<float> mergeCutoff_;
   bool canPaste_ = false;
 };
 

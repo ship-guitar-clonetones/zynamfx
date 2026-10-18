@@ -357,7 +357,7 @@ void BlockCard::syncMeta() {
   counts.favorites = favoritesCount();
   counts.favorited = favorited();
   counts.models = block_.tone.catalogModelCount();
-  // The public Free-tier integration does not write to the TONE3000 catalog.
+  // Favorite writes go to the API; the card reflects the reply.
   counts.favoriteToggle = false;
   meta_.setCounts(counts);
 

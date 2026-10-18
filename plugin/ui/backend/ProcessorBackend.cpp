@@ -117,6 +117,10 @@ bool ProcessorBackend::setChainBranch(const juce::String& side, const std::strin
   return processor_.setChainBranch(side, afterBlockId);
 }
 bool ProcessorBackend::clearChainBranch() { return processor_.clearChainBranch(); }
+bool ProcessorBackend::setChainMerge(const juce::String& afterBlockId) {
+  return processor_.setChainMerge(afterBlockId);
+}
+bool ProcessorBackend::clearChainMerge() { return processor_.clearChainMerge(); }
 void ProcessorBackend::setStereoMode(bool enabled) { processor_.setStereoMode(enabled); }
 void ProcessorBackend::setInputMode(const juce::String& mode) {
   processor_.setInputMode(TONE3000Processor::inputModeFromString(mode));

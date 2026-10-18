@@ -92,9 +92,6 @@ ToneBrowser::ToneBrowser(Services& services)
     if (onClose) onClose();
   };
   addAndMakeVisible(back_);
-  browseOfficial_.setTrailingMark(10);
-  browseOfficial_.onClick = [this] { if (onSignIn) onSignIn(); };
-  addAndMakeVisible(browseOfficial_);
   addChildComponent(signedInAvatar_);
   signInBack_.onClick = [this] { setSignInPageShown(false); };
   addChildComponent(signInBack_);
@@ -334,10 +331,8 @@ void ToneBrowser::rebuildBody() {
   // The search box exists only for a session; signed out the filter row is
   // the gear chips alone (the trending feed's one filter). A profile
   // filter's stream searches titles alone.
-  // Custom API search/taxonomy filters are outside the public Free tier.
-  // The full catalog is opened through TONE3000's hosted Select experience.
-  search_.setVisible(false);
-  filters_.setGearOnly(true);
+  search_.setVisible(!previewing);
+  filters_.setGearOnly(previewing);
   filters_.setVisible(!signInPage);
   search_.setHelpText(help::text(filters_.profileLocked() ? help::Key::browserSearchProfile : help::Key::browserSearch));
 
@@ -418,7 +413,6 @@ void ToneBrowser::resized() {
   const int colW = std::min(kColumnWidth, w);
   back_.setTopLeftPosition((w - colW) / 2, kPadTop);
   signInBack_.setTopLeftPosition((w - colW) / 2, kPadTop);
-  browseOfficial_.setTopRightPosition(w - kPadX, kPadTop - 4);
   signedInAvatar_.setBounds(w/2 - 118, 45, 18, 18);
   const int top = juce::jmax(68, kPadTop + BackLink::kHeight);
   const int h = std::max(0, getHeight() - top);

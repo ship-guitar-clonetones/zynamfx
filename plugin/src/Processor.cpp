@@ -450,6 +450,9 @@ void TONE3000Processor::updateLatency() {
           laneLatency += block->effectInstance->getLatencySamples();
       longestEffectPath = juce::jmax(longestEffectPath, laneLatency);
     }
+    // The rejoin's own compensation reads the same per-lane numbers, so keep
+    // them current on every latency edge (effect added/removed/bypassed).
+    refreshBranchMergeLatency();
   }
   latency += static_cast<int>(std::ceil(longestEffectPath * hostSampleRate /
                                         juce::jmax(1.0, chainSampleRate())));
@@ -1030,6 +1033,10 @@ void TONE3000Processor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     scratch.setSize(2, chainDomainBlockSize(), false, false, true);
     scratch.clear();
   }
+  // Rejoin delay line: fixed capacity, allocated and silenced here so the RT
+  // path only ever reads/writes it in place.
+  branchMergeDelayRing.assign(static_cast<size_t>(kBranchMergeDelayCapacity), 0.0f);
+  branchMergeRingWritePos = 0;
   chainScratchChannel.setSize(1, samplesPerBlock, false, false, true);
   chainScratchChannel.clear();
 
@@ -1579,13 +1586,16 @@ void TONE3000Processor::processChainOnBuffer(std::vector<std::unique_ptr<ChainBl
 // decays to a plain function pointer, so forking allocates nothing on the RT
 // path. Job 0 (the `local*` section) always runs on this thread; job 1 goes
 // to a pool worker, or is stolen back inline when none picks it up.
+// The end indices bound each section (see the declaration): the rejoin uses
+// them to stop the trunk at the merge anchor while the branch runs whole.
 void TONE3000Processor::processLanePair(Lane& workerBlocks,
                                         juce::AudioBuffer<float>& workerBuffer,
                                         juce::AudioBuffer<float>& workerScratch,
                                         int workerBeginIdx, Lane& localBlocks,
                                         juce::AudioBuffer<float>& localBuffer,
                                         juce::AudioBuffer<float>& localScratch,
-                                        int localBeginIdx) {
+                                        int localBeginIdx, int workerEndIdx,
+                                        int localEndIdx) {
   if (rtParallelLanes) {
     struct LaneJob {
       TONE3000Processor* proc;
@@ -1593,21 +1603,55 @@ void TONE3000Processor::processLanePair(Lane& workerBlocks,
       juce::AudioBuffer<float>* buffer;
       juce::AudioBuffer<float>* scratch;
       int beginIdx;
-    } jobs[2] = {{this, &localBlocks, &localBuffer, &localScratch, localBeginIdx},
-                 {this, &workerBlocks, &workerBuffer, &workerScratch, workerBeginIdx}};
+      int endIdx;
+    } jobs[2] = {{this, &localBlocks, &localBuffer, &localScratch, localBeginIdx, localEndIdx},
+                 {this, &workerBlocks, &workerBuffer, &workerScratch, workerBeginIdx,
+                  workerEndIdx}};
     void* ctxs[2] = {&jobs[0], &jobs[1]};
 
     rtWorkerPool.forkJoin(
         [](void* ctx) {
           auto& j = *static_cast<LaneJob*>(ctx);
-          j.proc->processChainOnBuffer(*j.blocks, *j.buffer, *j.scratch, j.beginIdx);
+          j.proc->processChainOnBuffer(*j.blocks, *j.buffer, *j.scratch, j.beginIdx, j.endIdx);
         },
         ctxs, 2);
     return;
   }
 
-  processChainOnBuffer(localBlocks, localBuffer, localScratch, localBeginIdx);
-  processChainOnBuffer(workerBlocks, workerBuffer, workerScratch, workerBeginIdx);
+  processChainOnBuffer(localBlocks, localBuffer, localScratch, localBeginIdx, localEndIdx);
+  processChainOnBuffer(workerBlocks, workerBuffer, workerScratch, workerBeginIdx, workerEndIdx);
+}
+
+// The rejoin's latency compensation: push `buffer` (one mono lane section)
+// through the fixed-capacity ring by `delaySamples`, in place. Called on the
+// audio thread with chainMutex held; no allocation, no lock, no logging.
+void TONE3000Processor::applyBranchMergeDelay(juce::AudioBuffer<float>& buffer, int numFrames,
+                                              int delaySamples) {
+  const int capacity = static_cast<int>(branchMergeDelayRing.size());
+  if (delaySamples <= 0 || capacity < 2 || numFrames <= 0)
+    return;
+
+  // The message thread already clamped to the capacity; belt and braces here
+  // because the audio thread must never index outside the ring.
+  delaySamples = juce::jlimit(1, capacity - 1, delaySamples);
+
+  float* ring = branchMergeDelayRing.data();
+  float* data = buffer.getWritePointer(0);
+  int readPos = branchMergeRingWritePos - delaySamples;
+  if (readPos < 0)
+    readPos += capacity;
+  int writePos = branchMergeRingWritePos;
+
+  for (int i = 0; i < numFrames; ++i) {
+    const float input = data[i];
+    data[i] = ring[readPos];  // the delayed signal
+    ring[writePos] = input;
+    if (++readPos == capacity)
+      readPos = 0;
+    if (++writePos == capacity)
+      writePos = 0;
+  }
+  branchMergeRingWritePos = writePos;
 }
 
 // ##############################
@@ -1663,8 +1707,43 @@ void TONE3000Processor::processChainStage(float** inputs, float** outputs, int n
       processChainOnBuffer(trunk, trunkBuf, trunkScratch, 0, rtBranchTapIndex + 1);
       std::memcpy(outputs[branchCh], outputs[trunkCh],
                   sizeof(float) * static_cast<size_t>(numFrames));
-      processLanePair(lane(branchSide), branchBuf, branchScratch, 0, trunk, trunkBuf,
-                      trunkScratch, rtBranchTapIndex + 1);
+
+      if (rtBranchMergeIndex > rtBranchTapIndex) {
+        // Rejoin: the branch lane is summed back into the trunk after the
+        // merge anchor, and the trunk carries the sum serially to the end.
+        //   tap+1 .. merge  trunk section  ∥  the whole branch lane
+        //   merge .. end    trunk suffix over the merged signal
+        // Both sections carry their lane's full hosted-effect latency; the
+        // faster one is delayed by the difference before the sum so the
+        // junction stays phase-aligned.
+        const int mergeIdx = rtBranchMergeIndex;
+        const int branchEnd = static_cast<int>(lane(branchSide).size());
+        const int trunkEnd = static_cast<int>(trunk.size());
+
+        processLanePair(lane(branchSide), branchBuf, branchScratch, 0, trunk, trunkBuf,
+                        trunkScratch, rtBranchTapIndex + 1, branchEnd, mergeIdx);
+
+        if (branchMergeDelaySamples > 0) {
+          if (branchMergeDelayBranch)
+            applyBranchMergeDelay(branchBuf, numFrames, branchMergeDelaySamples);
+          else
+            applyBranchMergeDelay(trunkBuf, numFrames, branchMergeDelaySamples);
+        }
+
+        trunkBuf.addFrom(0, 0, branchBuf, 0, 0, numFrames);
+
+        processChainOnBuffer(trunk, trunkBuf, trunkScratch, mergeIdx, trunkEnd);
+
+        // The joined signal leaves on the trunk's channel only; mirror it to
+        // the branch channel so both outputs carry the same merged audio.
+        std::memcpy(outputs[branchCh], outputs[trunkCh],
+                    sizeof(float) * static_cast<size_t>(numFrames));
+      } else {
+        // No rejoin: exactly the original split, bit-identical (no extra
+        // copies, no latency line, no sum).
+        processLanePair(lane(branchSide), branchBuf, branchScratch, 0, trunk, trunkBuf,
+                        trunkScratch, rtBranchTapIndex + 1);
+      }
     } else {
       // Stereo mode: each channel is an independent mono lane, processed in
       // place, no split/merge copies needed. Right lane to the worker (when

@@ -60,6 +60,8 @@ public:
   bool swapChains() override { return true; }
   bool setChainBranch(const juce::String&, const std::string&) override { return true; }
   bool clearChainBranch() override { return true; }
+  bool setChainMerge(const juce::String&) override { return true; }
+  bool clearChainMerge() override { return true; }
   void setStereoMode(bool) override {}
   void setInputMode(const juce::String& mode) override;
   void setActiveEditChain(const juce::String&) override {}

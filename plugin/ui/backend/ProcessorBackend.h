@@ -55,6 +55,8 @@ public:
   bool swapChains() override;
   bool setChainBranch(const juce::String& side, const std::string& afterBlockId) override;
   bool clearChainBranch() override;
+  bool setChainMerge(const juce::String& afterBlockId) override;
+  bool clearChainMerge() override;
   void setStereoMode(bool enabled) override;
   void setInputMode(const juce::String& mode) override;
   void setActiveEditChain(const juce::String& side) override;

@@ -1,5 +1,5 @@
 // The catalog query state. Public builds send only bounded list requests;
-// free-form search and taxonomy filters are handled by the hosted Select flow.
+// free-form search and taxonomy filters go to the same API endpoints upstream uses.
 #pragma once
 
 #include <juce_core/juce_core.h>
@@ -74,8 +74,8 @@ struct ToneQuery {
   const std::vector<juce::String>& picked(Taxonomy kind) const;
   std::vector<juce::String>& picked(Taxonomy kind);
 
-  // The public Free-tier bounded-list path. Search and rich filters are
-  // handled by TONE3000's hosted Select flow, never sent from this app.
+  // The catalog request path: search with the API's filters, or a profile
+  // stream (downloaded / favorited / created).
   juce::String requestPath(int page, int pageSize, int architecture) const;
 
   bool operator==(const ToneQuery& o) const;

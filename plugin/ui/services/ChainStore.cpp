@@ -128,6 +128,14 @@ bool ChainStore::clearBranch() {
   return run([&] { return backend_.clearChainBranch(); });
 }
 
+bool ChainStore::setMerge(const std::string& afterBlockId) {
+  return run([&] { return backend_.setChainMerge(afterBlockId); });
+}
+
+bool ChainStore::clearMerge() {
+  return run([&] { return backend_.clearChainMerge(); });
+}
+
 void ChainStore::setBlockParam(const std::string& blockId, const juce::String& param, double value) {
   backend_.setBlockParam(blockId, param, value);
 }

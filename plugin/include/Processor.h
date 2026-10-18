@@ -393,6 +393,18 @@ public:
   bool setChainBranch(const juce::String& side, const std::string& afterBlockId);
   bool clearChainBranch();
 
+  // Chain rejoin (the branch's second junction, stereo mode).
+  // The branch lane's signal is summed back into the trunk lane after one of
+  // the trunk's tone blocks, and the trunk carries the summed signal serially
+  // from there to the output. `afterBlockId` names that trunk tone block and
+  // must sit strictly after the branch tap. Requires an active branch; setting
+  // the anchor already in force is a no-op. Undoable; cleared automatically
+  // when the anchor leaves the trunk lane (removed, moved across, stale
+  // restore), like the tap itself. Without a merge the branch runs to the
+  // output as today.
+  bool setChainMerge(const juce::String& afterBlockId);
+  bool clearChainMerge();
+
   // How a stereo source feeds the chain(s). Interfaces usually expose stereo
   // pairs (line 1+2) even when only one jack is plugged in, and a DAW's
   // stereo track may carry one guitar or two, so the user picks:
@@ -745,13 +757,16 @@ private:
   // thread and the `local*` one on the calling (audio) thread, when this
   // callback forked (rtParallelLanes); strictly sequentially otherwise. The
   // sections are lane-disjoint by construction (different Lane, buffer and
-  // scratch), so both schedules produce bit-identical output. Caller holds
-  // chainMutex; the worker inherits that protection because it runs entirely
-  // inside this call.
+  // scratch), so both schedules produce bit-identical output. `*EndIdx` bound
+  // each section's block range like processChainOnBuffer (defaults = the end
+  // of that lane), so the rejoin can stop the trunk section at the merge
+  // anchor. Caller holds chainMutex; the worker inherits that protection
+  // because it runs entirely inside this call.
   void processLanePair(Lane& workerBlocks, juce::AudioBuffer<float>& workerBuffer,
                        juce::AudioBuffer<float>& workerScratch, int workerBeginIdx,
                        Lane& localBlocks, juce::AudioBuffer<float>& localBuffer,
-                       juce::AudioBuffer<float>& localScratch, int localBeginIdx);
+                       juce::AudioBuffer<float>& localScratch, int localBeginIdx,
+                       int workerEndIdx = -1, int localEndIdx = -1);
 
   // The whole chain stage at the chain rate: lane L (and lane R in stereo
   // mode) over the given channel pointers. Called either directly (48k host)
@@ -976,7 +991,43 @@ private:
   ChainSide branchSourceSide{ChainSide::Left};
   std::string branchAfterBlockId;
   int rtBranchTapIndex{-1};
+  // Rejoin anchor: the trunk-lane block after which the branch lane is summed
+  // back in. Empty / rtBranchMergeIndex < 0 = no rejoin (the branch runs to
+  // the output as before). Resolved by refreshBranchTapIndex, which also
+  // drops it when the anchor leaves the trunk lane or lands at/before the tap.
+  std::string branchMergeAfterBlockId;
+  int rtBranchMergeIndex{-1};
   void refreshBranchTapIndex();
+
+  // Per-lane hosted-effect latency in chain-domain samples (message thread,
+  // under chainMutex; the RT path only reads them). The merge compensates the
+  // difference between the two lanes before summing.
+  int trunkLaneLatencySamples{0};
+  int branchLaneLatencySamples{0};
+  // Resolved compensation for the current latencies: how far the *smaller*
+  // latency lane's parallel-section output is delayed before the sum, and
+  // which lane that delay line carries (false = trunk). Zero delay = the ring
+  // is bypassed entirely. Written by refreshBranchTapIndex/updateLatency
+  // (message thread, under chainMutex), read by the audio thread under the
+  // same lock.
+  int branchMergeDelaySamples{0};
+  bool branchMergeDelayBranch{false};
+  // Fixed-capacity delay line for that compensation (prepareToPlay allocates
+  // and silences it; the RT path never allocates or locks beyond chainMutex).
+  static constexpr int kBranchMergeDelayCapacity = 32768;
+  std::vector<float> branchMergeDelayRing;
+  int branchMergeRingWritePos{0};
+  // One-shot log guard: a latency difference past the ring capacity is
+  // clamped and reported once (message thread, so the RT path never logs).
+  bool branchMergeDelayClampLogged{false};
+
+  /** Recompute the two per-lane latencies + the merge delay line from them.
+      Caller holds chainMutex. Also clears the ring when the resolved delay or
+      the delayed lane changes, so stale audio never leaks into a new sum. */
+  void refreshBranchMergeLatency();
+  /** Delay `buffer` (1 channel) by `delaySamples` through the merge ring,
+      in place. Audio thread only; allocation-free. */
+  void applyBranchMergeDelay(juce::AudioBuffer<float>& buffer, int numFrames, int delaySamples);
 
   // Global chain-edit fade (see ChainEditFade / requestChainEditFadeAndWait).
   // The gain rides the host-rate buffer right after the chain stage; the

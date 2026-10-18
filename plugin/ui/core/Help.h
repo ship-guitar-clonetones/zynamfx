@@ -34,7 +34,7 @@ enum class Key {
   // Chain gallery
   addTile, closeToneBrowser, copyBlock, pasteBlock, loadFileTile, loadFolderTile, blockPower,
   retryLoad, swapTone, removeBlock, panLeft, panRight, panLink, monoSum, panMonoSum, soloLeft,
-  soloRight, invertLeft, invertRight, swapChains, branchGap, branchJunction,
+  soloRight, invertLeft, invertRight, swapChains, branchGap, branchJunction, mergeGap, mergeJunction,
   // Block card
   blockIn, blockOut, blockOutIr, blockMix, blockNormalize, blockNormalizeOverridden, blockSize,
   blockSizeChip, blockCalibrated, blockUncalibrated, eqToggle, toneInfo, toneInfoLogin, viewOnT3k,

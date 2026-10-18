@@ -21,6 +21,9 @@ juce::ValueTree TONE3000Processor::captureChainSnapshot(bool includeModelData) c
   snapshot.setProperty("branchSide",
                        branchSourceSide == ChainSide::Right ? "right" : "left", nullptr);
   snapshot.setProperty("branchAfterBlockId", juce::String(branchAfterBlockId), nullptr);
+  // Empty = no rejoin: the branch lane runs to the output on its own.
+  snapshot.setProperty("branchMergeAfterBlockId", juce::String(branchMergeAfterBlockId),
+                       nullptr);
 
   juce::ValueTree left("ChainBlocks");
   serializeChainToTree(lane(ChainSide::Left), left, includeModelData);
@@ -257,6 +260,8 @@ TONE3000Processor::Lane TONE3000Processor::restoreChainSnapshot(const juce::Valu
                          : ChainSide::Left;
   branchAfterBlockId =
       snapshot.getProperty("branchAfterBlockId").toString().toStdString();
+  branchMergeAfterBlockId =
+      snapshot.getProperty("branchMergeAfterBlockId").toString().toStdString();
   alignBranchLaneLengths();
 
   // A restored *active* branch + a stereo feed would silently drop a

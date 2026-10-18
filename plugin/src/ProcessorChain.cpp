@@ -1012,7 +1012,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
   std::vector<BlockRow> left, right;
   bool stereo = false, canUndo = false, canRedo = false, branched = false;
   bool canPaste = false, atDefault = false;
-  juce::String presetId, presetName, branchSide, activeSide, branchAfter;
+  juce::String presetId, presetName, branchSide, activeSide, branchAfter, branchMerge;
 
   {
     juce::ScopedLock lock(chainMutex);
@@ -1100,6 +1100,7 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
     if (branched) {
       branchSide = branchSourceSide == ChainSide::Right ? "right" : "left";
       branchAfter = juce::String(branchAfterBlockId);
+      branchMerge = juce::String(branchMergeAfterBlockId);
     }
     activeSide = pendingAddSide == ChainSide::Right ? "right" : "left";
   }
@@ -1205,6 +1206,8 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
     juce::DynamicObject::Ptr branch = new juce::DynamicObject();
     branch->setProperty("side", branchSide);
     branch->setProperty("afterBlockId", branchAfter);
+    // Empty = the branch runs to the output on its own (no rejoin).
+    branch->setProperty("mergeAfterBlockId", branchMerge);
     state->setProperty("branch", juce::var(branch.get()));
   }
   state->setProperty("activeSide", activeSide);
@@ -1341,8 +1344,13 @@ void TONE3000Processor::setStereoMode(bool enabled) {
 // history/revision/fade; this is pure bookkeeping.
 void TONE3000Processor::refreshBranchTapIndex() {
   rtBranchTapIndex = -1;
-  if (branchAfterBlockId.empty())
+  rtBranchMergeIndex = -1;
+  if (branchAfterBlockId.empty()) {
+    // No branch ⇒ no rejoin either (a merge can't outlive its branch).
+    branchMergeAfterBlockId.clear();
+    refreshBranchMergeLatency();
     return;
+  }
 
   const auto& trunk = lane(branchSourceSide);
   int tapIdx = -1;
@@ -1356,13 +1364,96 @@ void TONE3000Processor::refreshBranchTapIndex() {
   if (tapIdx == -1) {
     DBG("Branch tap block left the trunk lane; reverting to independent chains");
     branchAfterBlockId.clear();
+    branchMergeAfterBlockId.clear();
+    refreshBranchMergeLatency();
     return;
+  }
+
+  // Rejoin anchor: a tone block in the same (trunk) lane, strictly after the
+  // tap. A stale anchor (removed, moved across lanes, restore from an older
+  // chain) is repaired here, never recorded as an edit.
+  int mergeIdx = -1;
+  if (!branchMergeAfterBlockId.empty()) {
+    for (int i = tapIdx + 1; i < static_cast<int>(trunk.size()); ++i) {
+      const auto& b = trunk[static_cast<size_t>(i)];
+      if (b != nullptr && b->id == branchMergeAfterBlockId &&
+          b->type != ChainBlockType::INSERT) {
+        mergeIdx = i;
+        break;
+      }
+    }
+    if (mergeIdx == -1) {
+      DBG("Branch merge anchor left the trunk lane after the tap; branch runs to the output");
+      branchMergeAfterBlockId.clear();
+    }
   }
 
   // Dormant in mono mode: the fields persist (a mono round trip brings the
   // branch back) but the RT path ignores them (like the right lane itself).
-  if (stereoEnabled.load())
+  if (stereoEnabled.load()) {
     rtBranchTapIndex = tapIdx;
+    rtBranchMergeIndex = mergeIdx;
+  }
+
+  refreshBranchMergeLatency();
+}
+
+// Per-lane hosted-effect latency + the merge delay line that compensates the
+// difference before the sum. Message thread, caller holds chainMutex (the RT
+// path reads the resolved values under the same lock and owns the ring).
+// A hosted effect reports its latency in host samples; the chain domain runs
+// at chainSampleRate, so convert like the contract specifies. The difference
+// is clamped to the ring capacity (one log), never allowed to overrun it.
+void TONE3000Processor::refreshBranchMergeLatency() {
+  trunkLaneLatencySamples = 0;
+  branchLaneLatencySamples = 0;
+
+  if (!branchAfterBlockId.empty()) {
+    const double chainRate = juce::jmax(1.0, chainSampleRate());
+    const double hostRate = juce::jmax(1.0, hostSampleRate);
+    auto laneLatency = [chainRate, hostRate](const Lane& l) {
+      int total = 0;
+      for (const auto& b : l) {
+        if (b != nullptr && b->type == ChainBlockType::EFFECT && b->enabled &&
+            b->effectInstance != nullptr) {
+          const auto samples = static_cast<double>(b->effectInstance->getLatencySamples());
+          total += static_cast<int>(std::llround(samples * chainRate / hostRate));
+        }
+      }
+      return total;
+    };
+    trunkLaneLatencySamples = laneLatency(lane(branchSourceSide));
+    const ChainSide branchSide =
+        branchSourceSide == ChainSide::Right ? ChainSide::Left : ChainSide::Right;
+    branchLaneLatencySamples = laneLatency(lane(branchSide));
+  }
+
+  int delay = 0;
+  bool delayBranch = false;
+  if (rtBranchMergeIndex > rtBranchTapIndex) {
+    const int difference = trunkLaneLatencySamples - branchLaneLatencySamples;
+    // Delay the *faster* lane so both sections reach the junction aligned.
+    delay = std::abs(difference);
+    delayBranch = difference > 0;  // trunk is slower ⇒ delay the branch lane
+    if (delay >= kBranchMergeDelayCapacity) {
+      delay = kBranchMergeDelayCapacity - 1;
+      if (!branchMergeDelayClampLogged) {
+        branchMergeDelayClampLogged = true;
+        juce::Logger::writeToLog(
+            "[Chain] Branch merge latency difference exceeds the delay line (" +
+            juce::String(std::abs(difference)) + " > " +
+            juce::String(kBranchMergeDelayCapacity - 1) + " chain samples); clamped");
+      }
+    }
+  }
+
+  if (delay != branchMergeDelaySamples || delayBranch != branchMergeDelayBranch) {
+    branchMergeDelaySamples = delay;
+    branchMergeDelayBranch = delayBranch;
+    // Re-baseline the line: whatever it carried belonged to another delay.
+    branchMergeRingWritePos = 0;
+    std::fill(branchMergeDelayRing.begin(), branchMergeDelayRing.end(), 0.0f);
+  }
 }
 
 // Keep the lanes' visible ends even while a branch is active. The branch
@@ -1467,11 +1558,64 @@ bool TONE3000Processor::clearChainBranch() {
 
   pushChainHistory();
   branchAfterBlockId.clear();
+  // The rejoin is a property of the branch: no branch, no merge.
+  branchMergeAfterBlockId.clear();
   // Independent lanes go back to the plain per-lane baseline (any trailing
   // inserts trimmed for the branch grow back).
   alignBranchLaneLengths();
   bumpChainRevision();
   DBG("Chain branch cleared; chains independent again");
+  return true;
+}
+
+bool TONE3000Processor::setChainMerge(const juce::String& afterBlockId) {
+  juce::ScopedLock lock(chainMutex);
+
+  // A rejoin only exists between the two lanes of an active branch.
+  if (!stereoEnabled.load() || branchAfterBlockId.empty()) {
+    DBG("setChainMerge: needs stereo mode and an active branch");
+    return false;
+  }
+
+  // The anchor is a tone block in the trunk lane, strictly after the tap.
+  const auto& trunk = lane(branchSourceSide);
+  int anchorIdx = -1;
+  for (int i = 0; i < static_cast<int>(trunk.size()); ++i) {
+    const auto& b = trunk[static_cast<size_t>(i)];
+    if (b != nullptr && b->id == afterBlockId && b->type != ChainBlockType::INSERT) {
+      anchorIdx = i;
+      break;
+    }
+  }
+  if (anchorIdx < 0 || anchorIdx <= rtBranchTapIndex) {
+    DBG("setChainMerge: anchor not a tone block after the tap in the trunk lane: "
+        << afterBlockId);
+    return false;
+  }
+
+  // Re-setting the anchor already in force is a no-op (the UI can re-fire on
+  // fast clicks): no history entry, no revision bump.
+  if (branchMergeAfterBlockId == afterBlockId.toStdString())
+    return true;
+
+  pushChainHistory();
+  branchMergeAfterBlockId = afterBlockId.toStdString();
+  refreshBranchTapIndex();
+  bumpChainRevision();
+  DBG("Chain merge set: branch rejoins trunk after block " << afterBlockId);
+  return true;
+}
+
+bool TONE3000Processor::clearChainMerge() {
+  juce::ScopedLock lock(chainMutex);
+  if (branchMergeAfterBlockId.empty())
+    return false;  // nothing to clear: no history entry
+
+  pushChainHistory();
+  branchMergeAfterBlockId.clear();
+  refreshBranchTapIndex();
+  bumpChainRevision();
+  DBG("Chain merge cleared; branch runs to the output again");
   return true;
 }
 

@@ -88,7 +88,7 @@ public:
                     Reply<Tokens> reply);
 
   // Device-flow helpers remain for the shared interface, but are not invoked
-  // by the public Free-tier integration.
+  // by the integration.
   void requestDeviceAuthorization(Reply<DeviceAuthorization> reply);
   // One poll of the token endpoint for the device code. Until the user
   // acts it fails with the server's code, which the caller acts on:
@@ -109,12 +109,12 @@ public:
   void getUser(Reply<juce::var> reply);
   void getTone(int toneId, Reply<juce::var> reply);
   void setFavorite(int toneId, bool favorite, Reply<bool> reply);
-  // Free-tier bounded list path, locally allowlisted and parameter-checked.
+  // The catalog list path (search with filters, or a profile stream).
   void listTones(const juce::String& path, Reply<juce::var> reply);
   // /tones/trending[?gear=]: the homepage's top-10 feed, `{ data: Tone[] }`.
   // Needs no session (the signed-out preview), Bearer when there is one.
   void listTrending(const juce::String& gear, Reply<juce::var> reply);
-  // Disabled for public Free-tier builds; custom taxonomy lookups are not sent.
+  // Taxonomy lookup (tags / makes / users) for the filter menus.
   void listTaxonomy(Taxonomy kind, const juce::String& query, int pageSize, Reply<juce::var> reply);
   // /models?tone_id&page_size[&architecture]; architecture < 0 omits it.
   void listModels(int toneId, int pageSize, int architecture, Reply<juce::var> reply);

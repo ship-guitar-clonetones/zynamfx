@@ -48,28 +48,43 @@ private:
 };
 
 // The lanes column inside the scroller: both lanes (the branch lane indented
-// past the trunk prefix) and the two-lane elbow of an active branch, drawn
-// with the same lines as the ghost rail.
+// past the trunk prefix) and the two elbows of an active branch — the split at
+// the tap gap, and the rejoin where the branch lane ends at a trunk gap —
+// drawn with the same lines as the ghost rail.
 class ChainView::Column : public juce::Component {
 public:
   struct BranchLayout {
     ChainSide trunkSide;
     int indent;
     float tapGapX;
+    // The rejoin junction's gap on the trunk lane; empty while the lanes run
+    // separately to the output (no merge set).
+    std::optional<float> mergeGapX;
   };
   std::optional<BranchLayout> branch;
   int tile = gallery::kTileSize;
 
   void paint(juce::Graphics& g) override {
     if (!branch) return;
-    const float x = gallery::kEdgeFadeWidth + branch->tapGapX;
+    const float w = gallery::kLineWidth;
     const float topCentre = tile / 2.0f;
     const float bottomCentre = tile + gallery::kLaneGap + tile / 2.0f;
     const float stubY = branch->trunkSide == ChainSide::left ? bottomCentre : topCentre;
-    const float w = gallery::kLineWidth;
     g.setColour(theme::kWhite);
-    g.fillRect(juce::Rectangle<float>(x - w / 2, lanesTop_ + topCentre, w, bottomCentre - topCentre));
-    g.fillRect(juce::Rectangle<float>(x, lanesTop_ + stubY - w / 2, gallery::kTileGap / 2.0f, w));
+    // Split elbow: the trunk's tap gap drops to the branch lane's row and the
+    // stub runs right into its first tile.
+    const float tapX = gallery::kEdgeFadeWidth + branch->tapGapX;
+    g.fillRect(juce::Rectangle<float>(tapX - w / 2, lanesTop_ + topCentre, w,
+                                      bottomCentre - topCentre));
+    g.fillRect(juce::Rectangle<float>(tapX, lanesTop_ + stubY - w / 2, gallery::kTileGap / 2.0f, w));
+    if (!branch->mergeGapX) return;
+    // Rejoin elbow: mirrored. The branch lane's row runs left into the trunk
+    // gap, then rises/falls into the trunk lane, which carries on serially.
+    const float mergeX = gallery::kEdgeFadeWidth + *branch->mergeGapX;
+    g.fillRect(juce::Rectangle<float>(mergeX - w / 2, lanesTop_ + topCentre, w,
+                                      bottomCentre - topCentre));
+    g.fillRect(juce::Rectangle<float>(mergeX - gallery::kTileGap / 2.0f, lanesTop_ + stubY - w / 2,
+                                      gallery::kTileGap / 2.0f, w));
   }
   void setLanesTop(int y) { lanesTop_ = static_cast<float>(y); }
 
@@ -101,6 +116,8 @@ ChainView::ChainView(Services& services)
     l->onPaste = [this, side](int index) { services_.chain.pasteBlock(side, index); };
     l->onSetBranch = [this, side](const std::string& after) { services_.chain.setBranch(side, after); };
     l->onClearBranch = [this] { services_.chain.clearBranch(); };
+    l->onSetMerge = [this](const std::string& after) { services_.chain.setMerge(after); };
+    l->onClearMerge = [this] { services_.chain.clearMerge(); };
   }
 
   services_.chain.addListener(this);
@@ -183,20 +200,41 @@ void ChainView::resized() {
 
 // Branched layout: the branch lane starts at the trunk's tap gap, so its row
 // is indented past the whole trunk prefix (its input *is* that prefix's
-// output). Resolved against the optimistic lane state; a stale tap id
-// renders as independent lanes until native's cleared state arrives.
+// output). A rejoin adds an elbow back at a later trunk gap and ends the
+// branch row there: no add slot is offered past the merge column. Resolved
+// against the optimistic lane state; a stale tap/merge id renders as
+// independent lanes until native's cleared state arrives.
 void ChainView::layoutColumn() {
   const auto& state = services_.chain.state();
   const int tile = tileSize();
   std::optional<Column::BranchLayout> branch;
   if (stereo() && state.branch) {
-    const int tapIndex = lane(state.branch->side).indexOf(state.branch->afterBlockId);
-    if (tapIndex != -1)
+    const auto& trunk = lane(state.branch->side);
+    const int tapIndex = trunk.indexOf(state.branch->afterBlockId);
+    if (tapIndex != -1) {
       branch = Column::BranchLayout{state.branch->side, (tapIndex + 1) * (tile + gallery::kTileGap),
-                                    gallery::gapCentreX(tapIndex + 1, tile)};
+                                    gallery::gapCentreX(tapIndex + 1, tile), std::nullopt};
+      // Rejoin: the trunk block the branch sums in after must sit downstream
+      // of the tap, exactly as the engine validates it.
+      const int mergeIndex = state.branch->mergeAfterBlockId.empty()
+                                 ? -1
+                                 : trunk.indexOf(state.branch->mergeAfterBlockId);
+      if (mergeIndex > tapIndex)
+        branch->mergeGapX = gallery::gapCentreX(mergeIndex + 1, tile);
+    }
   }
   column_->branch = branch;
   column_->tile = tile;
+
+  // A rejoin ends the branch row at the merge column: the branch lane stops
+  // offering add slots past it (its tiles there still run in the parallel
+  // section, so this is drawing only — the chain state is untouched).
+  for (auto* l : {&left_, &right_}) {
+    std::optional<float> cutoff;
+    if (branch && l->side() != branch->trunkSide && branch->mergeGapX)
+      cutoff = gallery::joinCutX(*branch->mergeGapX, branch->indent);
+    l->setMergeCutoff(cutoff);
+  }
 
   auto indentFor = [&](ChainSide side) {
     return branch && side != branch->trunkSide ? branch->indent : 0;

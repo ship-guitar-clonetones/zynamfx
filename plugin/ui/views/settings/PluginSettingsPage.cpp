@@ -237,7 +237,7 @@ PluginSettingsPage::PluginSettingsPage(Services& services)
       version_(juce::String(), form::kSmallPx, theme::kSubtle),
       licenses_("Licenses and source", FormButton::text(form::kBodyPx, false, theme::kLinkBlue)),
       licensesBox_(licenses_, static_cast<float>(licenses_.preferredHeight())),
-      licenseNotice_("Powered by TONE3000. Free-tier integration through the hosted Select flow. Combined application: GNU AGPLv3; no warranty. "
+      licenseNotice_("Powered by TONE3000. Catalog browsing through the TONE3000 API under your own key. Combined application: GNU AGPLv3; no warranty. "
                      "Original components retain their copyright and license notices.",
                      form::kSmallPx, theme::kSubtle) {
   // Info Bar.

@@ -12,38 +12,49 @@ namespace t3k::ui {
 namespace {
 // Diameter of the branch dots: half the power-button chrome footprint.
 constexpr int kBranchDot = theme::kIconBoxSize / 2;
+// Stereo mode keeps the dots faintly visible so the parallel path can be
+// found without hunting a 24px gap; hover/press brings them up.
+constexpr float kBranchIdleAlpha = 0.5f;
 }  // namespace
 
-// Full-gap hover zone wrapping a branch dot: the whole 24px connector run is
-// the hit/hover area; the filled white disc stays hidden until then (always
-// shown while the pointer is a finger, which can't hover a 24px gap).
+// Full-gap hover zone wrapping a branch/merge dot: the whole 24px connector
+// run is the hit/hover area; the disc sits faint until hovered so the gap
+// reads as a control instead of a plain connector (and is fully shown while
+// the pointer is a finger, which can't hover a 24px gap). Rejoin dots are
+// drawn as a ring so a mergable gap never reads as a branch point.
 class GalleryLane::BranchGap : public Clickable, private Pointer::Listener {
 public:
-  BranchGap(Pointer& pointer, help::Key helpKey, std::function<void()> action)
-      : Clickable({}), pointer_(pointer) {
+  BranchGap(Pointer& pointer, help::Key helpKey, bool ring, std::function<void()> action)
+      : Clickable({}), pointer_(pointer), ring_(ring) {
     setHelpText(help::text(helpKey));
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
     onClick = std::move(action);
     pointer_.addListener(this);
+    setAlpha(pointer_.coarse() ? 1.0f : kBranchIdleAlpha);
     pointerChanged();
   }
   ~BranchGap() override { pointer_.removeListener(this); }
 
   void mouseEnter(const juce::MouseEvent&) override { setAlpha(1.0f); }
   void mouseExit(const juce::MouseEvent&) override {
-    if (!pointer_.coarse()) setAlpha(0.0f);
+    if (!pointer_.coarse()) setAlpha(kBranchIdleAlpha);
   }
   void pointerChanged() override {
-    if (!isMouseOver()) setAlpha(pointer_.coarse() ? 1.0f : 0.0f);
+    if (!isMouseOver()) setAlpha(pointer_.coarse() ? 1.0f : kBranchIdleAlpha);
   }
 
   void paintButton(juce::Graphics& g, bool, bool) override {
+    const auto dot = getLocalBounds().toFloat().withSizeKeepingCentre(kBranchDot, kBranchDot);
     g.setColour(theme::kWhite);
-    g.fillEllipse(getLocalBounds().toFloat().withSizeKeepingCentre(kBranchDot, kBranchDot));
+    if (ring_)
+      g.drawEllipse(dot.reduced(0.5f), 1.0f);
+    else
+      g.fillEllipse(dot);
   }
 
 private:
   Pointer& pointer_;
+  bool ring_ = false;
 };
 
 GalleryLane::GalleryLane(Services& services, ChainSide side) : services_(services), side_(side) {
@@ -93,10 +104,10 @@ void GalleryLane::setItems(const std::vector<ChainItem>& items, int tileSize) {
     } else if (auto* tone = dynamic_cast<ToneTile*>(tile.get())) {
       tone->setBlock(item);
     }
-    tile->setVisible(item.blockId != placeholder_);
     next[item.blockId] = std::move(tile);
   }
   tiles_ = std::move(next);  // dropped tiles (and their menus) go here
+  applyVisibility();
 
   setSize(gallery::laneWidth(static_cast<int>(items_.size()), tile_), tile_);
   rebuildBranchGaps();
@@ -121,7 +132,31 @@ void GalleryLane::setCanPaste(bool canPaste) {
 
 void GalleryLane::setPlaceholder(const std::string& blockId) {
   placeholder_ = blockId;
-  for (auto& [id, tile] : tiles_) tile->setVisible(id != placeholder_);
+  applyVisibility();
+  repaint();
+}
+
+// A rejoin ends the branch lane at the merge column: everything at or past it
+// is in the parallel section before the sum, so the row stops inviting blocks
+// there. Only insert anchors (the add tile and the ghost plus slots) go; real
+// tiles stay put and keep processing.
+bool GalleryLane::slotHidden(int index) const {
+  if (!mergeCutoff_ || index < 0 || index >= static_cast<int>(items_.size()) ||
+      !items_[static_cast<size_t>(index)].isInsert)
+    return false;
+  return gallery::slotAtOrPastJoin(index, tile_, *mergeCutoff_);
+}
+
+void GalleryLane::applyVisibility() {
+  for (size_t i = 0; i < items_.size(); ++i)
+    if (auto* tile = tileFor(items_[i].blockId))
+      tile->setVisible(items_[i].blockId != placeholder_ && !slotHidden(static_cast<int>(i)));
+}
+
+void GalleryLane::setMergeCutoff(std::optional<float> localX) {
+  if (mergeCutoff_ == localX) return;
+  mergeCutoff_ = localX;
+  applyVisibility();
   repaint();
 }
 
@@ -153,24 +188,46 @@ void GalleryLane::wire(GalleryTile& tile) {
 }
 
 // Every gap following a tone block carries a set-branch dot, except the
-// active tap gap on the trunk lane, whose dot clears the branch instead.
+// active tap gap on the trunk lane, whose dot clears the branch instead. On
+// the trunk lane, gaps after the tap also carry a rejoin ring: setting it
+// merges the branch lane back in after the block before that gap, and the
+// active merge gap's ring clears the merge.
 void GalleryLane::rebuildBranchGaps() {
   gaps_.clear();
   if (!stereo_) return;
   const bool trunk = branch_.has_value() && branch_->side == side_;
   const int tapIndex = trunk ? indexOf(branch_->afterBlockId) : -1;
+  const int mergeIndex =
+      trunk && !branch_->mergeAfterBlockId.empty() ? indexOf(branch_->mergeAfterBlockId) : -1;
   const int count = static_cast<int>(items_.size());
   for (int i = 0; i < count - 1; ++i) {
     const auto& item = items_[static_cast<size_t>(i)];
     if (item.isInsert) continue;
     const bool tap = trunk && i == tapIndex;
-    if (!tap && !branchInteractive_) continue;
-    auto gap = tap ? std::make_unique<BranchGap>(services_.pointer, help::Key::branchJunction,
-                                                 [this] { if (onClearBranch) onClearBranch(); })
-                   : std::make_unique<BranchGap>(services_.pointer, help::Key::branchGap,
-                                                 [this, id = item.blockId] {
-                                                   if (onSetBranch) onSetBranch(id);
-                                                 });
+    // A rejoin only exists downstream of the split: the merged-into block is
+    // a trunk block after the tap. `i` is the block before this gap.
+    const bool mergeGap = trunk && tapIndex != -1 && i > tapIndex;
+    const bool mergeHere = mergeGap && i == mergeIndex;
+    if (!tap && !mergeHere && !branchInteractive_) continue;
+    std::unique_ptr<BranchGap> gap;
+    if (tap)
+      gap = std::make_unique<BranchGap>(services_.pointer, help::Key::branchJunction,
+                                        /*ring=*/false,
+                                        [this] { if (onClearBranch) onClearBranch(); });
+    else if (mergeHere)
+      gap = std::make_unique<BranchGap>(services_.pointer, help::Key::mergeJunction, /*ring=*/true,
+                                        [this] { if (onClearMerge) onClearMerge(); });
+    else if (mergeGap)
+      gap = std::make_unique<BranchGap>(services_.pointer, help::Key::mergeGap, /*ring=*/true,
+                                        [this, id = item.blockId] {
+                                          if (onSetMerge) onSetMerge(id);
+                                        });
+    else
+      gap = std::make_unique<BranchGap>(services_.pointer, help::Key::branchGap,
+                                        /*ring=*/false,
+                                        [this, id = item.blockId] {
+                                          if (onSetBranch) onSetBranch(id);
+                                        });
     gap->setBounds(design::snap(gallery::gapCentreX(i + 1, tile_) - gallery::kTileGap / 2.0f), 0,
                    gallery::kTileGap, tile_);
     addAndMakeVisible(*gap);
@@ -187,7 +244,9 @@ void GalleryLane::resized() {
 
 // The ghost rail: one plus circle per slot, connector lines between them,
 // each line extended past the icon boxes by plusCircleInset so it meets the
-// drawn ring (stopping at the box edge reads as a hairline gap).
+// drawn ring (stopping at the box edge reads as a hairline gap). A rejoin ends
+// this (branch) lane at the merge column: no plus slot — and no connector run
+// trailing into one — is drawn past it.
 void GalleryLane::paint(juce::Graphics& g) {
   const int count = static_cast<int>(items_.size());
   if (count == 0) return;
@@ -199,8 +258,9 @@ void GalleryLane::paint(juce::Graphics& g) {
   const auto clip = g.getClipBounds().toFloat();
   g.setColour(theme::kWhite);
   for (int i = 0; i < count; ++i) {
+    if (slotHidden(i)) continue;
     const float cx = gallery::tileX(i, tile_) + tile_ / 2.0f;
-    if (i > 0) {
+    if (i > 0 && !slotHidden(i - 1)) {
       const float x0 = cx - (tile_ + gallery::kTileGap) + icon / 2.0f - inset;
       const float x1 = cx - icon / 2.0f + inset;
       const juce::Rectangle<float> line(x0, cy - gallery::kLineWidth / 2, x1 - x0, gallery::kLineWidth);

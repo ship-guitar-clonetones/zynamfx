@@ -176,7 +176,8 @@ ChainState ChainState::parse(const juce::var& v) {
     s.chainRight = list<ChainItem>(v, "chainRight", parseItem);
   if (v["branch"].isObject())
     s.branch = ChainBranch{chainSideFromString(str(v["branch"], "side", "left")),
-                           str(v["branch"], "afterBlockId").toStdString()};
+                           str(v["branch"], "afterBlockId").toStdString(),
+                           str(v["branch"], "mergeAfterBlockId").toStdString()};
   return s;
 }
 

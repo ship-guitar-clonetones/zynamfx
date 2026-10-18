@@ -332,9 +332,6 @@ void Tone3000Session::login(LoginIntent intent) {
   redirectUri_ = loopback_.redirectUri();
   juce::StringPairArray extra;
   extra.set("menubar", "true");
-  extra.set("prompt", "select_tone");
-  extra.set("architecture", juce::String(config_.architecture));
-  extra.set("preview", "true");
   flow_.authorizeUrl = oauth::authorizeUrl(config_.apiOrigin, config_.publishableKey, redirectUri_, *pkce_, extra);
   flow_.redirectUri = redirectUri_;
 #if JUCE_WEB_BROWSER
@@ -443,15 +440,36 @@ void Tone3000Session::finishSignIn(const Tokens& tokens) {
   authLog("signed in: tokens stored (access " + juce::String(tokens.access.length()) + " chars, refresh " +
           (tokens.refresh.isEmpty() ? "none" : "present") + ")");
   notifySessionChanged();
-  // The public build keeps catalog identity and browsing on TONE3000's
-  // hosted Select flow; it does not call the custom profile/search API.
+  // A browse-intent sign-in returns to the tone browser.
   if (wantsBrowser && onAuthenticated) onAuthenticated();
   setFlow(AuthFlow::Phase::idle);
 }
 
 // Device flow
 void Tone3000Session::startDeviceFlow() {
-  // Device authorization is intentionally unavailable in the public Free-tier build.
+  if (flow_.phase != AuthFlow::Phase::leaving) return;
+  stopDeviceFlow();
+  flow_.device = AuthFlow::Device{};
+  notifyAuthFlowChanged();
+  client_.requestDeviceAuthorization(scope_.wrap([this](Result<DeviceAuthorization> r) {
+    if (flow_.phase != AuthFlow::Phase::leaving || !flow_.device ||
+        flow_.device->state != AuthFlow::Device::State::requesting)
+      return;  // cancelled, or superseded by a newer request
+    if (!r) {
+      failDevice(kDeviceCodeFailed);
+      return;
+    }
+    deviceCode_ = r->deviceCode;
+    devicePollMs_ = r->intervalS * 1000;
+    deviceDeadlineMs_ = juce::Time::currentTimeMillis() + static_cast<juce::int64>(r->expiresInS) * 1000;
+    auto& device = *flow_.device;
+    device.state = AuthFlow::Device::State::waiting;
+    device.userCode = r->userCode;
+    device.verificationUri = r->verificationUri;
+    device.verificationUriComplete = r->verificationUriComplete;
+    notifyAuthFlowChanged();
+    devicePoll_.start(devicePollMs_, [this] { pollDevice(); });
+  }));
 }
 
 void Tone3000Session::pollDevice() {

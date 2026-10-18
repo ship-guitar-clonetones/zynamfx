@@ -141,6 +141,9 @@ struct ActivePreset {
 struct ChainBranch {
   ChainSide side = ChainSide::left;
   std::string afterBlockId;
+  // Rejoin junction: a trunk-lane block after the tap where the branch sums
+  // back in ("" = the two lanes still run independently to the output).
+  std::string mergeAfterBlockId;
 };
 
 struct ChainState {

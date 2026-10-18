@@ -14,6 +14,9 @@
 //   - it survives a full plugin state save/restore round trip,
 //   - setting a branch forces the input mode off "stereo" (a branched chain
 //     has a single mono source),
+//   - the rejoin junction (setChainMerge/clearChainMerge) sums the branch
+//     lane back into the trunk at an optional merge anchor, after which the
+//     trunk continues serially and both channels carry the merged signal,
 //   - the branch lane's surplus trailing insert placeholders trim so its
 //     indented rail ends level with the trunk where possible (trim-only,
 //     see alignBranchLaneLengths), and clearing restores the baseline.
@@ -446,6 +449,49 @@ TEST(ChainBranchTest, SurvivesStateSaveRestore) {
   // to the baseline; the restore path trims them back).
   EXPECT_EQ(laneSize(restored, "chain"), kMinLaneSlots);
   EXPECT_EQ(laneSize(restored, "chainRight"), kMinLaneSlots - 1);
+}
+
+// The rejoin junction: the branch lane sums back into the trunk at an
+// optional merge anchor (a trunk block after the tap) and the trunk then
+// continues serially. Both output channels carry the merged signal.
+TEST(ChainBranchTest, MergeSumsBranchBackIntoTrunk) {
+  ChainTestProcessor proc;
+  proc.setPlayConfigDetails(2, 2, kFs, kBlock);
+  proc.prepareToPlay(kFs, kBlock);
+  seedStereoChains(proc, {"blk-a", "blk-b"}, {});
+  ASSERT_TRUE(waitForChainLoaded(proc)) << "IR blocks never finished loading from cache";
+
+  letAudioGoIdle();
+  ASSERT_TRUE(proc.setChainBranch("left", "blk-a"));
+  ASSERT_TRUE(proc.setChainMerge("blk-b"));
+  {
+    const juce::var state = proc.getChainState(-1);
+    ASSERT_TRUE(state["branch"].isObject());
+    EXPECT_EQ(state["branch"]["side"].toString(), "left");
+    EXPECT_EQ(state["branch"]["afterBlockId"].toString(), "blk-a");
+    EXPECT_EQ(state["branch"]["mergeAfterBlockId"].toString(), "blk-b");
+  }
+
+  // The branch lane is empty, but it still carries the tapped signal; after
+  // the merge both channels must carry the one merged trunk signal.
+  {
+    const auto [l, r] = processStereo(proc, makeNoise(240 * kBlock, 2468, 0.1f));
+    float peak = 0.0f;
+    for (size_t i = 48000; i < l.size(); ++i) peak = std::max(peak, std::abs(l[i]));
+    EXPECT_GT(peak, 1e-3f) << "merged output should not be silent";
+    EXPECT_LT(settledMaxChannelDiff(l, r), 1e-4f) << "merged output should be dual mono";
+  }
+
+  // Clearing the merge keeps the branch tap; the chain is branched but the
+  // lanes no longer rejoin.
+  letAudioGoIdle();
+  ASSERT_TRUE(proc.clearChainMerge());
+  {
+    const juce::var state = proc.getChainState(-1);
+    ASSERT_TRUE(state["branch"].isObject());
+    EXPECT_EQ(state["branch"]["afterBlockId"].toString(), "blk-a");
+    EXPECT_TRUE(state["branch"]["mergeAfterBlockId"].toString().isEmpty());
+  }
 }
 
 }  // namespace

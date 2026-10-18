@@ -53,4 +53,18 @@ inline int laneWidth(int count, int tile) {
   return count <= 0 ? 0 : count * tile + (count - 1) * kTileGap;
 }
 
+// A rejoin ends the branch row: the trunk's merge gap, mapped into the branch
+// lane's own coordinates (that lane starts `indent` past the trunk prefix).
+// The branch slots sit on the trunk grid downstream of the tap, so this lands
+// exactly on one of the branch lane's own connector gaps.
+inline float joinCutX(float mergeGapX, int indent) {
+  return mergeGapX - static_cast<float>(indent);
+}
+
+// Slots at or past the rejoin column are no longer offered (judged by the slot
+// centre, so a slot straddling the join still sits before it).
+inline bool slotAtOrPastJoin(int index, int tile, float cutX) {
+  return static_cast<float>(tileX(index, tile)) + tile / 2.0f >= cutX;
+}
+
 }  // namespace t3k::ui::gallery

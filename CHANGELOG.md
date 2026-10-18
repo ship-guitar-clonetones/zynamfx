@@ -2,6 +2,39 @@
 
 All notable changes to zynamfx are recorded here. Dates are ISO (yyyy-mm-dd).
 
+## [2.2.0] - 2026-10-18
+
+First stable release since 2.0.1. Everything below ships together.
+
+### Added
+- **The TONE3000 browser runs inside the plugin.** Sign-in and the hosted OAuth flow open in an
+  in-editor browser panel instead of a separate system-browser window — standalone, AU and VST3.
+  **Open in Browser**, a copyable link and a device code stay as fallbacks; no web engine is bundled
+  (macOS uses the system WKWebView).
+- **Full catalog browsing in the tone browser.** Search, sort, format, tags, makes, creators,
+  verified/calibrated filters, the signed-in user's downloaded/favorited/created lists, and
+  favourite writes — the same TONE3000 API calls the upstream plugin makes, under your own key.
+- **Parallel chains can rejoin.** In stereo mode a branch splits at a tone block; a second junction
+  now sums the branch lane back into the first at a chosen block, and the chain continues serially
+  through the merged signal. The two paths are latency-compensated before summing, and both output
+  channels carry the joined result.
+- **The branch row ends at the join.** With a rejoin active, the second row no longer offers empty
+  slots past the merge point, and the return elbow is drawn at the merge column.
+
+### Fixed
+- **In-app sign-in no longer fails with "redirect_uri must be a valid URL".** JUCE's macOS browser
+  percent-encodes the whole URL it is given; the already-escaped authorize URL was double-encoded
+  before it reached TONE3000. The panel now hands the webview the decoded URL.
+- **Search works again in the tone browser.** The fork had hidden the search field and reduced the
+  filter row to gear chips, so only paging was possible.
+- **Device-code sign-in works.** Requesting and polling a device code was refused locally; the RFC
+  8628 flow is restored.
+- **Branch dots are visible.** They were fully transparent until hovered in a 24 px gap.
+- Beta-line fixes carried into the stable release: settings persistence (dangling-symlink heal),
+  slot click opens the tone browser, right-click opens the AU/VST3 chooser, the publishable key is
+  re-read when Settings saves it, prerelease builds never prompt for updates, and right-click paste
+  works in the key field.
+
 ## [2.1.0-beta.2] - 2026-10-18
 
 Beta fix for v2.1.0-beta.1. Prerelease: never offered as an update.

@@ -37,35 +37,34 @@ Other tools make you choose: a capture player *or* a plugin host *or* a paid rig
 
 [Download](#install) · [Build from source](#build-from-source) · [Releases](https://github.com/zackyusof/zynamfx/releases) · [Documentation](#documentation) · [Version 2 compared with Version 1](#version-2-compared-with-version-1) · [License](#licensing-and-attribution)
 
-## What 2.0.2 beta 2 changes
+## What 2.2.0 brings
 
-**This is a beta.** It is published as a GitHub *prerelease*: it is never offered as an update to anyone,
-and a beta build never checks for updates itself. Use it to test the fixes below and report back on the
-issue that matches your symptom.
-
-### Fixed
-- **A click on a slot opens the tone browser (NAM profiles) again.** Version 2.0.2 beta 1 made the
-  plain click open an action sheet instead; that change is reverted. Right-click / ctrl-click now opens
-  the AU/VST3 effect chooser directly.
-- **Settings persist.** The app-data folder heal now handles a dangling symlink (it used to loop on
-  "File exists" and every write failed), probes writability with a real write, and falls back to a local
-  folder — saying so in the log — when the primary one cannot be made writable.
-- **TONE3000 browsing works after entering the key.** The publishable key is re-read when Settings
-  commits it rather than only at editor construction, so browsing no longer needs an app restart.
-- **Slot Copy/Remove** are reachable again as Cmd+C / Delete on a focused tile.
-- **Paste works in every text field.** The text menu is enabled, so right-click -> Paste works in the
-  TONE3000 API-key field as well as Cmd+V.
-- **A rejected API key now says why.** A secret key (`t3k_cs_...`) or a value without the `t3k_pub_`
-  prefix is explained inline and your text is kept so you can correct it.
+**First stable release since 2.0.1.** Everything from the beta line ships together in one build.
 
 ### Added
-- **Sign-in diagnostics in the log.** The listener port, the callback parameter names, the redirect URI,
-  the parsed callback result (`missing_code`, `state_mismatch`, ...) and the token-exchange outcome are
-  now written to the log. Parameter *values* are never logged.
-- **Build identity as the first log line:** version, OS, CPU and bit width — so a support report carries
-  them without a round trip.
+- **The TONE3000 browser runs inside the plugin.** Sign-in and the hosted OAuth flow open in an
+  in-editor browser panel instead of a separate system-browser window — Standalone, AU and VST3.
+  **Open in Browser**, a copyable link and a device code stay as fallbacks; no web engine is bundled
+  (macOS uses the system WKWebView).
+- **Full catalog browsing in the tone browser.** Search, sort, format, tags, makes, creators,
+  verified/calibrated filters, your downloaded/favorited/created lists, and favourite writes — the
+  same TONE3000 API calls the upstream plugin makes, under your own key.
+- **Parallel chains can rejoin.** In stereo mode a branch splits at a tone block and a second
+  junction sums the branch lane back into the first at a chosen block; the chain then continues
+  serially through the merged signal. The two paths are latency-compensated before summing, and the
+  branch row ends at the join instead of offering empty slots past it.
 
-If sign-in still does not persist, the log now names the stage it stopped at. Add it to
+### Fixed
+- **In-app sign-in** no longer fails with `redirect_uri must be a valid URL` (the authorize URL was
+  double-encoded before it reached TONE3000).
+- **Search** works again in the tone browser.
+- **Device-code sign-in** works (the RFC 8628 flow is restored).
+- **Branch dots** are visible instead of transparent until hovered.
+- Settings persistence (dangling-symlink heal), slot click opens the tone browser, right-click opens
+  the AU/VST3 chooser, the publishable key is re-read when Settings saves it, prerelease builds never
+  prompt for updates, and right-click paste works in the key field.
+
+If sign-in still does not persist, the log names the stage it stopped at. Add it to
 [issue #8](https://github.com/zackyusof/zynamfx/issues/8) with your macOS version and artefact.
 
 ## Install
@@ -109,7 +108,8 @@ These commands target the specific user-installed bundle; do not use a wildcard 
 ## What it does
 
 - **Build guitar rigs:** arrange NAM amp/capture blocks and IR cabinet blocks in a signal chain. Each independent chain starts with seven slots; add, remove, reorder, duplicate, bypass, and save blocks in presets.
-- **Load models:** browse and select tones through TONE3000's hosted OAuth experience, or load your own local `.nam` captures and IR `.wav` files. Models are downloaded only after you choose them; creator attribution and model-license information are retained.
+- **Run parallel chains that rejoin:** in stereo mode a branch splits off at a tone block, and a second junction merges the branch lane back into the main lane at a chosen block. The chain continues serially through the joined signal; the two paths are latency-compensated before summing, and the branch row ends at the merge point.
+- **Load models:** browse and select tones in the built-in tone browser, which signs in through TONE3000's hosted OAuth **Select** page in an in-editor browser panel and searches the full catalog — search, sort, filters, and your own downloaded/favorited/created lists. You can also load your own local `.nam` captures and IR `.wav` files. Models are downloaded only after you choose them; creator attribution and model-license information are retained.
 - **Shape the sound:** use per-block level, mix, and six-band EQ, plus global input/output, gate, pitch shift, bass/middle/treble, and stereo spread controls. Presets and session state keep the rig ready for the next session.
 - **Host installed effects:** add separately installed AU or VST3 effects to the chain. zynamfx lists installed plug-ins without bundling them; opening an effect displays that plug-in's own editor window.
 - **Resize the interface:** the editor window and its contents resize freely together.
@@ -135,35 +135,35 @@ This is the public **Version 2** line. Version 1 was the earlier tone3000-plugin
 
 ## How it differs from the official TONE3000 plug-in
 
-TONE3000 owns and operates its account, catalog, and hosted tone-selection service. zynamfx supplies its own signal-chain app and interface while preserving TONE3000 attribution wherever its integration is used. Full catalog browsing and tone selection use TONE3000's hosted OAuth Select experience; zynamfx does not mirror the catalog, bundle catalog models, or present TONE3000 services as its own. Its in-app catalog preview is limited to bounded feeds, and the user requests each model they load.
+TONE3000 owns and operates its account, catalog, and hosted tone-selection service. zynamfx supplies its own signal-chain app and interface while preserving TONE3000 attribution wherever its integration is used. Full catalog browsing and tone selection use TONE3000's hosted OAuth Select experience under your own key; zynamfx does not mirror the catalog, bundle catalog models, or present TONE3000 services as its own. The tone browser is a client of those documented list endpoints — it does not download a model until you choose one.
 
-Public builds contain no API key, account token, or downloaded catalog model. Configure your own TONE3000 **publishable key (client ID)** in Settings → Plugin → TONE3000 API key, then sign in with your account. Never enter a secret key. The product and its builds are free, open source, and have no paid product or upsell. The integration is designed for the current non-commercial Free tier and its documented OAuth flows and bounded list endpoints; API access and terms remain controlled by TONE3000. See the [API Terms](https://www.tone3000.com/api/terms), [API guidance](https://www.tone3000.com/api), and [integration review](docs/tone3000-integration-2026-10-12.md).
+Public builds contain no API key, account token, or downloaded catalog model. Configure your own TONE3000 **publishable key (client ID)** in Settings → Plugin → TONE3000 API key, then sign in with your account. Never enter a secret key. The product and its builds are free, open source, and have no paid product or upsell. The integration is designed for the current non-commercial Free tier and its documented OAuth flows and list endpoints; API access and terms remain controlled by TONE3000. See the [API Terms](https://www.tone3000.com/api/terms), [API guidance](https://www.tone3000.com/api), and [integration review](docs/tone3000-integration-2026-10-12.md).
 
 The interface identifies the integration as **Powered by TONE3000** and links to [tone3000.com](https://www.tone3000.com). zynamfx uses its own wordmark and graphics. It does not use TONE3000's logo or claim affiliation, approval, or endorsement. Any creator content remains subject to its creator-selected license and attribution requirements.
 
 ## Common questions
 
 Short, factual answers to the questions that come up most. Everything below describes the **current
-release** (v2.0.1); check the release notes for the build you are running.
+release** (v2.2.0); check the release notes for the build you are running.
 
 **How do I insert my own AU/VST3 effect into the chain?**
-**Right-click the effect list** and choose **Add AU/VST3 Effect**. The chooser lists the AudioUnits and
-VST3s already installed on the machine; in 2.0.1 the search field at the top of the chooser filters that
-list (empty query keeps the vendor → effect browsing). Searching only filters what is already listed — it
-does not scan or instantiate anything. There is no separate visible "+" button in 2.0.1, which is why
-this trips people up. Effects that declare extra buses (side-chains) load and render as of 2.0.1: the
-chain feeds extra buses silence instead of disabling them.
+**Right-click the effect list** (or right-click a chain slot) and choose **Add AU/VST3 Effect**. The
+chooser lists the AudioUnits and VST3s already installed on the machine; the search field at the top
+of the chooser filters that list (empty query keeps the vendor → effect browsing). Searching only
+filters what is already listed — it does not scan or instantiate anything. Effects that declare extra
+buses (side-chains) load and render: the chain feeds extra buses silence instead of disabling them.
 
 **How does TONE3000 sign-in work, and should it stay signed in?**
-Set your own **publishable key** (client_id) in **Settings → Plugin → TONE3000 API key**, then restart
-and sign in. The sign-in opens TONE3000's hosted **Select** page in an in-editor browser (standalone, AU
-and VST3); that page is the selection and consent surface, so there is no separate "Authorize" screen on
-this flow. If a host cannot host the panel, **Open in Browser** hands the same URL to the system browser. Your selection is handed back to
-zynamfx and loaded locally. Sign-in is meant to **persist** — the app stores its token set in its
-preferences, so a fresh browser round trip for every tone is *not* the intended behaviour. If you see
-that, it is tracked in [issue #8](https://github.com/zackyusof/zynamfx/issues/8); please add your build
-version (the string beside the ZY monogram), the artefact you installed, macOS version, whether you run
-the Standalone or a DAW, and the log from `~/Library/Logs/zynamfx/zynamfx.log`.
+Set your own **publishable key** (client_id) in **Settings → Plugin → TONE3000 API key**, then sign in.
+Sign-in happens **once**, in an in-editor browser panel that opens TONE3000's hosted **Select** page —
+Standalone, AU and VST3 alike; there is no separate system-browser window and no separate "Authorize"
+screen. If a host cannot host the panel, **Open in Browser**, a copyable link, and a device code remain
+as fallbacks. Your selection is handed back to zynamfx and loaded locally. Sign-in is meant to
+**persist** — the app stores its token set in its preferences, so after that first sign-in browsing and
+tone selection happen in the plugin, not in a browser. If sign-in does not persist, it is tracked in
+[issue #8](https://github.com/zackyusof/zynamfx/issues/8); please add your build version (the string
+beside the ZY monogram), the artefact you installed, macOS version, whether you run the Standalone or a
+DAW, and the log from `~/Library/Logs/zynamfx/zynamfx.log`.
 
 **Which builds exist, and where do I get them?**
 Everything ships from the [Releases page](https://github.com/zackyusof/zynamfx/releases/latest): a

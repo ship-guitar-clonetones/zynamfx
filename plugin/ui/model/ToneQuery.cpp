@@ -64,6 +64,12 @@ std::vector<juce::String>& ToneQuery::picked(Taxonomy kind) {
 
 namespace {
 
+juce::String joined(const std::vector<juce::String>& values, const char* separator) {
+  juce::StringArray escaped;
+  for (const auto& v : values) escaped.add(juce::URL::addEscapeChars(v, true));
+  return escaped.joinIntoString(separator);
+}
+
 class QueryString {
 public:
   QueryString& add(const char* key, const juce::String& value) {
@@ -83,17 +89,21 @@ private:
 }  // namespace
 
 juce::String ToneQuery::requestPath(int page, int pageSize, int architecture) const {
-  // Public Free-tier browsing uses only TONE3000's bounded list endpoints.
-  // Full-catalog search and rich filters stay on the hosted Select flow.
-  if (profile == Profile::none)
-    return gear.isNotEmpty() ? "/api/v1/tones/trending?gear=" + juce::URL::addEscapeChars(gear, true)
-                             : "/api/v1/tones/trending";
-  // Profile streams are bounded and paginated by the API.
   QueryString qs;
-  qs.add("page", juce::String(juce::jmax(1, page)))
-      .add("page_size", juce::String(juce::jlimit(1, 100, pageSize)));
-  if (gear.isNotEmpty()) qs.addEscaped("gear", gear);
-  return "/api/v1/tones/" + juce::String(profileEndpoint(profile)) + qs.str();
+  qs.add("page", juce::String(page)).add("page_size", juce::String(pageSize));
+  const juce::String base = "/api/v1/tones/" + juce::String(profileEndpoint(profile));
+  qs.addEscaped("query", text.trim());
+  if (profile != Profile::none) return base + qs.addEscaped("gear", gear).str();
+
+  if (sort) qs.add("sort", sortId(*sort));
+  qs.addEscaped("gears", gear);
+  qs.add("format", format);
+  qs.add("tags", joined(tags, "_"));
+  qs.add("makes", joined(makes, "_"));
+  qs.add("creators", joined(creators, ","));
+  qs.addFlag("calibrated", calibratedInForce()).addFlag("verified", verified);
+  if (architecture >= 0) qs.add("architecture", juce::String(architecture));
+  return base + qs.str();
 }
 
 bool ToneQuery::operator==(const ToneQuery& o) const {

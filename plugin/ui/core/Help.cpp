@@ -208,6 +208,10 @@ std::map<Key, String> buildTable() {
   t[Key::swapChains] = U("Swap Chains: exchange Left/Right chains.");
   t[Key::branchGap] = U("Branch: feed the other chain from this point in this chain.");
   t[Key::branchJunction] = U("Branch Point: the other chain starts here. Click: make chains independent.");
+  t[Key::mergeGap] = U("Rejoin: bring the other chain back into this one here.");
+  t[Key::mergeJunction] =
+      U("Rejoin Point: the other chain merges into this one here. The branch row ends at this "
+        "point. Click: run the chains separately.");
 
   // Block card
   t[Key::blockIn] = knobDesktop("In", "block input gain, ±24 dB.");

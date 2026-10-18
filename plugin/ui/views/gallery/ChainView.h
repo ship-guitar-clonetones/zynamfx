@@ -2,7 +2,9 @@
 // lanes over a ghost rail of plus circles. Mono shows one lane; stereo shows
 // both L/R lanes in a single shared scroll area with the pan rail on the
 // left, and a branched pair indents the branch lane past the trunk's tap
-// gap with an elbow connector. This component owns the drag orchestration:
+// gap with an elbow connector — a rejoin closes that row back into the trunk
+// at the merge column, so the branch lane offers no add slot past it. This
+// component owns the drag orchestration:
 // the lane lists are mirrored into optimistic local state, so cross-lane
 // drags reflow the target lane live and drops land without any snap-back
 // while the native roundtrip completes. Tap/click opens the detail takeover.
