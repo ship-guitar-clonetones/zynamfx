@@ -397,6 +397,8 @@ target_sources(${PROJECT_NAME}
         src/TunerDetector.cpp
         include/PitchShift.h
         src/PitchShift.cpp
+        include/JamPlayer.h
+        src/JamPlayer.cpp
 )
 
 # Include GUI for Desktop builds
@@ -522,6 +524,7 @@ target_link_libraries(${PROJECT_NAME}
         juce::juce_core
         juce::juce_dsp
         juce::juce_events
+        juce::juce_audio_formats
         juce::juce_audio_utils
         juce::juce_audio_devices
         juce::juce_audio_processors
