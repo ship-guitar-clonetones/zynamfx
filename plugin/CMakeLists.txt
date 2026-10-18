@@ -634,6 +634,9 @@ if (WIN32)
         # -DASIO_SDK_PATH=<dir> (CI does this automatically). Without the SDK
         # the build still works, just without an ASIO option in the device list.
         set(ASIO_SDK_PATH "" CACHE PATH "Path to the Steinberg ASIO SDK (enables JUCE_ASIO)")
+        if (NOT ASIO_SDK_PATH AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../libs/asiosdk/ASIOSDK/common/iasiodrv.h")
+            set(ASIO_SDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../libs/asiosdk/ASIOSDK" CACHE PATH "Path to the Steinberg ASIO SDK (enables JUCE_ASIO)" FORCE)
+        endif()
         if (ASIO_SDK_PATH AND EXISTS "${ASIO_SDK_PATH}/common/iasiodrv.h")
             target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_ASIO=1)
             target_include_directories(${PROJECT_NAME} PUBLIC "${ASIO_SDK_PATH}/common")
