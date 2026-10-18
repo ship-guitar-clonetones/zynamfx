@@ -148,7 +148,7 @@ jobs:
           These builds are ad-hoc signed and not notarized. Download only from
           the official zynamfx GitHub releases. Easiest install: unzip the
           release archives and install-macos-release.sh into one folder, then
-          run `bash install-macos-release.sh` (see --help for options). It
+          run \`bash install-macos-release.sh\` (see --help for options). It
           installs the app and plug-ins, clears quarantine from only those
           zynamfx bundles, and refreshes the AU registration, leaving
           Gatekeeper enabled. Stop if macOS reports malware or a damaged app.
@@ -162,7 +162,7 @@ jobs:
           because of quarantine, verify the bundle came from the official
           release, then remove quarantine only from that bundle and restart the
           host. Example for AU (use the VST3 path instead if applicable):
-          xattr -dr com.apple.quarantine "$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
+          xattr -dr com.apple.quarantine "\$HOME/Library/Audio/Plug-Ins/Components/zynamfx.component"
 
           Install the AU component under ~/Library/Audio/Plug-Ins/Components
           and VST3 under ~/Library/Audio/Plug-Ins/VST3. Matching source is
