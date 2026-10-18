@@ -67,5 +67,17 @@ jobs:
         run: |
           $Version = (Get-Content VERSION).Trim()
           $Tag = "v$Version"
-          Write-Host "Publishing Windows artifacts to release $Tag..."
-          gh release upload $Tag release/* --clobber
+          Write-Host "Publishing Windows artifacts for $Tag..."
+
+          $files = (Get-ChildItem -Path release -File | ForEach-Object { $_.FullName })
+          $releaseExists = $false
+          $null = gh release view $Tag 2>&1
+          if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
+
+          if ($releaseExists) {
+              Write-Host "Release $Tag exists, uploading Windows artifacts..."
+              gh release upload $Tag @files --clobber
+          } else {
+              Write-Host "Release $Tag does not exist yet. Creating release $Tag..."
+              gh release create $Tag @files --title "zynamfx $Tag (Windows x64)" --generate-notes
+          }
