@@ -1,24 +1,10 @@
-# zynamfx — the rig that eats NAM profiles for breakfast 🎸🔥
-
-> **Stop thinking "NAM loader."** zynamfx is a full-blown signal-chain studio that swallows Neural Amp Modeler captures whole — then lets you bolt **any AU or VST3 plug-in you own** into the same chain, in any order. Amp capture → your favourite boutique chorus → cabinet IR → studio-grade reverb → analogue console saturation… one rig, zero DAW required. **Nothing else free and open-source even comes close.**
-
-**zynamfx** is a free, open-source macOS guitar signal-chain application. It ships as a Standalone app and as Audio Unit (AU) and VST3 plug-ins. It loads Neural Amp Modeler (NAM) captures and impulse responses (IRs), and it hosts separately installed AU/VST3 effects — so the delays, reverbs, EQs, and drives you already own can sit right next to your neural captures instead of being locked out of the chain. Whether a boutique chorus sits before the neural preamp or a pristine stereo delay follows the cabinet, it is all one low-latency rig.
-
-## 🔥 Why there is nothing like it
-
-NAM players play captures. Plugin hosts host plugins. **zynamfx is the only free, open-source app that does both in one chain built for guitarists:**
-
-- **🧠 NAM captures, every flavour** — load local `.nam` amp and pedal profiles, or pull from the hundreds of thousands of captures on TONE3000 through the built-in catalog browser. Your tone library is effectively infinite — and free.
-- **🔌 Your plugins live INSIDE the rig** — drop any installed AU or VST3 into any chain slot: FabFilter-style surgical EQ, Valhalla-grade reverb, 1176-style compression, analogue console warmth… before the amp, after the cab, wherever your ears want them.
-- **🎸🎸🎹 Not just guitar** — bass rigs with crushing low-end control, synth chains through neural saturation and wild effects, vocals, drums, anything you feed it. If it makes sound, zynamfx can chain it.
-- **🚀 Standalone or in your DAW** — run the app on stage with its own audio device, or load the AU/VST3 version inside Logic, Ableton, Reaper, whatever you use. Same chains, same presets, everywhere.
-- **💸 Free forever, open source, no catch** — no tiers, no upsells, no locked features, no subscriptions. Download it, own it, build on it.
-
-Other tools make you choose: a capture player *or* a plugin host *or* a paid rig simulator. zynamfx says: **take all three.** 🤘
+# zynamfx — a full guitar rig in one window 🎸
 
 <p align="center">
-  <img src="docs/images/zynamfx-screenshot.png" alt="The zynamfx standalone interface" width="760">
+  <img src="docs/images/zynamfx-screenshot.png" alt="zynamfx standalone: two parallel stereo lanes with lane balance, a hosted AU/VST3 effect in the chain, and the block editor" width="920">
 </p>
+
+<p align="center"><em>Two parallel stereo lanes with per-lane balance, a hosted AU/VST3 effect in the chain, and the block editor — one window, no DAW.</em></p>
 
 <p align="center">
   <a href="https://github.com/zackyusof/zynamfx/releases/latest"><img src="https://img.shields.io/github/v/release/zackyusof/zynamfx?style=flat-square&label=release" alt="Latest release"></a>
@@ -29,11 +15,41 @@ Other tools make you choose: a capture player *or* a plugin host *or* a paid rig
   <img src="https://img.shields.io/badge/status-actively%20maintained-brightgreen?style=flat-square" alt="Actively maintained">
 </p>
 
+**zynamfx** is a free, open-source macOS signal-chain app for guitar, bass, synths — anything you plug in. It loads **Neural Amp Modeler (NAM)** captures and impulse responses, hosts **any AU or VST3 effect you already own** in the same chain, and runs the whole rig as a **Standalone app** or as an **AU/VST3 plug-in** inside your DAW. Amp capture → boutique chorus → cabinet IR → studio reverb → console saturation, all in one low-latency chain.
+
+**New in 2.2.0**
+
+- **The TONE3000 browser is inside the app.** Sign-in and the hosted **Select** flow run in an in-editor browser panel in the Standalone, AU and VST3 — no system-browser window, no bundled web engine (macOS uses the system WKWebView). Open in Browser, a copyable link and a device code remain as fallbacks.
+- **Search the full catalog in the tone browser.** Search, sort, format, tags, makes, creators, verified/calibrated filters, your downloaded/favorited/created lists, and favourite writes — the same TONE3000 API calls the upstream plug-in makes, under your own key.
+- **Parallel chains that rejoin — per channel, not summed.** In stereo mode a branch splits at a tone block and a second junction rejoins it at a chosen block. Each lane keeps its own output channel and pan while the main lane's remaining blocks process both as a shared tail: no correlated +6 dB, no comb filtering.
+- **Lane balance on the last slot.** A compact L↔R control on each lane's last real slot places that row anywhere from hard left to hard right, with the rail knobs using the same range and an arc that grows out of centre.
+- **Search works again** in the tone browser, **device-code sign-in** is restored, and in-app sign-in no longer fails with `redirect_uri must be a valid URL`.
+
+## What it does
+
+- **Build a signal chain:** arrange NAM amp/capture blocks and IR cabinet blocks, with seven starting slots per lane. Add, remove, reorder, duplicate, bypass, and save blocks in presets.
+- **Run parallel chains that rejoin:** split a lane at a tone block, let both rows process, then rejoin at a chosen block. The paths are not summed — each lane keeps its own channel and pan, and the remaining blocks process both as a shared tail. The branch row ends at the join, and each lane's last slot carries its balance control. (A NAM block in the shared tail still runs one voice and feeds both channels, so keep amps before the merge.)
+- **Load models:** browse the full TONE3000 catalog in the built-in tone browser, or load your own local `.nam` captures and IR `.wav` files. Models are downloaded only after you choose them; creator attribution and model licences are retained.
+- **Shape the sound:** per-block level, mix and six-band EQ, plus global input/output, gate, pitch shift, bass/middle/treble and stereo spread. Presets and session state keep the rig ready.
+- **Host installed effects:** drop any installed AU or VST3 into any slot; the plug-in's own editor opens. Side-chain buses are fed silence rather than disabled, so multi-bus effects load and render.
+- **Standalone or in your DAW:** the Standalone manages its own audio device; the AU and VST3 run inside Logic, Ableton, Reaper, Pro Tools and other macOS hosts.
+- **Resize freely:** the editor window and its contents resize together.
+
+## Why there is nothing like it
+
+NAM players play captures. Plugin hosts host plugins. **zynamfx is the only free, open-source app that does both in one chain built for guitarists:**
+
+- **🧠 NAM captures, every flavour** — local `.nam` profiles or hundreds of thousands of captures on TONE3000, browsable in-app. Your tone library is effectively infinite — and free.
+- **🔌 Your plugins live INSIDE the rig** — surgical EQ, studio reverb, 1176-style compression, console warmth: before the amp, after the cab, wherever your ears want them.
+- **🎸🎸🎹 Not just guitar** — bass rigs, synth chains through neural saturation, vocals, drums. If it makes sound, zynamfx can chain it.
+- **🚀 Standalone or in your DAW** — same chains, same presets, everywhere.
+- **💸 Free forever, open source, no catch** — no tiers, no upsells, no locked features, no subscriptions.
+
 > "I mainly built it for my own needs." — zackyusof
 
 **Free and open source, no catch.** Public builds are keyless and carry no paid tier or upsell: bring your own free TONE3000 publishable key for catalog browsing, or work entirely offline with local `.nam`/IR files and third-party effects. The combined app is AGPLv3 with matching source; the TONE3000 code it builds on stays MIT. zynamfx is an independent community project — not an official TONE3000 product, and not endorsed by TONE3000 or Line 6.
 
-**Actively maintained — this is not an abandoned fork.** zynamfx tracks the upstream [TONE3000 plugin](https://github.com/tone-3000/tone3000-plugin). A GitHub Action checks for a new stable TONE3000 release every day; when one lands it merges it, bumps the zynamfx patch version, rebuilds the Standalone, AU and VST3, validates the AU, packages the matching source, and publishes a fresh zynamfx release automatically. Every release names the exact TONE3000 tag and commit it is based on and ships an `UPSTREAM.txt` provenance file (also recorded in [UPSTREAM.md](UPSTREAM.md)). If an upstream change conflicts with a zynamfx-specific file, the workflow stops without publishing until the change is reviewed — so a release is never silently skipped or shipped from an unreviewed base.
+**Actively maintained — this is not an abandoned fork.** zynamfx tracks the upstream [TONE3000 plugin](https://github.com/tone-3000/tone3000-plugin). A GitHub Action checks for a new stable TONE3000 release every day; when one lands it merges it, bumps the zynamfx patch version, rebuilds the Standalone, AU and VST3, validates the AU, packages the matching source, and publishes a fresh zynamfx release automatically. Every release names the exact TONE3000 tag and commit it is based on and ships an `UPSTREAM.txt` provenance file (also recorded in [UPSTREAM.md](UPSTREAM.md)). If an upstream change conflicts with a zynamfx-specific file, the workflow stops without publishing until the change is reviewed.
 
 [Download](#install) · [Build from source](#build-from-source) · [Releases](https://github.com/zackyusof/zynamfx/releases) · [Documentation](#documentation) · [Version 2 compared with Version 1](#version-2-compared-with-version-1) · [License](#licensing-and-attribution)
 
@@ -42,32 +58,17 @@ Other tools make you choose: a capture player *or* a plugin host *or* a paid rig
 **First stable release since 2.0.1.** Everything from the beta line ships together in one build.
 
 ### Added
-- **The TONE3000 browser runs inside the plugin.** Sign-in and the hosted OAuth flow open in an
-  in-editor browser panel instead of a separate system-browser window — Standalone, AU and VST3.
-  **Open in Browser**, a copyable link and a device code stay as fallbacks; no web engine is bundled
-  (macOS uses the system WKWebView).
-- **Full catalog browsing in the tone browser.** Search, sort, format, tags, makes, creators,
-  verified/calibrated filters, your downloaded/favorited/created lists, and favourite writes — the
-  same TONE3000 API calls the upstream plugin makes, under your own key.
-- **Parallel chains can rejoin — per channel, not summed.** In stereo mode a branch splits at a tone
-  block and a second junction rejoins the branch lane at a chosen block. The two paths are not
-  summed: each lane keeps its own output channel and pan, and the main lane's remaining blocks
-  process both as a shared tail — no correlated +6 dB and no comb filtering. A NAM block in the
-  shared tail still runs a single voice and feeds both channels, so place amps before the merge.
-  The branch row ends at the join instead of offering empty slots past it.
-- **Lane balance on a lane's last slot.** A compact L↔R control on the last real slot of each lane
-  in stereo mode: full travel runs hard left to hard right, and the rail knobs use the same range
-  with an arc that grows out of centre. Hidden in mono and mono-sum, where pan is bypassed.
+- **The TONE3000 browser runs inside the plugin** — Standalone, AU and VST3. Open in Browser, copyable link and device code stay as fallbacks; no web engine is bundled.
+- **Full catalog browsing in the tone browser** — search, sort, format, tags, makes, creators, verified/calibrated filters, your own lists, and favourite writes, under your own key.
+- **Parallel chains can rejoin — per channel, not summed.** Each lane keeps its own output channel and pan; the main lane's remaining blocks process both as a shared tail. No correlated +6 dB, no comb. A NAM block in the shared tail still feeds both channels, so place amps before the merge. The branch row ends at the join.
+- **Lane balance on a lane's last slot** — full travel from hard left to hard right, with the rail knobs on the same range and a centre-out arc. Hidden in mono and mono-sum, where pan is bypassed.
 
 ### Fixed
-- **In-app sign-in** no longer fails with `redirect_uri must be a valid URL` (the authorize URL was
-  double-encoded before it reached TONE3000).
+- **In-app sign-in** no longer fails with `redirect_uri must be a valid URL`.
 - **Search** works again in the tone browser.
-- **Device-code sign-in** works (the RFC 8628 flow is restored).
+- **Device-code sign-in** works (RFC 8628 restored).
 - **Branch dots** are visible instead of transparent until hovered.
-- Settings persistence (dangling-symlink heal), slot click opens the tone browser, right-click opens
-  the AU/VST3 chooser, the publishable key is re-read when Settings saves it, prerelease builds never
-  prompt for updates, and right-click paste works in the key field.
+- Settings persistence (dangling-symlink heal), slot click opens the tone browser, right-click opens the AU/VST3 chooser, the publishable key is re-read when Settings saves it, prerelease builds never prompt for updates, and right-click paste works in the key field.
 
 If sign-in still does not persist, the log names the stage it stopped at. Add it to
 [issue #8](https://github.com/zackyusof/zynamfx/issues/8) with your macOS version and artefact.
@@ -109,16 +110,6 @@ These commands target the specific user-installed bundle; do not use a wildcard 
 2. Add blocks to the chain: a NAM amp/capture, an IR cabinet, and — if you want — a hosted AU/VST3 effect in any slot.
 3. To browse the TONE3000 catalog, open **Settings → Plugin**, paste your own free TONE3000 **publishable key (client ID)**, then sign in. Never enter a secret key.
 4. Pick a tone, shape it with the per-block controls, and save the rig as a preset. Open the AU or VST3 inside a DAW to use the same chain in a project.
-
-## What it does
-
-- **Build guitar rigs:** arrange NAM amp/capture blocks and IR cabinet blocks in a signal chain. Each independent chain starts with seven slots; add, remove, reorder, duplicate, bypass, and save blocks in presets.
-- **Run parallel chains that rejoin:** in stereo mode a branch splits off at a tone block, and a second junction rejoins the branch lane to the main lane at a chosen block. The paths are not summed: each lane keeps its own channel and pan while the main lane's remaining blocks process both as a shared tail, so there is no correlated boost and no combing. The branch row ends at the merge point, and a balance control on each lane's last slot places that lane in the stereo image.
-- **Load models:** browse and select tones in the built-in tone browser, which signs in through TONE3000's hosted OAuth **Select** page in an in-editor browser panel and searches the full catalog — search, sort, filters, and your own downloaded/favorited/created lists. You can also load your own local `.nam` captures and IR `.wav` files. Models are downloaded only after you choose them; creator attribution and model-license information are retained.
-- **Shape the sound:** use per-block level, mix, and six-band EQ, plus global input/output, gate, pitch shift, bass/middle/treble, and stereo spread controls. Presets and session state keep the rig ready for the next session.
-- **Host installed effects:** add separately installed AU or VST3 effects to the chain. zynamfx lists installed plug-ins without bundling them; opening an effect displays that plug-in's own editor window.
-- **Resize the interface:** the editor window and its contents resize freely together.
-- **Use it standalone or in a DAW:** the Standalone app manages its own audio device; AU and VST3 run inside compatible macOS hosts.
 
 ## What hosting third-party effects unlocks
 
